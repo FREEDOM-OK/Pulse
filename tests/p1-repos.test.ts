@@ -19,7 +19,7 @@ import {
   updateMemo,
 } from '@/db/repositories/memos';
 import {
-  createExercise,
+  createCustomExercise,
   deleteExercise,
   findExerciseByName,
   listExercises,
@@ -167,19 +167,31 @@ describe('P1 备忘仓储', () => {
 });
 
 describe('P1 动作库仓储', () => {
-  it('按部位分组，每组至少 4 个；可新增与删除自定义动作', async () => {
+  it('包含自定义类；自定义动作可按组或按时间计，基础动作不可删除', async () => {
     await createTestContext();
     const grouped = await listExercisesByCategory();
-    expect(Object.keys(grouped)).toHaveLength(7);
-    for (const [category, list] of Object.entries(grouped)) {
-      expect(list.length, `${category} 数量不足`).toBeGreaterThanOrEqual(4);
+    expect(Object.keys(grouped)).toHaveLength(8);
+    expect(grouped['自定义类']).toEqual([]);
+    for (const category of ['胸', '背', '腿', '肩', '手臂', '核心', '有氧']) {
+      expect(grouped[category].length, `${category} 数量不足`).toBeGreaterThanOrEqual(4);
     }
 
-    const id = await createExercise('壶铃摇摆', '腿');
-    expect((await findExerciseByName('壶铃摇摆'))?.category).toBe('腿');
+    const id = await createCustomExercise('壶铃摇摆', 'duration');
+    expect(await findExerciseByName('壶铃摇摆')).toMatchObject({
+      category: '自定义类',
+      trackingType: 'duration',
+    });
 
     const all = await listExercises();
-    expect(all.some((exercise) => exercise.name === '深蹲')).toBe(true);
+    const barbellSquat = all.find((exercise) => exercise.name === '杠铃深蹲');
+    expect(barbellSquat).toMatchObject({ isPreset: true, trackingType: 'sets' });
+    expect(all.find((exercise) => exercise.name === '慢跑')).toMatchObject({
+      trackingType: 'duration',
+    });
+
+    if (!barbellSquat) throw new Error('缺少基础动作：杠铃深蹲');
+    await deleteExercise(barbellSquat.id);
+    expect(await findExerciseByName('杠铃深蹲')).not.toBeNull();
 
     await deleteExercise(id);
     expect(await findExerciseByName('壶铃摇摆')).toBeNull();

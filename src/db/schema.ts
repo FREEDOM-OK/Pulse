@@ -102,7 +102,15 @@ CREATE INDEX IF NOT EXISTS idx_memos_pinned ON memos(pinned, updated_at);
 CREATE INDEX IF NOT EXISTS idx_wishlist_status ON wishlist(status);
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_V1];
+export const MIGRATION_V2 = `
+ALTER TABLE exercises ADD COLUMN tracking_type TEXT NOT NULL DEFAULT 'sets';
+ALTER TABLE training_items ADD COLUMN tracking_type TEXT NOT NULL DEFAULT 'sets';
+ALTER TABLE training_items ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE set_records ADD COLUMN tracking_type TEXT NOT NULL DEFAULT 'sets';
+ALTER TABLE set_records ADD COLUMN duration_minutes INTEGER;
+`;
+
+export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

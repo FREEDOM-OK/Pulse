@@ -7,24 +7,33 @@ import { Spacing } from '@/constants/theme';
 import type { TrainingItemRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 
+interface CompleteValues {
+  reps?: number;
+  weight?: number;
+  durationMinutes?: number;
+}
+
 interface TrainingCardProps {
   item: TrainingItemRow;
   doneSets: number;
-  onComplete: (values: { reps: number; weight: number }) => void;
+  onComplete: (values: CompleteValues) => void;
   onDelete: () => void;
-  onUpdate: (patch: { reps?: number; weight?: number }) => void;
+  onUpdate: (patch: { reps?: number; weight?: number; durationMinutes?: number }) => void;
 }
 
-/** 待训练卡片：次数 × 重量可改，点「完成」记一组。 */
+/** 待训练卡片：按组动作填写次数与重量，按时间动作填写运动分钟数。 */
 export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }: TrainingCardProps) {
   const theme = useTheme();
+  const isDuration = item.tracking_type === 'duration';
   const [repsText, setRepsText] = useState(String(item.reps));
   const [weightText, setWeightText] = useState(String(item.weight));
+  const [durationText, setDurationText] = useState(String(item.duration_minutes));
 
   useEffect(() => {
     setRepsText(String(item.reps));
     setWeightText(String(item.weight));
-  }, [item.reps, item.weight]);
+    setDurationText(String(item.duration_minutes));
+  }, [item.reps, item.weight, item.duration_minutes]);
 
   const commitReps = () => {
     const value = Number(repsText);
@@ -48,6 +57,17 @@ export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }:
     if (rounded !== item.weight) onUpdate({ weight: rounded });
   };
 
+  const commitDuration = () => {
+    const value = Number(durationText);
+    if (!Number.isFinite(value) || value < 1) {
+      setDurationText(String(item.duration_minutes));
+      return;
+    }
+    const rounded = Math.round(value);
+    setDurationText(String(rounded));
+    if (rounded !== item.duration_minutes) onUpdate({ durationMinutes: rounded });
+  };
+
   const currentReps = () => {
     const value = Number(repsText);
     return Number.isFinite(value) && value >= 1 ? Math.round(value) : item.reps;
@@ -58,9 +78,13 @@ export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }:
     return Number.isFinite(value) && value >= 0 ? Math.round(value) : item.weight;
   };
 
+  const currentDuration = () => {
+    const value = Number(durationText);
+    return Number.isFinite(value) && value >= 1 ? Math.round(value) : item.duration_minutes;
+  };
+
   return (
-    <SwipeRow
-      actions={[{ label: '删除', color: '#D64545', onPress: onDelete }]}>
+    <SwipeRow actions={[{ label: '删除', color: '#D64545', onPress: onDelete }]}>
       <ThemedView type="backgroundElement" style={styles.card}>
         <View style={styles.row}>
           <View style={styles.nameArea}>
@@ -68,18 +92,19 @@ export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }:
               {item.exercise_name}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.progress}>
-              已练 {doneSets} 组
+              已练 {doneSets} {isDuration ? '次' : '组'}
             </ThemedText>
           </View>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`完成一组 ${item.exercise_name}`}
+            accessibilityLabel={`完成${isDuration ? '一次' : '一组'} ${item.exercise_name}`}
             onPress={() =>
-              onComplete({
-                reps: currentReps(),
-                weight: currentWeight(),
-              })
+              onComplete(
+                isDuration
+                  ? { durationMinutes: currentDuration() }
+                  : { reps: currentReps(), weight: currentWeight() }
+              )
             }
             style={({ pressed }) => [
               styles.completeButton,
@@ -92,39 +117,60 @@ export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }:
           </Pressable>
         </View>
 
-        <View style={styles.paramRow}>
-          <TextInput
-            value={repsText}
-            onChangeText={setRepsText}
-            onBlur={commitReps}
-            onSubmitEditing={commitReps}
-            keyboardType="number-pad"
-            maxLength={3}
-            accessibilityLabel={`${item.exercise_name} 每组次数`}
-            style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
-          />
-          <ThemedText type="small" themeColor="textSecondary">
-            次 ×
-          </ThemedText>
-          <TextInput
-            value={weightText}
-            onChangeText={setWeightText}
-            onBlur={commitWeight}
-            onSubmitEditing={commitWeight}
-            keyboardType="number-pad"
-            maxLength={4}
-            accessibilityLabel={`${item.exercise_name} 重量`}
-            style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
-          />
-          <ThemedText type="small" themeColor="textSecondary">
-            kg
-          </ThemedText>
-          {item.weight === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.selfWeight}>
-              自重
+        {isDuration ? (
+          <View style={styles.paramRow}>
+            <TextInput
+              value={durationText}
+              onChangeText={setDurationText}
+              onBlur={commitDuration}
+              onSubmitEditing={commitDuration}
+              keyboardType="number-pad"
+              maxLength={4}
+              accessibilityLabel={`${item.exercise_name} 运动时间`}
+              style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+            />
+            <ThemedText type="small" themeColor="textSecondary">
+              分钟
             </ThemedText>
-          ) : null}
-        </View>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.selfWeight}>
+              仅记录运动时长
+            </ThemedText>
+          </View>
+        ) : (
+          <View style={styles.paramRow}>
+            <TextInput
+              value={repsText}
+              onChangeText={setRepsText}
+              onBlur={commitReps}
+              onSubmitEditing={commitReps}
+              keyboardType="number-pad"
+              maxLength={3}
+              accessibilityLabel={`${item.exercise_name} 每组次数`}
+              style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+            />
+            <ThemedText type="small" themeColor="textSecondary">
+              次 ×
+            </ThemedText>
+            <TextInput
+              value={weightText}
+              onChangeText={setWeightText}
+              onBlur={commitWeight}
+              onSubmitEditing={commitWeight}
+              keyboardType="number-pad"
+              maxLength={4}
+              accessibilityLabel={`${item.exercise_name} 重量`}
+              style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+            />
+            <ThemedText type="small" themeColor="textSecondary">
+              kg
+            </ThemedText>
+            {item.weight === 0 ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.selfWeight}>
+                自重
+              </ThemedText>
+            ) : null}
+          </View>
+        )}
       </ThemedView>
     </SwipeRow>
   );

@@ -8,7 +8,7 @@ import { ExercisePicker } from '@/components/fitness/exercise-picker';
 import { SetRecordItem } from '@/components/fitness/set-record-row';
 import { TrainingCard } from '@/components/fitness/training-card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { DateStrip, dateLabel } from '@/components/ui/date-strip';
+import { DateStrip } from '@/components/ui/date-strip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MonthPicker } from '@/components/ui/month-picker';
 import { Spacing } from '@/constants/theme';
@@ -23,7 +23,7 @@ import {
   updateTrainingItem,
 } from '@/db/repositories/training';
 import type { SetRecordRow, TrainingItemRow } from '@/db/types';
-import { todayStr } from '@/lib/date';
+import { formatDay, isToday, todayStr } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function FitnessScreen() {
@@ -64,11 +64,12 @@ export default function FitnessScreen() {
 
   const handlePick = async (exercises: Exercise[]) => {
     for (const exercise of exercises) {
-      // 次数与重量省略不传，由 addTrainingItem 套用设置里的健身默认值。
+      // 次数、重量或时间省略不传，由 addTrainingItem 按动作类型套用默认值。
       await addTrainingItem({
         date,
         exerciseId: exercise.id,
         exerciseName: exercise.name,
+        trackingType: exercise.trackingType,
       });
     }
     setPickerOpen(false);
@@ -98,7 +99,7 @@ export default function FitnessScreen() {
               健身
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {dateLabel(date)} · 今日 {totalSets} 组
+              {formatDay(date)} · {isToday(date) ? `今日 ${totalSets} 组` : `${totalSets} 组`}
             </ThemedText>
           </View>
           <Pressable
@@ -108,7 +109,7 @@ export default function FitnessScreen() {
               { backgroundColor: theme.backgroundElement },
               pressed && styles.pressed,
             ]}>
-            <ThemedText type="small">动作库</ThemedText>
+            <ThemedText type="small">添加</ThemedText>
           </Pressable>
         </View>
 
@@ -123,7 +124,7 @@ export default function FitnessScreen() {
           </View>
 
           {items.length === 0 ? (
-            <EmptyState text="今天还没有安排训练" hint="点右下角「＋」从动作库添加" />
+            <EmptyState text="这个日期还没有安排训练" hint="点右上角「添加」选择动作" />
           ) : (
             <View style={styles.cardList}>
               {items.map((item) => (
@@ -169,17 +170,6 @@ export default function FitnessScreen() {
           )}
         </ScrollView>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="添加动作"
-          onPress={() => setPickerOpen(true)}
-          style={({ pressed }) => [
-            styles.fab,
-            { backgroundColor: theme.text },
-            pressed && styles.pressed,
-          ]}>
-          <ThemedText style={[styles.fabText, { color: theme.background }]}>＋</ThemedText>
-        </Pressable>
       </SafeAreaView>
 
       <ExercisePicker
@@ -205,7 +195,7 @@ export default function FitnessScreen() {
         title="删除这个训练项目？"
         message={
           deletingItem
-            ? `「${deletingItem.exercise_name}」的卡片会删除，已完成的 ${setsByItem.get(deletingItem.id) ?? 0} 组记录会保留。`
+            ? `「${deletingItem.exercise_name}」的卡片会删除，已完成的 ${setsByItem.get(deletingItem.id) ?? 0} 条记录会保留。`
             : undefined
         }
         confirmLabel="确认删除"
@@ -221,7 +211,9 @@ export default function FitnessScreen() {
         title="删除这组记录？"
         message={
           deletingRecord
-            ? `「${deletingRecord.exercise_name}」第${deletingRecord.set_index}组（${deletingRecord.reps}次 × ${deletingRecord.weight}kg）会删除，后面的组会重新编号。`
+            ? deletingRecord.tracking_type === 'duration'
+              ? `「${deletingRecord.exercise_name}」第${deletingRecord.set_index}次（${deletingRecord.duration_minutes ?? 0}分钟）会删除，后面的记录会重新编号。`
+              : `「${deletingRecord.exercise_name}」第${deletingRecord.set_index}组（${deletingRecord.reps}次 × ${deletingRecord.weight}kg）会删除，后面的组会重新编号。`
             : undefined
         }
         confirmLabel="确认删除"
@@ -262,7 +254,7 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.two,
-    paddingBottom: 96,
+    paddingBottom: Spacing.four,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -276,25 +268,6 @@ const styles = StyleSheet.create({
   },
   cardList: {
     gap: Spacing.two,
-  },
-  fab: {
-    position: 'absolute',
-    right: Spacing.four,
-    bottom: Spacing.four,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  fabText: {
-    fontSize: 28,
-    lineHeight: 32,
   },
   pressed: {
     opacity: 0.8,

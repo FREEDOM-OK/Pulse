@@ -3,6 +3,7 @@ import { resetDriverForTests, getDriver } from '@/db/connection';
 import { createTestContext } from './helpers/node-driver';
 import { clearAllData, exportBackup, importBackup, parseBackupPayload } from '@/db/repositories/backup';
 import { getDayDetail, getMonthActivity } from '@/db/repositories/calendar';
+import { PRESET_EXERCISES } from '@/db/seed-data';
 import { addDays } from '@/lib/date';
 import { validateMemoContent, validateTaskTitle } from '@/lib/validation';
 
@@ -31,7 +32,8 @@ describe('P9 边界与性能', () => {
 
     await clearAllData();
     await clearAllData();
-    expect((await exportBackup()).data.exercises).toHaveLength(0);
+    // 基础必备动作永久保留，清空数据不会删除它们。
+    expect((await exportBackup()).data.exercises).toHaveLength(PRESET_EXERCISES.length);
 
     await importBackup(parseBackupPayload(JSON.parse(JSON.stringify(payload))));
     expect((await exportBackup()).data.exercises).toEqual(payload.data.exercises);

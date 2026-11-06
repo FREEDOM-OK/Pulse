@@ -16,6 +16,9 @@ import { addTrainingItem, completeSet } from '@/db/repositories/training';
 import { addDietRecord } from '@/db/repositories/diet';
 import { addWish, markPlayed } from '@/db/repositories/games';
 import { setTheme } from '@/db/repositories/settings';
+import { createCustomExercise, findExerciseByName } from '@/db/repositories/exercises';
+import { PRESET_EXERCISES } from '@/db/seed-data';
+import { SCHEMA_VERSION } from '@/db/schema';
 
 const DATE = '2026-11-06';
 
@@ -59,7 +62,7 @@ describe('P1 备份与恢复', () => {
     const payload = await exportBackup();
 
     expect(payload.app).toBe(BACKUP_APP_ID);
-    expect(payload.schemaVersion).toBe(1);
+    expect(payload.schemaVersion).toBe(SCHEMA_VERSION);
     expect(payload.data.tasks).toHaveLength(1);
     expect(payload.data.memos).toHaveLength(1);
     expect(payload.data.trainingItems).toHaveLength(1);
@@ -85,7 +88,11 @@ describe('P1 备份与恢复', () => {
     expect(await countRows('set_records')).toBe(0);
     expect(await countRows('diet_records')).toBe(0);
     expect(await countRows('played_games')).toBe(0);
-    expect(await countRows('exercises')).toBe(0);
+    expect(await countRows('exercises')).toBe(PRESET_EXERCISES.length);
+    const presetCount = await getDriver().getFirstAsync<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM exercises WHERE is_preset = 1'
+    );
+    expect(Number(presetCount?.total)).toBe(PRESET_EXERCISES.length);
 
     const parsed = parseBackupPayload(JSON.parse(JSON.stringify(before)));
     await importBackup(parsed);
@@ -100,6 +107,59 @@ describe('P1 备份与恢复', () => {
     expect(after.data.wishlist).toEqual(before.data.wishlist);
     expect(after.data.exercises).toEqual(before.data.exercises);
     expect(after.data.settings).toEqual(before.data.settings);
+  });
+
+  it('清空全部数据时保留基础动作，只删除自定义动作', async () => {
+    await createTestContext();
+    await createCustomExercise('临时自定义动作', 'sets');
+
+    await clearAllData();
+
+    expect(await findExerciseByName('临时自定义动作')).toBeNull();
+    expect(await countRows('exercises')).toBe(PRESET_EXERCISES.length);
+    expect(await findExerciseByName('杠铃卧推')).toMatchObject({ isPreset: true });
+    expect(await findExerciseByName('爬坡快走')).toMatchObject({ trackingType: 'duration' });
+  });
+
+  it('按时间动作保存分钟数，并能随备份完整恢复', async () => {
+    await createTestContext();
+    const itemId = await addTrainingItem({
+      date: DATE,
+      exerciseId: null,
+      exerciseName: '慢跑',
+      trackingType: 'duration',
+      durationMinutes: 25,
+    });
+    const record = await completeSet(itemId);
+
+    expect(record).toMatchObject({
+      tracking_type: 'duration',
+      duration_minutes: 25,
+      reps: 1,
+      weight: 0,
+    });
+
+    const payload = await exportBackup();
+    expect(payload.data.trainingItems[0]).toMatchObject({
+      trackingType: 'duration',
+      durationMinutes: 25,
+    });
+    expect(payload.data.setRecords[0]).toMatchObject({
+      trackingType: 'duration',
+      durationMinutes: 25,
+    });
+
+    await clearAllData();
+    await importBackup(parseBackupPayload(JSON.parse(JSON.stringify(payload))));
+    const restored = (await exportBackup()).data;
+    expect(restored.trainingItems[0]).toMatchObject({
+      trackingType: 'duration',
+      durationMinutes: 25,
+    });
+    expect(restored.setRecords[0]).toMatchObject({
+      trackingType: 'duration',
+      durationMinutes: 25,
+    });
   });
 
   it('导入后可继续正常使用（主键不冲突）', async () => {

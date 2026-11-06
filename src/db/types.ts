@@ -16,9 +16,15 @@ export const MEAL_LABEL: Record<MealType, string> = {
   snack: '加餐',
 };
 
-export type ExerciseCategory = '胸' | '背' | '腿' | '肩' | '手臂' | '核心' | '有氧';
+export const EXERCISE_CATEGORIES = ['胸', '背', '腿', '肩', '手臂', '核心', '有氧'] as const;
 
-export const EXERCISE_CATEGORIES: ExerciseCategory[] = [
+export type PresetExerciseCategory = (typeof EXERCISE_CATEGORIES)[number];
+
+export const CUSTOM_EXERCISE_CATEGORY = '自定义类' as const;
+
+export type ExerciseCategory = PresetExerciseCategory | typeof CUSTOM_EXERCISE_CATEGORY;
+
+export const ALL_EXERCISE_CATEGORIES: ExerciseCategory[] = [
   '胸',
   '背',
   '腿',
@@ -26,7 +32,15 @@ export const EXERCISE_CATEGORIES: ExerciseCategory[] = [
   '手臂',
   '核心',
   '有氧',
+  CUSTOM_EXERCISE_CATEGORY,
 ];
+
+export type TrackingType = 'sets' | 'duration';
+
+export const TRACKING_TYPE_LABELS: Record<TrackingType, string> = {
+  sets: '按组计',
+  duration: '按时间计',
+};
 
 export type WishStatus = 'want' | 'played';
 
@@ -57,6 +71,7 @@ export interface ExerciseRow {
   name: string;
   category: string;
   is_preset: number;
+  tracking_type: TrackingType;
   created_at: string;
 }
 
@@ -67,6 +82,8 @@ export interface TrainingItemRow {
   exercise_name: string;
   reps: number;
   weight: number;
+  tracking_type: TrackingType;
+  duration_minutes: number;
   sort_order: number;
   created_at: string;
 }
@@ -79,6 +96,8 @@ export interface SetRecordRow {
   set_index: number;
   reps: number;
   weight: number;
+  tracking_type: TrackingType;
+  duration_minutes: number | null;
   completed_at: string;
   sort_order: number;
 }

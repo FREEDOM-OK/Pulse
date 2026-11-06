@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { AppButton } from '@/components/ui/app-button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -10,11 +9,16 @@ import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import type { Exercise } from '@/db/repositories/exercises';
 import {
-  createExercise,
+  createCustomExercise,
   deleteExercise,
   listExercisesByCategory,
 } from '@/db/repositories/exercises';
-import { EXERCISE_CATEGORIES } from '@/db/types';
+import {
+  ALL_EXERCISE_CATEGORIES,
+  CUSTOM_EXERCISE_CATEGORY,
+  TRACKING_TYPE_LABELS,
+  type TrackingType,
+} from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 
 interface ExercisePickerProps {
@@ -23,16 +27,18 @@ interface ExercisePickerProps {
   onConfirm: (exercises: Exercise[]) => void;
 }
 
+const TRACKING_TYPES: TrackingType[] = ['sets', 'duration'];
+
 /** 动作库选择器：按部位分类、支持多选、可新增/删除自定义动作。 */
 export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerProps) {
   const theme = useTheme();
   const [grouped, setGrouped] = useState<Record<string, Exercise[]>>({});
-  const [category, setCategory] = useState<string>(EXERCISE_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(ALL_EXERCISE_CATEGORIES[0]);
   const [selected, setSelected] = useState<Record<number, Exercise>>({});
   const [manageMode, setManageMode] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newCategory, setNewCategory] = useState<string>(EXERCISE_CATEGORIES[0]);
+  const [newTrackingType, setNewTrackingType] = useState<TrackingType>('sets');
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Exercise | null>(null);
 
@@ -62,21 +68,35 @@ export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerPr
     });
   };
 
+  const openCreateDialog = () => {
+    setNewName('');
+    setNewTrackingType('sets');
+    setError(null);
+    setAddOpen(true);
+  };
+
+  const closeCreateDialog = () => {
+    setAddOpen(false);
+    setError(null);
+  };
+
   const handleCreate = async () => {
     const name = newName.trim();
     if (!name) {
-      setError('动作名不能为空');
+      setError('运动名称不能为空');
       return;
     }
-    if (currentList.some((exercise) => exercise.name === name)) {
-      setError('这个部位已有同名动作');
+    const duplicate = Object.values(grouped)
+      .flat()
+      .some((exercise) => exercise.name === name);
+    if (duplicate) {
+      setError('动作库已有同名动作');
       return;
     }
-    await createExercise(name, newCategory);
-    setNewName('');
-    setAddOpen(false);
-    setError(null);
-    setCategory(newCategory);
+
+    await createCustomExercise(name, newTrackingType);
+    setCategory(CUSTOM_EXERCISE_CATEGORY);
+    closeCreateDialog();
     await loadLibrary();
   };
 
@@ -105,7 +125,7 @@ export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerPr
               </ThemedText>
               <AppButton label="取消" variant="secondary" onPress={onClose} />
               <AppButton
-                label="添加到今天"
+                label="添加到所选日期"
                 disabled={selectedCount === 0}
                 onPress={() => onConfirm(Object.values(selected))}
               />
@@ -113,55 +133,17 @@ export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerPr
           )
         }>
         <View style={styles.toolbar}>
-          <Pressable onPress={() => setAddOpen((value) => !value)}>
-            <ThemedText type="linkPrimary">{addOpen ? '收起' : '＋ 新增自定义动作'}</ThemedText>
+          <Pressable onPress={openCreateDialog}>
+            <ThemedText type="linkPrimary">＋ 新增自定义动作</ThemedText>
           </Pressable>
           <Pressable onPress={() => setManageMode((value) => !value)}>
             <ThemedText type="linkPrimary">{manageMode ? '退出管理' : '管理动作'}</ThemedText>
           </Pressable>
         </View>
 
-        {addOpen ? (
-          <ThemedView type="backgroundElement" style={styles.addBox}>
-            <TextField
-              placeholder="动作名称，例如：壶铃摇摆"
-              value={newName}
-              onChangeText={setNewName}
-              maxLength={30}
-            />
-            <View style={styles.categoryRow}>
-              {EXERCISE_CATEGORIES.map((item) => {
-                const active = newCategory === item;
-                return (
-                  <Pressable
-                    key={item}
-                    onPress={() => setNewCategory(item)}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      { backgroundColor: active ? theme.text : theme.background },
-                      pressed && styles.pressed,
-                    ]}>
-                    <ThemedText
-                      type="small"
-                      style={{ color: active ? theme.background : theme.text }}>
-                      {item}
-                    </ThemedText>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {error ? (
-              <ThemedText type="small" style={styles.error}>
-                {error}
-              </ThemedText>
-            ) : null}
-            <AppButton label="添加动作" onPress={() => handleCreate().catch(() => undefined)} />
-          </ThemedView>
-        ) : null}
-
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
           <View style={styles.categoryRow}>
-            {EXERCISE_CATEGORIES.map((item) => {
+            {ALL_EXERCISE_CATEGORIES.map((item) => {
               const active = category === item;
               return (
                 <Pressable
@@ -185,7 +167,10 @@ export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerPr
 
         <View style={styles.list}>
           {currentList.length === 0 ? (
-            <EmptyState text="这个部位还没有动作" hint="可以点上面「新增自定义动作」" />
+            <EmptyState
+              text={category === CUSTOM_EXERCISE_CATEGORY ? '还没有自定义动作' : '这个部位还没有动作'}
+              hint="点上方「新增自定义动作」添加"
+            />
           ) : (
             currentList.map((exercise) => {
               const checked = Boolean(selected[exercise.id]);
@@ -201,17 +186,24 @@ export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerPr
                   <ThemedText type="small" style={styles.rowLabel}>
                     {exercise.name}
                   </ThemedText>
-                  {exercise.isPreset ? null : (
+                  {!exercise.isPreset || exercise.trackingType === 'duration' ? (
                     <ThemedText type="small" themeColor="textSecondary">
-                      自定义
+                      {!exercise.isPreset ? '自定义 · ' : ''}
+                      {TRACKING_TYPE_LABELS[exercise.trackingType]}
                     </ThemedText>
-                  )}
+                  ) : null}
                   {manageMode ? (
-                    <Pressable onPress={() => setDeleting(exercise)} hitSlop={8}>
-                      <ThemedText type="small" style={styles.deleteText}>
-                        删除
+                    exercise.isPreset ? (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        基础
                       </ThemedText>
-                    </Pressable>
+                    ) : (
+                      <Pressable onPress={() => setDeleting(exercise)} hitSlop={8}>
+                        <ThemedText type="small" style={styles.deleteText}>
+                          删除
+                        </ThemedText>
+                      </Pressable>
+                    )
                   ) : (
                     <View
                       style={[
@@ -235,12 +227,65 @@ export function ExercisePicker({ visible, onClose, onConfirm }: ExercisePickerPr
         </View>
       </ModalSheet>
 
+      <ModalSheet
+        visible={addOpen}
+        title="新增自定义动作"
+        onClose={closeCreateDialog}
+        footer={
+          <View style={styles.footerRow}>
+            <AppButton label="取消" variant="secondary" onPress={closeCreateDialog} />
+            <AppButton label="确定" onPress={() => handleCreate().catch(() => undefined)} />
+          </View>
+        }>
+        <View style={styles.createForm}>
+          <TextField
+            label="运动名称"
+            placeholder="例如：壶铃摇摆"
+            value={newName}
+            onChangeText={(value) => {
+              setNewName(value);
+              setError(null);
+            }}
+            maxLength={30}
+          />
+          <ThemedText type="small" themeColor="textSecondary">
+            计算方式
+          </ThemedText>
+          <View style={styles.categoryRow}>
+            {TRACKING_TYPES.map((item) => {
+              const active = newTrackingType === item;
+              return (
+                <Pressable
+                  key={item}
+                  onPress={() => setNewTrackingType(item)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    { backgroundColor: active ? theme.text : theme.backgroundElement },
+                    pressed && styles.pressed,
+                  ]}>
+                  <ThemedText
+                    type="small"
+                    style={{ color: active ? theme.background : theme.text }}>
+                    {TRACKING_TYPE_LABELS[item]}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+          {error ? (
+            <ThemedText type="small" style={styles.error}>
+              {error}
+            </ThemedText>
+          ) : null}
+        </View>
+      </ModalSheet>
+
       <ConfirmDialog
         visible={deleting !== null}
         title="删除动作？"
         message={
           deleting
-            ? `「${deleting.name}」会从动作库移除，但已有的训练记录不会受影响。`
+            ? `「${deleting.name}」会从自定义类移除，但已有的训练记录不会受影响。`
             : undefined
         }
         confirmLabel="确认删除"
@@ -259,11 +304,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Spacing.two,
   },
-  addBox: {
-    borderRadius: Spacing.three,
-    padding: Spacing.three,
-    gap: Spacing.two,
-    marginBottom: Spacing.three,
+  createForm: {
+    gap: Spacing.three,
   },
   categoryScroll: {
     marginBottom: Spacing.two,

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { resetDriverForTests } from '@/db/connection';
 import { createTestContext } from './helpers/node-driver';
-import { exportBackup, BackupError } from '@/db/repositories/backup';
+import { exportBackup, BackupError, BACKUP_VERSION } from '@/db/repositories/backup';
 import {
   buildAutoBackupName,
   buildBackupFileName,
@@ -27,7 +27,7 @@ describe('P8 备份文件', () => {
 
     const payload = await exportBackup();
     const text = serializeBackup(payload);
-    expect(text).toContain('"schemaVersion": 1');
+    expect(text).toContain(`"schemaVersion": ${BACKUP_VERSION}`);
 
     const parsed = parseBackupText(text);
     expect(parsed.data.tasks).toEqual(payload.data.tasks);

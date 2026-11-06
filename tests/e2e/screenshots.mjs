@@ -46,11 +46,11 @@ async function main() {
 
     // 健身：添加卧推，完成两组
     await page.clickText('健身');
-    await page.waitForText('今天还没有安排训练');
-    await page.clickText('动作库');
+    await page.waitForText('这个日期还没有安排训练');
+    await page.clickText('添加');
     await page.waitForText('选择动作');
-    await page.clickText('卧推');
-    await page.clickText('添加到今天');
+    await page.clickText('杠铃卧推');
+    await page.clickText('添加到所选日期');
     await page.waitForText('已练 0 组');
     await page.clickText('完成');
     await page.clickText('完成');

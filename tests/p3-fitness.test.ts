@@ -184,4 +184,34 @@ describe('P3 健身：卡片与完成记录', () => {
     expect(item.reps).toBe(5);
     expect(item.weight).toBe(60);
   });
+
+  it('按时间动作记录运动分钟数，不再使用次数与重量', async () => {
+    await createTestContext();
+    const id = await addTrainingItem({
+      date: DATE,
+      exerciseId: null,
+      exerciseName: '慢跑',
+      trackingType: 'duration',
+      reps: 12,
+      weight: 40,
+      durationMinutes: 15,
+    });
+
+    const initial = (await listTrainingItems(DATE))[0];
+    expect(initial).toMatchObject({
+      tracking_type: 'duration',
+      duration_minutes: 15,
+      reps: 1,
+      weight: 0,
+    });
+
+    await updateTrainingItem(id, { durationMinutes: 30 });
+    const record = await completeSet(id);
+    expect(record).toMatchObject({
+      tracking_type: 'duration',
+      duration_minutes: 30,
+      reps: 1,
+      weight: 0,
+    });
+  });
 });

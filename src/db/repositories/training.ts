@@ -1,5 +1,5 @@
 import { getDriver } from '../connection';
-import type { TrainingItemRow, SetRecordRow } from '../types';
+import type { SetRecordRow, TrackingType, TrainingItemRow } from '../types';
 import { nowIso } from '@/lib/date';
 import { getFitnessDefaults } from './settings';
 
@@ -7,10 +7,19 @@ export interface AddTrainingItemInput {
   date: string;
   exerciseId: number | null;
   exerciseName: string;
+  trackingType?: TrackingType;
   /** 省略时使用设置里的「默认次数」。 */
   reps?: number;
   /** 省略时使用设置里的「默认重量」。 */
   weight?: number;
+  /** 按时间计的动作默认 10 分钟。 */
+  durationMinutes?: number;
+}
+
+export interface TrainingItemPatch {
+  reps?: number;
+  weight?: number;
+  durationMinutes?: number;
 }
 
 export interface TrainingSummary {
@@ -29,21 +38,27 @@ export async function listTrainingItems(date: string): Promise<TrainingItemRow[]
 export async function addTrainingItem(input: AddTrainingItemInput): Promise<number> {
   const driver = getDriver();
   const defaults = await getFitnessDefaults();
-  const reps = Math.max(1, Math.round(input.reps ?? defaults.reps));
-  const weight = Math.max(0, input.weight ?? defaults.weight);
+  const trackingType: TrackingType = input.trackingType === 'duration' ? 'duration' : 'sets';
+  const reps = trackingType === 'duration' ? 1 : Math.max(1, Math.round(input.reps ?? defaults.reps));
+  const weight = trackingType === 'duration' ? 0 : Math.max(0, input.weight ?? defaults.weight);
+  const durationMinutes =
+    trackingType === 'duration' ? Math.max(1, Math.round(input.durationMinutes ?? 10)) : 10;
   const row = await driver.getFirstAsync<{ maxOrder: number | null }>(
     'SELECT MAX(sort_order) AS maxOrder FROM training_items WHERE date = ?',
     [input.date]
   );
   const result = await driver.runAsync(
-    `INSERT INTO training_items (date, exercise_id, exercise_name, reps, weight, sort_order, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO training_items
+     (date, exercise_id, exercise_name, reps, weight, tracking_type, duration_minutes, sort_order, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.date,
       input.exerciseId,
       input.exerciseName,
       reps,
       weight,
+      trackingType,
+      durationMinutes,
       Number(row?.maxOrder ?? 0) + 1,
       nowIso(),
     ]
@@ -53,7 +68,7 @@ export async function addTrainingItem(input: AddTrainingItemInput): Promise<numb
 
 export async function updateTrainingItem(
   id: number,
-  patch: { reps?: number; weight?: number }
+  patch: TrainingItemPatch
 ): Promise<void> {
   const fields: string[] = [];
   const params: (string | number)[] = [];
@@ -64,6 +79,10 @@ export async function updateTrainingItem(
   if (patch.weight !== undefined) {
     fields.push('weight = ?');
     params.push(Math.max(0, patch.weight));
+  }
+  if (patch.durationMinutes !== undefined) {
+    fields.push('duration_minutes = ?');
+    params.push(Math.max(1, Math.round(patch.durationMinutes)));
   }
   if (fields.length === 0) return;
   params.push(id);
@@ -96,10 +115,10 @@ export async function countSetsForItem(itemId: number): Promise<number> {
   return Number(row?.total ?? 0);
 }
 
-/** 点一次「完成」：新增一条组记录，组号 = 该卡片已有记录数 + 1，排序号 = 当天最大 + 1。 */
+/** 点一次「完成」：新增一条记录；按时间计的动作保存分钟数，不保存重量。 */
 export async function completeSet(
   itemId: number,
-  overrides?: { reps?: number; weight?: number }
+  overrides?: { reps?: number; weight?: number; durationMinutes?: number }
 ): Promise<SetRecordRow> {
   const driver = getDriver();
   let created: SetRecordRow | null = null;
@@ -111,17 +130,23 @@ export async function completeSet(
     );
     if (!item) throw new Error('训练项目不存在');
 
-    const reps = Math.max(1, Math.round(overrides?.reps ?? item.reps));
-    const weight = Math.max(0, overrides?.weight ?? item.weight);
+    const isDuration = item.tracking_type === 'duration';
+    const reps = isDuration ? 1 : Math.max(1, Math.round(overrides?.reps ?? item.reps));
+    const weight = isDuration ? 0 : Math.max(0, overrides?.weight ?? item.weight);
+    const durationMinutes = isDuration
+      ? Math.max(1, Math.round(overrides?.durationMinutes ?? item.duration_minutes ?? 10))
+      : null;
 
-    if (reps !== item.reps || weight !== item.weight) {
-      await driver.runAsync('UPDATE training_items SET reps = ?, weight = ? WHERE id = ?', [
-        reps,
-        weight,
-        itemId,
-      ]);
+    if (reps !== item.reps || weight !== item.weight || durationMinutes !== item.duration_minutes) {
+      await driver.runAsync(
+        `UPDATE training_items
+         SET reps = ?, weight = ?, duration_minutes = ?
+         WHERE id = ?`,
+        [reps, weight, durationMinutes ?? item.duration_minutes, itemId]
+      );
       item.reps = reps;
       item.weight = weight;
+      if (durationMinutes !== null) item.duration_minutes = durationMinutes;
     }
 
     const countRow = await driver.getFirstAsync<{ total: number }>(
@@ -139,8 +164,9 @@ export async function completeSet(
 
     const result = await driver.runAsync(
       `INSERT INTO set_records
-       (training_item_id, date, exercise_name, set_index, reps, weight, completed_at, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (training_item_id, date, exercise_name, set_index, reps, weight,
+        tracking_type, duration_minutes, completed_at, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         item.date,
@@ -148,6 +174,8 @@ export async function completeSet(
         setIndex,
         reps,
         weight,
+        item.tracking_type,
+        durationMinutes,
         completedAt,
         sortOrder,
       ]
@@ -161,6 +189,8 @@ export async function completeSet(
       set_index: setIndex,
       reps,
       weight,
+      tracking_type: item.tracking_type,
+      duration_minutes: durationMinutes,
       completed_at: completedAt,
       sort_order: sortOrder,
     };
@@ -170,7 +200,7 @@ export async function completeSet(
   return created;
 }
 
-/** 撤销一组：删除记录，并把同一动作剩余组重新编号为 1..n。 */
+/** 撤销一组：删除记录，并把同一动作剩余记录重新编号为 1..n。 */
 export async function undoSet(recordId: number): Promise<void> {
   const driver = getDriver();
 
@@ -223,11 +253,12 @@ export async function getTrainingSummary(date: string): Promise<TrainingSummary>
   };
 }
 
-/** 日历回顾用：某天的动作和组数汇总。 */
+/** 日历回顾用：某天的动作和完成记录数汇总。 */
 export async function getDayExercises(
   date: string
 ): Promise<{ exerciseName: string; sets: number }[]> {
-  const rows = await getDriver().getAllAsync<{ exercise_name: string; sets: number }>(
+  const driver = getDriver();
+  const rows = await driver.getAllAsync<{ exercise_name: string; sets: number }>(
     `SELECT exercise_name, COUNT(*) AS sets
      FROM set_records WHERE date = ?
      GROUP BY exercise_name

@@ -1,5 +1,6 @@
 import { getDriver } from '../connection';
 import { ALL_TABLES, SCHEMA_VERSION } from '../schema';
+import { seedExercises } from '../seed';
 import type { SqlParam } from '../driver';
 
 export const BACKUP_APP_ID = 'my-life-app';
@@ -62,6 +63,7 @@ interface ExerciseRow {
   name: string;
   category: string;
   is_preset: number;
+  tracking_type: string;
   created_at: string;
 }
 interface TrainingRow {
@@ -71,6 +73,8 @@ interface TrainingRow {
   exercise_name: string;
   reps: number;
   weight: number;
+  tracking_type: string;
+  duration_minutes: number;
   sort_order: number;
   created_at: string;
 }
@@ -82,6 +86,8 @@ interface SetRow {
   set_index: number;
   reps: number;
   weight: number;
+  tracking_type: string;
+  duration_minutes: number | null;
   completed_at: string;
   sort_order: number;
 }
@@ -160,6 +166,7 @@ export async function exportBackup(): Promise<BackupPayload> {
         name: row.name,
         category: row.category,
         isPreset: row.is_preset,
+        trackingType: row.tracking_type === 'duration' ? 'duration' : 'sets',
         createdAt: row.created_at,
       })),
       trainingItems: trainingItems.map((row) => ({
@@ -169,6 +176,8 @@ export async function exportBackup(): Promise<BackupPayload> {
         exerciseName: row.exercise_name,
         reps: row.reps,
         weight: row.weight,
+        trackingType: row.tracking_type === 'duration' ? 'duration' : 'sets',
+        durationMinutes: row.duration_minutes,
         sortOrder: row.sort_order,
         createdAt: row.created_at,
       })),
@@ -180,6 +189,8 @@ export async function exportBackup(): Promise<BackupPayload> {
         setIndex: row.set_index,
         reps: row.reps,
         weight: row.weight,
+        trackingType: row.tracking_type === 'duration' ? 'duration' : 'sets',
+        durationMinutes: row.duration_minutes,
         completedAt: row.completed_at,
         sortOrder: row.sort_order,
       })),
@@ -270,15 +281,23 @@ export function summarizeBackup(payload: BackupPayload) {
   };
 }
 
-async function clearTables(): Promise<void> {
+async function clearTables(preservePresetExercises = false): Promise<void> {
   const driver = getDriver();
   for (const table of ALL_TABLES) {
+    if (table === 'exercises' && preservePresetExercises) {
+      await driver.runAsync('DELETE FROM exercises WHERE is_preset = 0');
+      continue;
+    }
     await driver.runAsync(`DELETE FROM ${table}`);
   }
+
+  const sequenceTables = preservePresetExercises
+    ? ALL_TABLES.filter((table) => table !== 'exercises')
+    : ALL_TABLES;
   try {
     await driver.runAsync(
-      `DELETE FROM sqlite_sequence WHERE name IN (${ALL_TABLES.map(() => '?').join(', ')})`,
-      ALL_TABLES as unknown as SqlParam[]
+      `DELETE FROM sqlite_sequence WHERE name IN (${sequenceTables.map(() => '?').join(', ')})`,
+      sequenceTables as unknown as SqlParam[]
     );
   } catch {
     // 空库时 sqlite_sequence 可能不存在，忽略。
@@ -333,12 +352,15 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
 
     for (const row of data.exercises) {
       await driver.runAsync(
-        'INSERT INTO exercises (id, name, category, is_preset, created_at) VALUES (?, ?, ?, ?, ?)',
+        `INSERT INTO exercises
+         (id, name, category, is_preset, tracking_type, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
           value<number>(row, 'id'),
           value<string>(row, 'name'),
           value<string>(row, 'category'),
           value<number>(row, 'isPreset') ?? 0,
+          value<string>(row, 'trackingType') === 'duration' ? 'duration' : 'sets',
           value<string>(row, 'createdAt'),
         ]
       );
@@ -347,8 +369,9 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
     for (const row of data.trainingItems) {
       await driver.runAsync(
         `INSERT INTO training_items
-         (id, date, exercise_id, exercise_name, reps, weight, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, date, exercise_id, exercise_name, reps, weight,
+          tracking_type, duration_minutes, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           value<number>(row, 'id'),
           value<string>(row, 'date'),
@@ -356,6 +379,8 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<string>(row, 'exerciseName'),
           value<number>(row, 'reps') ?? 1,
           value<number>(row, 'weight') ?? 0,
+          value<string>(row, 'trackingType') === 'duration' ? 'duration' : 'sets',
+          Math.max(1, Math.round(value<number>(row, 'durationMinutes') ?? 10)),
           value<number>(row, 'sortOrder') ?? 0,
           value<string>(row, 'createdAt'),
         ]
@@ -365,8 +390,9 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
     for (const row of data.setRecords) {
       await driver.runAsync(
         `INSERT INTO set_records
-         (id, training_item_id, date, exercise_name, set_index, reps, weight, completed_at, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, training_item_id, date, exercise_name, set_index, reps, weight,
+          tracking_type, duration_minutes, completed_at, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           value<number>(row, 'id'),
           value<number | null>(row, 'trainingItemId') ?? null,
@@ -375,6 +401,8 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<number>(row, 'setIndex') ?? 1,
           value<number>(row, 'reps') ?? 1,
           value<number>(row, 'weight') ?? 0,
+          value<string>(row, 'trackingType') === 'duration' ? 'duration' : 'sets',
+          value<number | null>(row, 'durationMinutes') ?? null,
           value<string>(row, 'completedAt'),
           value<number>(row, 'sortOrder') ?? 0,
         ]
@@ -431,12 +459,15 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
       await driver.runAsync('INSERT INTO settings (key, value) VALUES (?, ?)', [key, settingValue]);
     }
   });
+
+  await seedExercises();
 }
 
-/** 清空所有业务数据（设置也清空）。 */
+/** 清空所有业务数据；基础必备动作永久保留。 */
 export async function clearAllData(): Promise<void> {
   const driver = getDriver();
   await driver.withTransactionAsync(async () => {
-    await clearTables();
+    await clearTables(true);
   });
+  await seedExercises();
 }

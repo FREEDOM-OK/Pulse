@@ -50,15 +50,15 @@ export async function run(page, baseUrl) {
 
   await page.clickText('健身');
   await page.waitForText('待训练');
-  await page.clickText('动作库');
+  await page.clickText('添加');
   await page.waitForText('选择动作');
-  await page.clickText('卧推');
-  await page.clickText('添加到今天');
+  await page.clickText('杠铃卧推');
+  await page.clickText('添加到所选日期');
   await page.waitForText('已练 0 组');
 
   const defaults = await page.evaluate(`(() => ({
-    reps: document.querySelector('[aria-label="卧推 每组次数"]')?.value ?? null,
-    weight: document.querySelector('[aria-label="卧推 重量"]')?.value ?? null,
+    reps: document.querySelector('[aria-label="杠铃卧推 每组次数"]')?.value ?? null,
+    weight: document.querySelector('[aria-label="杠铃卧推 重量"]')?.value ?? null,
   }))()`);
   if (String(defaults.reps) !== '12' || String(defaults.weight) !== '40') {
     throw new Error(`新增动作没有采用健身默认值：${JSON.stringify(defaults)}`);

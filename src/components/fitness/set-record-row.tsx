@@ -10,15 +10,18 @@ interface SetRecordItemProps {
   onDelete: () => void;
 }
 
-/** 已完成的一组：左滑露出「删除」，删除后同一动作的组号会重新排列。 */
+/** 已完成记录：按组动作显示次数与重量，按时间动作只显示运动分钟数。 */
 export function SetRecordItem({ record, onDelete }: SetRecordItemProps) {
+  const isDuration = record.tracking_type === 'duration';
+  const sequenceLabel = isDuration ? '次' : '组';
+
   return (
     <SwipeRow
       actions={[
         {
           label: '删除',
           color: '#D64545',
-          accessibilityLabel: `删除${record.exercise_name}第${record.set_index}组`,
+          accessibilityLabel: `删除${record.exercise_name}第${record.set_index}${sequenceLabel}`,
           onPress: onDelete,
         },
       ]}>
@@ -32,14 +35,23 @@ export function SetRecordItem({ record, onDelete }: SetRecordItemProps) {
           {record.exercise_name}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          第{record.set_index}组
+          第{record.set_index}
+          {sequenceLabel}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {record.reps}次
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {record.weight}kg
-        </ThemedText>
+        {isDuration ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {record.duration_minutes ?? 0}分钟
+          </ThemedText>
+        ) : (
+          <>
+            <ThemedText type="small" themeColor="textSecondary">
+              {record.reps}次
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              {record.weight}kg
+            </ThemedText>
+          </>
+        )}
       </ThemedView>
     </SwipeRow>
   );
