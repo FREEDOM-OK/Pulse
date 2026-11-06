@@ -7,7 +7,6 @@ import { ThemedView } from '@/components/themed-view';
 import { MemoForm } from '@/components/home/memo-form';
 import { MiniCalendar } from '@/components/home/mini-calendar';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { EmptyState } from '@/components/ui/empty-state';
 import { ModalSheet } from '@/components/ui/modal-sheet';
 import { Spacing } from '@/constants/theme';
 import { getMonthActivity, type DayFlags } from '@/db/repositories/calendar';

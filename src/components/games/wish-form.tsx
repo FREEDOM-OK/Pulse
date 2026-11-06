@@ -4,7 +4,6 @@ import { AppButton } from '@/components/ui/app-button';
 import { ModalSheet, modalStyles } from '@/components/ui/modal-sheet';
 import { TextField } from '@/components/ui/text-field';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
 import type { WishlistRow } from '@/db/types';
 import { addWish, updateWish } from '@/db/repositories/games';
 import { validateGameName } from '@/lib/validation';
