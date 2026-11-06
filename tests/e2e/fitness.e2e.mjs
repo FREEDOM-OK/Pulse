@@ -37,12 +37,9 @@ export async function run(page, baseUrl) {
   }
 
   // 左滑第 4 组，露出「删除」按钮
-  const beforeSwipe = await page.rectOf('第4组');
-  if (!beforeSwipe) throw new Error('找不到第 4 组记录');
-  await page.drag(beforeSwipe.x + 60, beforeSwipe.y, beforeSwipe.x - 80, beforeSwipe.y);
-  const afterSwipe = await page.rectOf('第4组');
-  if (!afterSwipe || afterSwipe.x > beforeSwipe.x - 40) {
-    throw new Error(`左滑没有把记录向左移出：${beforeSwipe.x} -> ${afterSwipe && afterSwipe.x}`);
+  const moved = await page.swipeLeft('第4组');
+  if (moved < 40) {
+    throw new Error(`左滑没有把记录向左移出，只移动了 ${moved}px`);
   }
 
   // 删除第 4 组，剩余组重新编号

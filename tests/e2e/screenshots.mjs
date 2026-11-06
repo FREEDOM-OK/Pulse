@@ -55,6 +55,9 @@ async function main() {
     await page.clickText('完成');
     await page.clickText('完成');
     await page.waitForText('共 2 组');
+    // 左滑第 2 组，让截图里能看到「删除」按钮
+    await page.swipeLeft('第2组');
+    await sleep(300);
     await page.screenshot(path.join(OUT_DIR, 'fitness.png'));
 
     // 饮食
@@ -78,8 +81,8 @@ async function main() {
     await page.waitForText('塞尔达：王国之泪');
     await page.clickText('玩了');
     await page.waitForText('玩了：塞尔达：王国之泪');
-    await page.fill('0', '2', 0);
-    await page.fill('0', '30', 1);
+    await page.clickLabel('游玩小时 2');
+    await page.clickLabel('游玩分钟 30');
     await page.fill('玩起来怎么样', '探索感很强，地图很大');
     await page.clickLabel('5 星', -1);
     await page.clickText('保存');

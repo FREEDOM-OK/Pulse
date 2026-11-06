@@ -260,6 +260,43 @@ class Page {
     await sleep(400);
   }
 
+  /** 触摸左滑：比鼠标拖拽更接近真机，也不会触发 Web 的文字选择。 */
+  async touchSwipeLeft(x, y, distance = 140) {
+    await this.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    try {
+      await this.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ x, y }],
+      });
+      const steps = 12;
+      for (let step = 1; step <= steps; step += 1) {
+        await this.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ x: x - (distance * step) / steps, y }],
+        });
+        await sleep(16);
+      }
+      await this.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } finally {
+      await sleep(450);
+      await this.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+    }
+  }
+
+  /** 左滑包含指定文本的行，直到整行真的向左移动；返回移动的像素数。 */
+  async swipeLeft(text, attempts = 3) {
+    const before = await this.rectOf(text);
+    if (!before) throw new Error(`找不到要滑动的文本「${text}」`);
+    let moved = 0;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      await this.touchSwipeLeft(before.x + 60, before.y);
+      const after = await this.rectOf(text);
+      moved = before.x - (after ? after.x : before.x);
+      if (moved >= 40) return moved;
+    }
+    return moved;
+  }
+
   /** 取 aria-label 匹配元素的矩形区域（视口坐标）。 */
   async rectOfLabel(label) {
     return this.evaluate(`(() => {
