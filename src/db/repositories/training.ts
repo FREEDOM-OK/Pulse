@@ -1,13 +1,16 @@
 import { getDriver } from '../connection';
 import type { TrainingItemRow, SetRecordRow } from '../types';
 import { nowIso } from '@/lib/date';
+import { getFitnessDefaults } from './settings';
 
 export interface AddTrainingItemInput {
   date: string;
   exerciseId: number | null;
   exerciseName: string;
-  reps: number;
-  weight: number;
+  /** 省略时使用设置里的「默认次数」。 */
+  reps?: number;
+  /** 省略时使用设置里的「默认重量」。 */
+  weight?: number;
 }
 
 export interface TrainingSummary {
@@ -25,6 +28,9 @@ export async function listTrainingItems(date: string): Promise<TrainingItemRow[]
 
 export async function addTrainingItem(input: AddTrainingItemInput): Promise<number> {
   const driver = getDriver();
+  const defaults = await getFitnessDefaults();
+  const reps = Math.max(1, Math.round(input.reps ?? defaults.reps));
+  const weight = Math.max(0, input.weight ?? defaults.weight);
   const row = await driver.getFirstAsync<{ maxOrder: number | null }>(
     'SELECT MAX(sort_order) AS maxOrder FROM training_items WHERE date = ?',
     [input.date]
@@ -36,8 +42,8 @@ export async function addTrainingItem(input: AddTrainingItemInput): Promise<numb
       input.date,
       input.exerciseId,
       input.exerciseName,
-      Math.max(1, Math.round(input.reps)),
-      Math.max(0, input.weight),
+      reps,
+      weight,
       Number(row?.maxOrder ?? 0) + 1,
       nowIso(),
     ]

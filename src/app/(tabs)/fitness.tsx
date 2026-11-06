@@ -63,12 +63,11 @@ export default function FitnessScreen() {
 
   const handlePick = async (exercises: Exercise[]) => {
     for (const exercise of exercises) {
+      // 次数与重量省略不传，由 addTrainingItem 套用设置里的健身默认值。
       await addTrainingItem({
         date,
         exerciseId: exercise.id,
         exerciseName: exercise.name,
-        reps: 8,
-        weight: 0,
       });
     }
     setPickerOpen(false);

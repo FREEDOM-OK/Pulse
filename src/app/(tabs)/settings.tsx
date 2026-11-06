@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { ThemedText } from '@/components/themed-text';
@@ -15,7 +15,11 @@ import {
   summarizeBackup,
   type BackupPayload,
 } from '@/db/repositories/backup';
-import type { ThemeSetting } from '@/db/repositories/settings';
+import {
+  getFitnessDefaults,
+  setFitnessDefaults,
+  type ThemeSetting,
+} from '@/db/repositories/settings';
 import { buildAutoBackupName, buildBackupFileName, parseBackupText, serializeBackup } from '@/lib/backup-text';
 import { pickBackupText, saveAutoBackup, saveBackupFile } from '@/lib/backup-file';
 import { useThemePreference } from '@/theme/theme-context';
@@ -42,6 +46,17 @@ export default function SettingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [importPayload, setImportPayload] = useState<BackupPayload | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
+  const [defaultRepsText, setDefaultRepsText] = useState('8');
+  const [defaultWeightText, setDefaultWeightText] = useState('0');
+
+  useEffect(() => {
+    getFitnessDefaults()
+      .then((defaults) => {
+        setDefaultRepsText(String(defaults.reps));
+        setDefaultWeightText(String(defaults.weight));
+      })
+      .catch(() => undefined);
+  }, []);
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -101,6 +116,29 @@ export default function SettingsScreen() {
       setError(errorMessage(reason));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const sumDefaultReps = Math.round(Number(defaultRepsText));
+  const sumDefaultWeight = Math.round(Number(defaultWeightText));
+  const defaultsValid =
+    Number.isInteger(sumDefaultReps) &&
+    sumDefaultReps >= 1 &&
+    Number.isInteger(sumDefaultWeight) &&
+    sumDefaultWeight >= 0;
+
+  const commitFitnessDefaults = async () => {
+    if (!defaultsValid) return;
+    const defaults = { reps: sumDefaultReps, weight: sumDefaultWeight };
+    try {
+      await setFitnessDefaults(defaults);
+      setDefaultRepsText(String(defaults.reps));
+      setDefaultWeightText(String(defaults.weight));
+      setError(null);
+      setMessage('健身默认值已保存。');
+    } catch (reason) {
+      setMessage(null);
+      setError(errorMessage(reason));
     }
   };
 
@@ -192,6 +230,53 @@ export default function SettingsScreen() {
               <ThemedText type="small" themeColor="textSecondary">
                 ›
               </ThemedText>
+            </Pressable>
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            健身默认值
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            <View style={styles.defaultsRow}>
+              <ThemedText type="small">默认次数</ThemedText>
+              <TextInput
+                value={defaultRepsText}
+                onChangeText={setDefaultRepsText}
+                keyboardType="number-pad"
+                maxLength={3}
+                accessibilityLabel="健身默认次数"
+                style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+              />
+              <ThemedText type="small" themeColor="textSecondary">次</ThemedText>
+            </View>
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={styles.defaultsRow}>
+              <ThemedText type="small">默认重量</ThemedText>
+              <TextInput
+                value={defaultWeightText}
+                onChangeText={setDefaultWeightText}
+                keyboardType="number-pad"
+                maxLength={4}
+                accessibilityLabel="健身默认重量"
+                style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+              />
+              <ThemedText type="small" themeColor="textSecondary">kg</ThemedText>
+            </View>
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="保存健身默认值"
+              disabled={busy || !defaultsValid}
+              onPress={() => commitFitnessDefaults().catch(() => undefined)}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed, !defaultsValid && styles.disabled]}
+            >
+              <View style={styles.rowText}>
+                <ThemedText type="small">保存健身默认值</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  之后新增的训练动作会使用这里的次数和重量，仍可单独修改
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">›</ThemedText>
             </Pressable>
           </ThemedView>
 
@@ -357,6 +442,24 @@ const styles = StyleSheet.create({
   themeOptions: {
     flexDirection: 'row',
     gap: Spacing.one,
+  },
+  defaultsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.two,
+  },
+  numberInput: {
+    width: 72,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    fontSize: 14,
+    textAlign: 'center',
+    minHeight: 34,
+  },
+  disabled: {
+    opacity: 0.4,
   },
   themeChip: {
     paddingHorizontal: Spacing.two,
