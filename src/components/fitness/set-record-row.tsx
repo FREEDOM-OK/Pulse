@@ -1,0 +1,67 @@
+import { StyleSheet, View } from 'react-native';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { SwipeRow } from '@/components/ui/swipe-row';
+import { Spacing } from '@/constants/theme';
+import type { SetRecordRow } from '@/db/types';
+
+interface SetRecordItemProps {
+  record: SetRecordRow;
+  onUndo: () => void;
+}
+
+/** 已完成的一组：右滑露出「撤销」。 */
+export function SetRecordItem({ record, onUndo }: SetRecordItemProps) {
+  return (
+    <SwipeRow
+      reveal="leading"
+      actions={[{ label: '撤销', color: '#8A8F98', onPress: onUndo }]}>
+      <ThemedView type="backgroundElement" style={styles.row}>
+        <View style={styles.indexBadge}>
+          <ThemedText type="small" style={styles.indexText}>
+            {record.set_index}
+          </ThemedText>
+        </View>
+        <ThemedText type="small" style={styles.name} numberOfLines={1}>
+          {record.exercise_name}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          第{record.set_index}组
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {record.reps}次
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {record.weight}kg
+        </ThemedText>
+      </ThemedView>
+    </SwipeRow>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.three,
+  },
+  indexBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(127,127,127,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  indexText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  name: {
+    flex: 1,
+    fontSize: 14,
+  },
+});
