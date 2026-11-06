@@ -19,8 +19,8 @@ export async function run(page, baseUrl) {
   // 点了
   await page.clickText('玩了');
   await page.waitForText('玩了：塞尔达');
-  await page.fill('0', '2', 0);
-  await page.fill('0', '30', 1);
+  await page.clickLabel('游玩小时 2');
+  await page.clickLabel('游玩分钟 30');
   await page.fill('玩起来怎么样', '探索感很强，地图很大');
   await page.clickLabel('4 星', -1);
   await page.clickText('保存');
@@ -56,3 +56,4 @@ export async function run(page, baseUrl) {
   await sleep(400);
   await page.waitForText('还没有游玩记录');
 }
+

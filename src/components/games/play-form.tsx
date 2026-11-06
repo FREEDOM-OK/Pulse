@@ -3,12 +3,14 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { AppButton } from '@/components/ui/app-button';
 import { ModalSheet, modalStyles } from '@/components/ui/modal-sheet';
+import { NumberWheel } from '@/components/ui/number-wheel';
 import { StarRating } from '@/components/games/star-rating';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import type { PlayedGameRow } from '@/db/types';
 import { updatePlayed } from '@/db/repositories/games';
-import { parseDurationInput, validateDurationMinutes, validateRating } from '@/lib/validation';
+import { durationPartsFromMinutes, durationPartsToMinutes } from '@/lib/duration-wheel';
+import { validateDurationMinutes, validateRating } from '@/lib/validation';
 
 export interface PlayedDraft {
   durationMinutes: number;
@@ -24,31 +26,27 @@ interface PlayFormProps {
   onConfirm: (draft: PlayedDraft) => void;
 }
 
-/** 「玩了」弹窗：游玩时长 + 体验 + 1~5 星；也可用于编辑已玩记录。 */
+/** 「玩了」弹窗：滚动选择时长 + 体验 + 1~5 星；也可用于编辑已玩记录。 */
 export function PlayForm({ visible, gameName, played, onClose, onConfirm }: PlayFormProps) {
-  const [hours, setHours] = useState('');
-  const [minutes, setMinutes] = useState('');
+  const [hours, setHours] = useState(0);
+  const [minutes, setMinutes] = useState(0);
   const [experience, setExperience] = useState('');
   const [rating, setRating] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    const total = played?.duration_minutes ?? 0;
-    setHours(total >= 60 ? String(Math.floor(total / 60)) : '');
-    setMinutes(total % 60 > 0 ? String(total % 60) : '');
+    const parts = durationPartsFromMinutes(played?.duration_minutes ?? 0);
+    setHours(parts.hours);
+    setMinutes(parts.minutes);
     setExperience(played?.experience ?? '');
     setRating(played?.rating ?? 0);
     setError(null);
   }, [visible, played]);
 
   const handleConfirm = () => {
-    const parsed = parseDurationInput(hours, minutes);
-    if (parsed.error) {
-      setError(parsed.error);
-      return;
-    }
-    const durationError = validateDurationMinutes(parsed.value);
+    const durationMinutes = durationPartsToMinutes(hours, minutes);
+    const durationError = validateDurationMinutes(durationMinutes);
     if (durationError) {
       setError(durationError);
       return;
@@ -59,7 +57,7 @@ export function PlayForm({ visible, gameName, played, onClose, onConfirm }: Play
       return;
     }
     setError(null);
-    onConfirm({ durationMinutes: parsed.value, experience, rating });
+    onConfirm({ durationMinutes, experience, rating });
   };
 
   return (
@@ -75,31 +73,25 @@ export function PlayForm({ visible, gameName, played, onClose, onConfirm }: Play
       }>
       <View style={modalStyles.field}>
         <ThemedText type="small" themeColor="textSecondary">
-          游玩时长
+          游玩时长（上下滑动选择）
         </ThemedText>
-        <View style={styles.durationRow}>
-          <TextField
-            placeholder="0"
+        <View style={styles.durationWheels}>
+          <NumberWheel
+            label="游玩小时"
+            unit="小时"
             value={hours}
-            onChangeText={setHours}
-            keyboardType="number-pad"
-            maxLength={2}
-            style={styles.numberInput}
+            min={0}
+            max={24}
+            onChange={setHours}
           />
-          <ThemedText type="small" themeColor="textSecondary">
-            小时
-          </ThemedText>
-          <TextField
-            placeholder="0"
+          <NumberWheel
+            label="游玩分钟"
+            unit="分钟"
             value={minutes}
-            onChangeText={setMinutes}
-            keyboardType="number-pad"
-            maxLength={2}
-            style={styles.numberInput}
+            min={0}
+            max={59}
+            onChange={setMinutes}
           />
-          <ThemedText type="small" themeColor="textSecondary">
-            分钟
-          </ThemedText>
         </View>
       </View>
 
@@ -141,14 +133,11 @@ export async function savePlayedEdit(id: number, draft: PlayedDraft): Promise<vo
 }
 
 const styles = StyleSheet.create({
-  durationRow: {
+  durationWheels: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  numberInput: {
-    width: 72,
-    textAlign: 'center',
+    justifyContent: 'center',
+    gap: Spacing.five,
+    paddingVertical: Spacing.two,
   },
   textarea: {
     minHeight: 80,
