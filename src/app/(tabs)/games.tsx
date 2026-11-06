@@ -19,7 +19,7 @@ import {
   markPlayed,
 } from '@/db/repositories/games';
 import type { PlayedGameRow, WishlistRow } from '@/db/types';
-import { formatDay, formatDuration, todayStr } from '@/lib/date';
+import { formatDay, formatDuration } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
 type TabKey = 'want' | 'played';
@@ -57,7 +57,7 @@ export default function GamesScreen() {
         durationMinutes: draft.durationMinutes,
         experience: draft.experience,
         rating: draft.rating,
-        playedDate: todayStr(),
+        playedDate: draft.playedDate,
       });
       setPlayTarget(null);
     }

@@ -66,6 +66,8 @@ export function MonthPicker({ visible, value, onSelect, onClose }: MonthPickerPr
             return (
               <Pressable
                 key={date}
+                accessibilityRole="button"
+                accessibilityLabel={`选择日期 ${date}`}
                 onPress={() => onSelect(date)}
                 style={({ pressed }) => [
                   styles.cell,
