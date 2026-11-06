@@ -7,15 +7,21 @@ import type { SetRecordRow } from '@/db/types';
 
 interface SetRecordItemProps {
   record: SetRecordRow;
-  onUndo: () => void;
+  onDelete: () => void;
 }
 
-/** 已完成的一组：右滑露出「撤销」。 */
-export function SetRecordItem({ record, onUndo }: SetRecordItemProps) {
+/** 已完成的一组：左滑露出「删除」，删除后同一动作的组号会重新排列。 */
+export function SetRecordItem({ record, onDelete }: SetRecordItemProps) {
   return (
     <SwipeRow
-      reveal="leading"
-      actions={[{ label: '撤销', color: '#8A8F98', onPress: onUndo }]}>
+      actions={[
+        {
+          label: '删除',
+          color: '#D64545',
+          accessibilityLabel: `删除${record.exercise_name}第${record.set_index}组`,
+          onPress: onDelete,
+        },
+      ]}>
       <ThemedView type="backgroundElement" style={styles.row}>
         <View style={styles.indexBadge}>
           <ThemedText type="small" style={styles.indexText}>

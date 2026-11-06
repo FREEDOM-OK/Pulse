@@ -5,6 +5,7 @@ import {
   addTrainingItem,
   completeSet,
   countSetsForItem,
+  deleteSetRecord,
   deleteTrainingItem,
   getDayExercises,
   getTrainingSummary,
@@ -83,6 +84,23 @@ describe('P3 健身：卡片与完成记录', () => {
     const records = await listSetRecords(DATE);
     expect(records.map((row) => row.set_index)).toEqual([1, 2]);
     expect(records.map((row) => row.sort_order)).toEqual([1, 3]);
+  });
+
+  it('删除已完成的一组（左滑删除）后剩余组重新编号', async () => {
+    await createTestContext();
+    const id = await addItem('卧推', 5, 60);
+    const first = await completeSet(id);
+    await completeSet(id);
+    const third = await completeSet(id);
+    await completeSet(id);
+
+    await deleteSetRecord(third.id);
+
+    const records = await listSetRecords(DATE);
+    expect(records.map((row) => row.set_index)).toEqual([1, 2, 3]);
+    expect(await countSetsForItem(id)).toBe(3);
+    expect(records.some((row) => row.id === third.id)).toBe(false);
+    expect(records.some((row) => row.id === first.id)).toBe(true);
   });
 
   it('不同日期的训练互不影响', async () => {

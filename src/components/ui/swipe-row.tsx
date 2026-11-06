@@ -9,6 +9,8 @@ export interface SwipeAction {
   color: string;
   textColor?: string;
   onPress: () => void;
+  /** 无障碍标签；默认用 label。 */
+  accessibilityLabel?: string;
 }
 
 interface SwipeRowProps {
@@ -70,6 +72,8 @@ export function SwipeRow({ children, actions, reveal = 'trailing' }: SwipeRowPro
         {actions.map((action) => (
           <Pressable
             key={action.label}
+            accessibilityRole="button"
+            accessibilityLabel={action.accessibilityLabel ?? action.label}
             onPress={() => {
               settle(false);
               action.onPress();

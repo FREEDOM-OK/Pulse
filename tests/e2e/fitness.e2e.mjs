@@ -36,13 +36,24 @@ export async function run(page, baseUrl) {
     throw new Error('修改次数后新记录没有使用新的次数');
   }
 
-  // 撤销第 4 组
-  await page.clickText('撤销');
+  // 左滑第 4 组，露出「删除」按钮
+  const beforeSwipe = await page.rectOf('第4组');
+  if (!beforeSwipe) throw new Error('找不到第 4 组记录');
+  await page.drag(beforeSwipe.x + 60, beforeSwipe.y, beforeSwipe.x - 80, beforeSwipe.y);
+  const afterSwipe = await page.rectOf('第4组');
+  if (!afterSwipe || afterSwipe.x > beforeSwipe.x - 40) {
+    throw new Error(`左滑没有把记录向左移出：${beforeSwipe.x} -> ${afterSwipe && afterSwipe.x}`);
+  }
+
+  // 删除第 4 组，剩余组重新编号
+  await page.clickLabel('删除卧推第4组');
+  await page.waitForText('删除这组记录？');
+  await page.clickText('确认删除');
   await page.waitForText('共 3 组');
   await page.waitForNoText('第4组');
 
   // 删除卡片，历史记录仍保留
-  await page.clickText('删除');
+  await page.clickLabel('删除');
   await page.waitForText('删除这个训练项目？');
   await page.clickText('确认删除');
   await sleep(400);

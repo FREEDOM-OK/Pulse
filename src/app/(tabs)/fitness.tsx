@@ -16,10 +16,10 @@ import type { Exercise } from '@/db/repositories/exercises';
 import {
   addTrainingItem,
   completeSet,
+  deleteSetRecord,
   deleteTrainingItem,
   listSetRecords,
   listTrainingItems,
-  undoSet,
   updateTrainingItem,
 } from '@/db/repositories/training';
 import type { SetRecordRow, TrainingItemRow } from '@/db/types';
@@ -34,6 +34,7 @@ export default function FitnessScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState<TrainingItemRow | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<SetRecordRow | null>(null);
 
   const load = useCallback(async () => {
     const [nextItems, nextRecords] = await Promise.all([
@@ -78,6 +79,13 @@ export default function FitnessScreen() {
     if (!deletingItem) return;
     await deleteTrainingItem(deletingItem.id);
     setDeletingItem(null);
+    await load();
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!deletingRecord) return;
+    await deleteSetRecord(deletingRecord.id);
+    setDeletingRecord(null);
     await load();
   };
 
@@ -142,7 +150,7 @@ export default function FitnessScreen() {
           <View style={[styles.sectionHeader, styles.sectionGap]}>
             <ThemedText type="smallBold">已完成</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              共 {totalSets} 组 · 右滑可撤销
+              共 {totalSets} 组 · 左滑可删除
             </ThemedText>
           </View>
 
@@ -154,11 +162,7 @@ export default function FitnessScreen() {
                 <SetRecordItem
                   key={record.id}
                   record={record}
-                  onUndo={() => {
-                    undoSet(record.id)
-                      .then(load)
-                      .catch(() => undefined);
-                  }}
+                  onDelete={() => setDeletingRecord(record)}
                 />
               ))}
             </View>
@@ -209,6 +213,22 @@ export default function FitnessScreen() {
         onCancel={() => setDeletingItem(null)}
         onConfirm={() => {
           handleDelete().catch(() => undefined);
+        }}
+      />
+
+      <ConfirmDialog
+        visible={deletingRecord !== null}
+        title="删除这组记录？"
+        message={
+          deletingRecord
+            ? `「${deletingRecord.exercise_name}」第${deletingRecord.set_index}组（${deletingRecord.reps}次 × ${deletingRecord.weight}kg）会删除，后面的组会重新编号。`
+            : undefined
+        }
+        confirmLabel="确认删除"
+        danger
+        onCancel={() => setDeletingRecord(null)}
+        onConfirm={() => {
+          handleDeleteRecord().catch(() => undefined);
         }}
       />
     </ThemedView>
