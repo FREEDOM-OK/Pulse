@@ -1,12 +1,19 @@
 import { sleep } from './browser.mjs';
 
+function dateStr(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /** P3 健身：动作选择、自定义动作、按时间计、完成打卡、按日回看 */
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
   await page.waitForText('首页');
   await page.clickText('健身');
   await page.waitForText('待训练');
-  await page.waitForText('这个日期还没有安排训练');
+  await page.waitForText('还没有待训练的动作');
 
   // 今日标题保留「今日」，并可从右上角添加动作
   await page.waitForText('今日 0 组');
@@ -26,6 +33,14 @@ export async function run(page, baseUrl) {
   await page.clickText('完成');
   await page.waitForText('第3组');
   await page.waitForText('共 3 组');
+
+  // 日历圆点：练过的日子，日期条和月历里对应的日子下面都有一点
+  const todayStr = dateStr(new Date());
+  await page.waitForLabel(`日期 ${todayStr} 有记录`);
+  await page.clickLabel('打开日历');
+  await page.waitForLabel(`选择日期 ${todayStr} 有记录`);
+  await page.clickLabel(`选择日期 ${todayStr} 有记录`);
+  await sleep(300);
 
   // 改次数后完成，新记录用新次数
   await page.fillByLabel('杠铃卧推 每组次数', '5');
@@ -60,10 +75,11 @@ export async function run(page, baseUrl) {
   await page.waitForText('共 3 组');
   await page.waitForText('杠铃卧推');
 
-  // 非今日不显示「今日」，添加的按时间动作只进入所选日期
+  // 待训练清单跨日期共享：切到后一天仍能看到已加的动作（这里卡片前面已删，故为空）
   await page.clickLabel('后一天');
-  await page.waitForText('这个日期还没有安排训练');
+  await page.waitForText('还没有待训练的动作');
   await page.waitForNoText('今日 0 组');
+  await page.waitForText('共 0 组');
   await page.clickText('添加');
   await page.waitForText('选择动作');
   await page.clickText('自定义类');
@@ -88,8 +104,9 @@ export async function run(page, baseUrl) {
   await page.clickText('完成');
   await page.waitForText('20分钟');
 
-  // 回到今天仍只有原来的杠铃卧推记录
+  // 回到今天：已完成仍是 3 组；壶铃摇摆的待训练卡片还在，但今天的记录里没有它
   await page.clickLabel('前一天');
   await page.waitForText('共 3 组');
-  await page.waitForNoText('壶铃摇摆');
+  await page.waitForText('壶铃摇摆');
+  await page.waitForNoText('20分钟');
 }

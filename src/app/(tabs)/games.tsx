@@ -21,6 +21,7 @@ import {
 import type { PlayedGameRow, WishlistRow } from '@/db/types';
 import { formatDay, formatDuration } from '@/lib/date';
 import { isTabSwipe, tabAfterSwipe } from '@/lib/games-tab';
+import { clearRowGesture, isRowGestureActive } from '@/lib/gesture';
 import { useTheme } from '@/hooks/use-theme';
 
 type TabKey = 'want' | 'played';
@@ -47,8 +48,15 @@ export default function GamesScreen() {
   const tabSwipe = useMemo(
     () =>
       PanResponder.create({
+        // 每次触摸开始先清掉上一次的「行内手势」标记；
+        // 若这一下其实落在某一行上，行会在冒泡阶段重新打上标记。
+        onStartShouldSetPanResponderCapture: () => {
+          clearRowGesture();
+          return false;
+        },
         onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gesture) => isTabSwipe(gesture.dx, gesture.dy),
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          !isRowGestureActive() && isTabSwipe(gesture.dx, gesture.dy),
         onPanResponderTerminationRequest: () => false,
         onPanResponderRelease: (_, gesture) => {
           setTab((current) => tabAfterSwipe(current, gesture.dx, gesture.dy));
@@ -179,26 +187,36 @@ export default function GamesScreen() {
                   <SwipeRow
                     key={record.id}
                     actions={[
-                      { label: '删除', color: '#D64545', onPress: () => setDeletingPlayed(record) },
+                      {
+                        label: '编辑',
+                        color: theme.backgroundElement,
+                        textColor: theme.text,
+                        accessibilityLabel: '编辑',
+                        onPress: () => setEditingPlayed(record),
+                      },
+                      {
+                        label: '删除',
+                        color: '#D64545',
+                        accessibilityLabel: '删除',
+                        onPress: () => setDeletingPlayed(record),
+                      },
                     ]}>
-                    <Pressable onPress={() => setEditingPlayed(record)}>
-                      <ThemedView type="backgroundElement" style={styles.playedCard}>
-                        <View style={styles.playedHeader}>
-                          <ThemedText type="smallBold" style={styles.playedName}>
-                            {record.game_name}
-                          </ThemedText>
-                          <StarRating value={record.rating} readOnly size={15} />
-                        </View>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {formatDay(record.played_date)} · {formatDuration(record.duration_minutes)}
+                    <ThemedView type="backgroundElement" style={styles.playedCard}>
+                      <View style={styles.playedHeader}>
+                        <ThemedText type="smallBold" style={styles.playedName}>
+                          {record.game_name}
                         </ThemedText>
-                        {record.experience ? (
-                          <ThemedText type="small" numberOfLines={3}>
-                            {record.experience}
-                          </ThemedText>
-                        ) : null}
-                      </ThemedView>
-                    </Pressable>
+                        <StarRating value={record.rating} readOnly size={15} />
+                      </View>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {formatDay(record.played_date)} · {formatDuration(record.duration_minutes)}
+                      </ThemedText>
+                      {record.experience ? (
+                        <ThemedText type="small" numberOfLines={3}>
+                          {record.experience}
+                        </ThemedText>
+                      ) : null}
+                    </ThemedView>
                   </SwipeRow>
                 ))}
               </View>

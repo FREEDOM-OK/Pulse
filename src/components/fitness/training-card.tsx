@@ -16,15 +16,29 @@ interface CompleteValues {
 interface TrainingCardProps {
   item: TrainingItemRow;
   doneSets: number;
+  /** 这个动作练的部位（胸/背/腿…），显示在卡片右下角。 */
+  category?: string;
   onComplete: (values: CompleteValues) => void;
   onDelete: () => void;
   onUpdate: (patch: { reps?: number; weight?: number; durationMinutes?: number }) => void;
 }
 
 /** 待训练卡片：按组动作填写次数与重量，按时间动作填写运动分钟数。 */
-export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }: TrainingCardProps) {
+export function TrainingCard({
+  item,
+  doneSets,
+  category,
+  onComplete,
+  onDelete,
+  onUpdate,
+}: TrainingCardProps) {
   const theme = useTheme();
   const isDuration = item.tracking_type === 'duration';
+  const partLabel = category
+    ? category === '自定义类'
+      ? '自定义'
+      : `练${category}`
+    : '';
   const [repsText, setRepsText] = useState(String(item.reps));
   const [weightText, setWeightText] = useState(String(item.weight));
   const [durationText, setDurationText] = useState(String(item.duration_minutes));
@@ -132,9 +146,11 @@ export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }:
             <ThemedText type="small" themeColor="textSecondary">
               分钟
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.selfWeight}>
-              仅记录运动时长
-            </ThemedText>
+            {partLabel ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.partLabel}>
+                {partLabel}
+              </ThemedText>
+            ) : null}
           </View>
         ) : (
           <View style={styles.paramRow}>
@@ -165,8 +181,13 @@ export function TrainingCard({ item, doneSets, onComplete, onDelete, onUpdate }:
               kg
             </ThemedText>
             {item.weight === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.selfWeight}>
+              <ThemedText type="small" themeColor="textSecondary">
                 自重
+              </ThemedText>
+            ) : null}
+            {partLabel ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.partLabel}>
+                {partLabel}
               </ThemedText>
             ) : null}
           </View>
@@ -219,7 +240,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     minHeight: 34,
   },
-  selfWeight: {
+  partLabel: {
     marginLeft: 'auto',
   },
   pressed: {

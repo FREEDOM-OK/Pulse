@@ -19,7 +19,8 @@ import {
   listTasksByDate,
   toggleTask,
 } from '@/db/repositories/tasks';
-import { todayStr } from '@/lib/date';
+import { addDays, todayStr } from '@/lib/date';
+import { getMonthActivity } from '@/db/repositories/calendar';
 
 export default function TodayScreen() {
   const theme = useTheme();
@@ -30,11 +31,22 @@ export default function TodayScreen() {
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [deleting, setDeleting] = useState<TaskRow | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [markedDays, setMarkedDays] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
-    const [list, nextStats] = await Promise.all([listTasksByDate(date), getTaskStats(date)]);
+    const [list, nextStats, activity] = await Promise.all([
+      listTasksByDate(date),
+      getTaskStats(date),
+      getMonthActivity(addDays(date, -400), addDays(date, 400)),
+    ]);
     setTasks(list);
     setStats(nextStats);
+
+    const marks: Record<string, boolean> = {};
+    for (const [day, flags] of Object.entries(activity)) {
+      if (flags.tasks) marks[day] = true;
+    }
+    setMarkedDays(marks);
   }, [date]);
 
   useFocusEffect(
@@ -76,6 +88,7 @@ export default function TodayScreen() {
           value={date}
           onChange={setDate}
           onOpenCalendar={() => setCalendarOpen(true)}
+          marked={markedDays}
         />
 
         <FlatList
@@ -129,6 +142,7 @@ export default function TodayScreen() {
       <MonthPicker
         visible={calendarOpen}
         value={date}
+        marked={markedDays}
         onClose={() => setCalendarOpen(false)}
         onSelect={(selected) => {
           setDate(selected);

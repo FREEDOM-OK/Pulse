@@ -208,7 +208,7 @@ describe('P1 健身仓储', () => {
       reps: 4,
       weight: 60,
     });
-    expect((await listTrainingItems(DATE))[0].sort_order).toBe(1);
+    expect((await listTrainingItems())[0].sort_order).toBe(1);
 
     await completeSet(itemId);
     await completeSet(itemId);
@@ -262,7 +262,7 @@ describe('P1 健身仓储', () => {
     await completeSet(itemId);
 
     await deleteTrainingItem(itemId);
-    expect(await listTrainingItems(DATE)).toHaveLength(0);
+    expect(await listTrainingItems()).toHaveLength(0);
     expect(await listSetRecords(DATE)).toHaveLength(2);
 
     const summary = await getTrainingSummary(DATE);

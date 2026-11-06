@@ -39,7 +39,7 @@ describe('P8 健身默认值设置', () => {
     await setFitnessDefaults({ reps: 12, weight: 40 });
 
     const id = await addTrainingItem({ date: DATE, exerciseId: 1, exerciseName: '卧推' });
-    const item = (await listTrainingItems(DATE)).find((row) => row.id === id);
+    const item = (await listTrainingItems()).find((row) => row.id === id);
 
     expect(item?.reps).toBe(12);
     expect(item?.weight).toBe(40);
@@ -56,7 +56,7 @@ describe('P8 健身默认值设置', () => {
       reps: 5,
       weight: 62.5,
     });
-    const [item] = await listTrainingItems(DATE);
+    const [item] = await listTrainingItems();
 
     expect(item.reps).toBe(5);
     expect(item.weight).toBe(62.5);
@@ -70,7 +70,7 @@ describe('P8 健身默认值设置', () => {
     await setFitnessDefaults({ reps: 12, weight: 40 });
     await addTrainingItem({ date: DATE, exerciseId: 2, exerciseName: '深蹲' });
 
-    const items = await listTrainingItems(DATE);
+    const items = await listTrainingItems();
     expect(items.map((row) => [row.exercise_name, row.reps, row.weight])).toEqual([
       ['卧推', 8, 0],
       ['深蹲', 12, 40],

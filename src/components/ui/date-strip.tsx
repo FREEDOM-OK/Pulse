@@ -14,12 +14,14 @@ interface DateStripProps {
   value: string;
   onChange: (date: string) => void;
   onOpenCalendar: () => void;
+  /** 有记录的日子：下面对应显示一个小圆点。 */
+  marked?: Record<string, boolean>;
 }
 
 const WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六'];
 
 /** 顶部日期条：左右滑动选日期，点日历图标打开月历。 */
-export function DateStrip({ value, onChange, onOpenCalendar }: DateStripProps) {
+export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStripProps) {
   const theme = useTheme();
   const today = todayStr();
 
@@ -64,9 +66,11 @@ export function DateStrip({ value, onChange, onOpenCalendar }: DateStripProps) {
           const selected = date === value;
           const isToday = date === today;
           const weekday = WEEKDAY_SHORT[parseDate(date).getDay()];
+          const hasRecord = Boolean(marked?.[date]);
           return (
             <Pressable
               key={date}
+              accessibilityLabel={`日期 ${date}${hasRecord ? ' 有记录' : ''}`}
               onPress={() => onChange(date)}
               style={({ pressed }) => [
                 styles.item,
@@ -85,6 +89,12 @@ export function DateStrip({ value, onChange, onOpenCalendar }: DateStripProps) {
               <ThemedText type="smallBold" themeColor={selected ? 'text' : 'textSecondary'}>
                 {parseDate(date).getDate()}
               </ThemedText>
+              <View
+                style={[
+                  styles.dot,
+                  { backgroundColor: hasRecord ? theme.text : 'transparent' },
+                ]}
+              />
             </Pressable>
           );
         })}
@@ -145,6 +155,11 @@ const styles = StyleSheet.create({
   },
   weekday: {
     fontSize: 11,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
   },
   arrow: {
     width: 34,

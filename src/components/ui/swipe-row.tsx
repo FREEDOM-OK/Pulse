@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { markRowGesture } from '@/lib/gesture';
 
 export interface SwipeAction {
   label: string;
@@ -41,7 +42,15 @@ export function SwipeRow({ children, actions, reveal = 'trailing' }: SwipeRowPro
 
   const responder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
+      // 只做标记、不抢响应者：告诉外层「这一下是从行上开始的」。
+      onStartShouldSetPanResponder: () => {
+        markRowGesture();
+        return false;
+      },
+      // 捕获阶段先抢下水平滑动：否则行内可点的内容（按钮、可点卡片）或外层页签滑动
+      // 会先吃掉手指，表现就是「左滑很难划出来」。
+      onMoveShouldSetPanResponderCapture: (_, gesture) =>
+        Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
       onMoveShouldSetPanResponder: (_, gesture) =>
         Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
       onPanResponderMove: (_, gesture) => {

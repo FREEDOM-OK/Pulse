@@ -13,10 +13,12 @@ interface MonthPickerProps {
   value: string;
   onSelect: (date: string) => void;
   onClose: () => void;
+  /** 有记录的日子：格子下方显示一个小圆点。 */
+  marked?: Record<string, boolean>;
 }
 
 /** 月历选日期弹窗（任务改日期、日期条跳转共用）。 */
-export function MonthPicker({ visible, value, onSelect, onClose }: MonthPickerProps) {
+export function MonthPicker({ visible, value, onSelect, onClose, marked }: MonthPickerProps) {
   const theme = useTheme();
   const parsed = parseDate(value);
   const [cursor, setCursor] = useState({ year: parsed.getFullYear(), month: parsed.getMonth() });
@@ -63,11 +65,12 @@ export function MonthPicker({ visible, value, onSelect, onClose }: MonthPickerPr
             }
             const selected = date === value;
             const isToday = date === todayStr();
+            const hasRecord = Boolean(marked?.[date]);
             return (
               <Pressable
                 key={date}
                 accessibilityRole="button"
-                accessibilityLabel={`选择日期 ${date}`}
+                accessibilityLabel={`选择日期 ${date}${hasRecord ? ' 有记录' : ''}`}
                 onPress={() => onSelect(date)}
                 style={({ pressed }) => [
                   styles.cell,
@@ -83,6 +86,18 @@ export function MonthPicker({ visible, value, onSelect, onClose }: MonthPickerPr
                   }}>
                   {parseDate(date).getDate()}
                 </ThemedText>
+                <View
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor: hasRecord
+                        ? selected
+                          ? theme.background
+                          : theme.text
+                        : 'transparent',
+                    },
+                  ]}
+                />
               </Pressable>
             );
           })}
@@ -124,6 +139,12 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     margin: 1,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 1,
   },
   pressed: {
     opacity: 0.6,

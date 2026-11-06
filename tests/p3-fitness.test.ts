@@ -42,7 +42,7 @@ describe('P3 健身：卡片与完成记录', () => {
       reps: 0,
       weight: -20,
     });
-    const item = (await listTrainingItems(DATE)).find((row) => row.id === id);
+    const item = (await listTrainingItems()).find((row) => row.id === id);
     expect(item?.reps).toBe(1);
     expect(item?.weight).toBe(0);
   });
@@ -167,7 +167,7 @@ describe('P3 健身：卡片与完成记录', () => {
     const id = await addItem('卧推');
     await completeSet(id);
 
-    const item = (await listTrainingItems(DATE))[0];
+    const item = (await listTrainingItems())[0];
     expect(item.exercise_name).toBe('卧推');
     expect((await listSetRecords(DATE))[0].exercise_name).toBe('卧推');
   });
@@ -180,7 +180,7 @@ describe('P3 健身：卡片与完成记录', () => {
     expect(record.reps).toBe(5);
     expect(record.weight).toBe(60);
 
-    const item = (await listTrainingItems(DATE))[0];
+    const item = (await listTrainingItems())[0];
     expect(item.reps).toBe(5);
     expect(item.weight).toBe(60);
   });
@@ -197,7 +197,7 @@ describe('P3 健身：卡片与完成记录', () => {
       durationMinutes: 15,
     });
 
-    const initial = (await listTrainingItems(DATE))[0];
+    const initial = (await listTrainingItems())[0];
     expect(initial).toMatchObject({
       tracking_type: 'duration',
       duration_minutes: 15,
@@ -213,5 +213,39 @@ describe('P3 健身：卡片与完成记录', () => {
       reps: 1,
       weight: 0,
     });
+  });
+
+  it('待训练清单跨日期共享，完成记录只算在当前日期', async () => {
+    await createTestContext();
+    const id = await addItem('卧推');
+
+    // 同一条待训练在任何日期都能用，不会因为换日期而消失。
+    expect((await listTrainingItems())).toHaveLength(1);
+
+    await completeSet(id, undefined, DATE);
+    await completeSet(id, undefined, DATE);
+    await completeSet(id, undefined, OTHER_DATE);
+
+    const today = await listSetRecords(DATE);
+    const tomorrow = await listSetRecords(OTHER_DATE);
+    expect(today.map((row) => row.set_index)).toEqual([1, 2]);
+    // 换到另一天，组号从第 1 组重新开始。
+    expect(tomorrow.map((row) => row.set_index)).toEqual([1]);
+    expect(today.every((row) => row.date === DATE)).toBe(true);
+    expect(tomorrow.every((row) => row.date === OTHER_DATE)).toBe(true);
+  });
+
+  it('删除某天的一组，不会影响其他日期的组号', async () => {
+    await createTestContext();
+    const id = await addItem('卧推');
+    await completeSet(id, undefined, DATE);
+    const todaySecond = await completeSet(id, undefined, DATE);
+    await completeSet(id, undefined, OTHER_DATE);
+    await completeSet(id, undefined, OTHER_DATE);
+
+    await deleteSetRecord(todaySecond.id);
+
+    expect((await listSetRecords(DATE)).map((row) => row.set_index)).toEqual([1]);
+    expect((await listSetRecords(OTHER_DATE)).map((row) => row.set_index)).toEqual([1, 2]);
   });
 });

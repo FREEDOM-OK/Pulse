@@ -42,6 +42,12 @@ export async function run(page, baseUrl) {
   await page.waitForText('塞尔达');
   await page.waitForText('听说探索感很强');
 
+  // 想玩清单的行左滑要能轻松划出「删除」
+  const wishMoved = await page.swipeLeft('听说探索感很强');
+  if (wishMoved < 40) {
+    throw new Error(`想玩清单左滑没有生效，只移动了 ${wishMoved}px`);
+  }
+
   // 点了：默认今天，并改成另一个日期
   await page.clickText('玩了');
   await page.waitForText('玩了：塞尔达');
@@ -67,8 +73,8 @@ export async function run(page, baseUrl) {
   await page.waitForText('2 小时 30 分钟');
   await page.waitForLabel('评分 4 星');
 
-  // 编辑评分到 5 星
-  await page.clickText('探索感很强，地图很大');
+  // 编辑评分到 5 星（已玩卡片改为左滑「编辑」）
+  await page.clickLabel('编辑');
   await page.waitForText('编辑已玩记录');
   await page.waitForLabel(`游玩日期 ${dateStr(selectedDate)}`);
   await page.clickLabel('5 星', -1);
@@ -82,6 +88,12 @@ export async function run(page, baseUrl) {
   await page.clickText('已玩记录');
   await page.waitForText('塞尔达');
   await page.waitForText(dayLabel(selectedDate));
+
+  // 已玩记录卡片左滑也要能轻松划出「删除」
+  const playedMoved = await page.swipeLeft('探索感很强，地图很大');
+  if (playedMoved < 40) {
+    throw new Error(`已玩记录左滑没有生效，只移动了 ${playedMoved}px`);
+  }
 
   // 删除已玩记录
   await page.clickText('删除');

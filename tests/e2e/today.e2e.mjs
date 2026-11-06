@@ -23,6 +23,14 @@ export async function run(page, baseUrl) {
   await page.waitForText('09:30');
   await page.waitForText('完成 0/1');
 
+  // 日历圆点：有任务的日子，日期条和月历里对应的日子下面都有一点
+  const todayStr = dateStr(new Date());
+  await page.waitForLabel(`日期 ${todayStr} 有记录`);
+  await page.clickLabel('打开日历');
+  await page.waitForLabel(`选择日期 ${todayStr} 有记录`);
+  await page.clickLabel(`选择日期 ${todayStr} 有记录`);
+  await sleep(300);
+
   // 重新加载页面，数据应仍在（本地存储持久化）
   await page.reload();
   await page.clickText('今日计划');
@@ -68,4 +76,11 @@ export async function run(page, baseUrl) {
 
 function formatMonthDay(date) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function dateStr(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }

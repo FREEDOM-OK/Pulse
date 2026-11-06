@@ -46,7 +46,7 @@ async function main() {
 
     // 健身：添加卧推，完成两组
     await page.clickText('健身');
-    await page.waitForText('这个日期还没有安排训练');
+    await page.waitForText('还没有待训练的动作');
     await page.clickText('添加');
     await page.waitForText('选择动作');
     await page.clickText('杠铃卧推');

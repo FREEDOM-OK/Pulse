@@ -28,10 +28,13 @@ export interface TrainingSummary {
   firstExercise: string | null;
 }
 
-export async function listTrainingItems(date: string): Promise<TrainingItemRow[]> {
+/**
+ * 待训练清单不再按日期划分：加进来的动作会一直留在清单里，
+ * 切换到任何一天都能看到，只有「已完成」记录才按日期区分。
+ */
+export async function listTrainingItems(): Promise<TrainingItemRow[]> {
   return getDriver().getAllAsync<TrainingItemRow>(
-    'SELECT * FROM training_items WHERE date = ? ORDER BY sort_order ASC, id ASC',
-    [date]
+    'SELECT * FROM training_items ORDER BY sort_order ASC, id ASC'
   );
 }
 
@@ -44,8 +47,7 @@ export async function addTrainingItem(input: AddTrainingItemInput): Promise<numb
   const durationMinutes =
     trackingType === 'duration' ? Math.max(1, Math.round(input.durationMinutes ?? 10)) : 10;
   const row = await driver.getFirstAsync<{ maxOrder: number | null }>(
-    'SELECT MAX(sort_order) AS maxOrder FROM training_items WHERE date = ?',
-    [input.date]
+    'SELECT MAX(sort_order) AS maxOrder FROM training_items'
   );
   const result = await driver.runAsync(
     `INSERT INTO training_items
@@ -115,10 +117,14 @@ export async function countSetsForItem(itemId: number): Promise<number> {
   return Number(row?.total ?? 0);
 }
 
-/** 点一次「完成」：新增一条记录；按时间计的动作保存分钟数，不保存重量。 */
+/**
+ * 点一次「完成」：新增一条记录；按时间计的动作保存分钟数，不保存重量。
+ * date 是当前查看的日期——待训练清单是共用的，完成记录只落在这一天。
+ */
 export async function completeSet(
   itemId: number,
-  overrides?: { reps?: number; weight?: number; durationMinutes?: number }
+  overrides?: { reps?: number; weight?: number; durationMinutes?: number },
+  date?: string
 ): Promise<SetRecordRow> {
   const driver = getDriver();
   let created: SetRecordRow | null = null;
@@ -130,6 +136,7 @@ export async function completeSet(
     );
     if (!item) throw new Error('训练项目不存在');
 
+    const recordDate = date ?? item.date;
     const isDuration = item.tracking_type === 'duration';
     const reps = isDuration ? 1 : Math.max(1, Math.round(overrides?.reps ?? item.reps));
     const weight = isDuration ? 0 : Math.max(0, overrides?.weight ?? item.weight);
@@ -150,12 +157,12 @@ export async function completeSet(
     }
 
     const countRow = await driver.getFirstAsync<{ total: number }>(
-      'SELECT COUNT(*) AS total FROM set_records WHERE training_item_id = ?',
-      [itemId]
+      'SELECT COUNT(*) AS total FROM set_records WHERE training_item_id = ? AND date = ?',
+      [itemId, recordDate]
     );
     const sortRow = await driver.getFirstAsync<{ maxOrder: number | null }>(
       'SELECT MAX(sort_order) AS maxOrder FROM set_records WHERE date = ?',
-      [item.date]
+      [recordDate]
     );
 
     const setIndex = Number(countRow?.total ?? 0) + 1;
@@ -169,7 +176,7 @@ export async function completeSet(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
-        item.date,
+        recordDate,
         item.exercise_name,
         setIndex,
         reps,
@@ -184,7 +191,7 @@ export async function completeSet(
     created = {
       id: result.lastInsertRowId,
       training_item_id: item.id,
-      date: item.date,
+      date: recordDate,
       exercise_name: item.exercise_name,
       set_index: setIndex,
       reps,
@@ -216,8 +223,8 @@ export async function undoSet(recordId: number): Promise<void> {
     if (record.training_item_id === null) return;
 
     const remaining = await driver.getAllAsync<{ id: number }>(
-      'SELECT id FROM set_records WHERE training_item_id = ? ORDER BY set_index ASC, id ASC',
-      [record.training_item_id]
+      'SELECT id FROM set_records WHERE training_item_id = ? AND date = ? ORDER BY set_index ASC, id ASC',
+      [record.training_item_id, record.date]
     );
     for (let index = 0; index < remaining.length; index += 1) {
       await driver.runAsync('UPDATE set_records SET set_index = ? WHERE id = ?', [

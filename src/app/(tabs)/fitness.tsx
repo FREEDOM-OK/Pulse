@@ -13,6 +13,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { MonthPicker } from '@/components/ui/month-picker';
 import { Spacing } from '@/constants/theme';
 import type { Exercise } from '@/db/repositories/exercises';
+import { listExercises } from '@/db/repositories/exercises';
+import { getMonthActivity } from '@/db/repositories/calendar';
 import {
   addTrainingItem,
   completeSet,
@@ -23,7 +25,7 @@ import {
   updateTrainingItem,
 } from '@/db/repositories/training';
 import type { SetRecordRow, TrainingItemRow } from '@/db/types';
-import { formatDay, isToday, todayStr } from '@/lib/date';
+import { addDays, formatDay, isToday, todayStr } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function FitnessScreen() {
@@ -35,14 +37,28 @@ export default function FitnessScreen() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState<TrainingItemRow | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<SetRecordRow | null>(null);
+  const [markedDays, setMarkedDays] = useState<Record<string, boolean>>({});
+  const [categoryById, setCategoryById] = useState<Record<number, string>>({});
 
   const load = useCallback(async () => {
-    const [nextItems, nextRecords] = await Promise.all([
-      listTrainingItems(date),
+    const [nextItems, nextRecords, activity, exerciseList] = await Promise.all([
+      listTrainingItems(),
       listSetRecords(date),
+      getMonthActivity(addDays(date, -400), addDays(date, 400)),
+      listExercises(),
     ]);
     setItems(nextItems);
     setRecords(nextRecords);
+
+    const marks: Record<string, boolean> = {};
+    for (const [day, flags] of Object.entries(activity)) {
+      if (flags.fitness) marks[day] = true;
+    }
+    setMarkedDays(marks);
+
+    const categories: Record<number, string> = {};
+    for (const exercise of exerciseList) categories[exercise.id] = exercise.category;
+    setCategoryById(categories);
   }, [date]);
 
   useFocusEffect(
@@ -113,7 +129,12 @@ export default function FitnessScreen() {
           </Pressable>
         </View>
 
-        <DateStrip value={date} onChange={setDate} onOpenCalendar={() => setCalendarOpen(true)} />
+        <DateStrip
+          value={date}
+          onChange={setDate}
+          onOpenCalendar={() => setCalendarOpen(true)}
+          marked={markedDays}
+        />
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.sectionHeader}>
@@ -124,16 +145,17 @@ export default function FitnessScreen() {
           </View>
 
           {items.length === 0 ? (
-            <EmptyState text="这个日期还没有安排训练" hint="点右上角「添加」选择动作" />
+            <EmptyState text="还没有待训练的动作" hint="点右上角「添加」选择动作" />
           ) : (
             <View style={styles.cardList}>
               {items.map((item) => (
                 <TrainingCard
                   key={item.id}
                   item={item}
+                  category={item.exercise_id != null ? categoryById[item.exercise_id] : undefined}
                   doneSets={setsByItem.get(item.id) ?? 0}
                   onComplete={(values) => {
-                    completeSet(item.id, values)
+                    completeSet(item.id, values, date)
                       .then(load)
                       .catch(() => undefined);
                   }}
@@ -183,6 +205,7 @@ export default function FitnessScreen() {
       <MonthPicker
         visible={calendarOpen}
         value={date}
+        marked={markedDays}
         onClose={() => setCalendarOpen(false)}
         onSelect={(selected) => {
           setDate(selected);
