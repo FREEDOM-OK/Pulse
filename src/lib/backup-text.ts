@@ -28,9 +28,9 @@ export function serializeBackup(payload: BackupPayload): string {
 export function parseBackupText(text: string): BackupPayload {
   let raw: unknown;
   try {
-    raw = JSON.parse(text);
+    raw = JSON.parse(text.replace(/^\uFEFF/, ''));
   } catch {
-    throw new BackupError('文件内容不是合法的 JSON');
+    throw new BackupError('文件内容不是合法的 JSON，请选择本 App 导出的 .json 备份文件');
   }
   return parseBackupPayload(raw);
 }
