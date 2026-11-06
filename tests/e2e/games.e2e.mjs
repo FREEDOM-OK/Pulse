@@ -23,6 +23,16 @@ export async function run(page, baseUrl) {
   await page.clickText('游戏');
   await page.waitForText('想玩清单是空的');
 
+  // 空白区域左滑 -> 已玩记录，右滑 -> 回到想玩清单
+  const area = await page.rectOfLabel('游戏列表区域');
+  if (!area) throw new Error('找不到游戏列表区域');
+  const swipeY = area.y + area.height - 160;
+  await page.drag(area.x + area.width * 0.75, swipeY, area.x + area.width * 0.1, swipeY);
+  await page.waitForText('还没有游玩记录');
+  await page.drag(area.x + area.width * 0.1, swipeY, area.x + area.width * 0.75, swipeY);
+  await page.waitForText('想玩清单是空的');
+  await page.waitForText('想玩 0 · 已玩 0');
+
   // 添加想玩的游戏
   await page.clickLabel('添加想玩的游戏');
   await page.waitForText('添加想玩的游戏');

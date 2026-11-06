@@ -260,6 +260,16 @@ class Page {
     await sleep(400);
   }
 
+  /** 取 aria-label 匹配元素的矩形区域（视口坐标）。 */
+  async rectOfLabel(label) {
+    return this.evaluate(`(() => {
+      const el = document.querySelector('[aria-label="${label}"]');
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })()`);
+  }
+
   async rectOf(text) {
     return this.evaluate(`(() => {
       const el = Array.from(document.querySelectorAll('div,span'))

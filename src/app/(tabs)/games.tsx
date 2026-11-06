@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
@@ -20,6 +20,7 @@ import {
 } from '@/db/repositories/games';
 import type { PlayedGameRow, WishlistRow } from '@/db/types';
 import { formatDay, formatDuration } from '@/lib/date';
+import { isTabSwipe, tabAfterSwipe } from '@/lib/games-tab';
 import { useTheme } from '@/hooks/use-theme';
 
 type TabKey = 'want' | 'played';
@@ -41,6 +42,20 @@ export default function GamesScreen() {
     setWishlist(wishes);
     setPlayed(records);
   }, []);
+
+  /** 在列表空白区域左右滑动，切换想玩 / 已玩页签。 */
+  const tabSwipe = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gesture) => isTabSwipe(gesture.dx, gesture.dy),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderRelease: (_, gesture) => {
+          setTab((current) => tabAfterSwipe(current, gesture.dx, gesture.dy));
+        },
+      }),
+    []
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -101,93 +116,95 @@ export default function GamesScreen() {
           })}
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
-          {tab === 'want' ? (
-            wishlist.length === 0 ? (
-              <EmptyState text="想玩清单是空的" hint="点右下角「＋」添加想玩的游戏" />
+        <View accessibilityLabel="游戏列表区域" style={styles.swipeArea} {...tabSwipe.panHandlers}>
+          <ScrollView contentContainerStyle={styles.content}>
+            {tab === 'want' ? (
+              wishlist.length === 0 ? (
+                <EmptyState text="想玩清单是空的" hint="点右下角「＋」添加想玩的游戏" />
+              ) : (
+                <View style={styles.list}>
+                  {wishlist.map((wish) => (
+                    <SwipeRow
+                      key={wish.id}
+                      actions={[
+                        {
+                          label: '编辑',
+                          color: theme.backgroundElement,
+                          textColor: theme.text,
+                          onPress: () => {
+                            setEditingWish(wish);
+                            setWishFormOpen(true);
+                          },
+                        },
+                        {
+                          label: '删除',
+                          color: '#D64545',
+                          onPress: () => setDeletingWish(wish),
+                        },
+                      ]}>
+                      <ThemedView type="backgroundElement" style={styles.wishRow}>
+                        <View style={styles.wishInfo}>
+                          <ThemedText type="smallBold" style={styles.wishName}>
+                            {wish.name}
+                          </ThemedText>
+                          {wish.note ? (
+                            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+                              {wish.note}
+                            </ThemedText>
+                          ) : null}
+                        </View>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`标记已玩 ${wish.name}`}
+                          onPress={() => setPlayTarget(wish)}
+                          style={({ pressed }) => [
+                            styles.playButton,
+                            { backgroundColor: theme.text },
+                            pressed && styles.pressed,
+                          ]}>
+                          <ThemedText type="smallBold" style={{ color: theme.background }}>
+                            玩了
+                          </ThemedText>
+                        </Pressable>
+                      </ThemedView>
+                    </SwipeRow>
+                  ))}
+                </View>
+              )
+            ) : played.length === 0 ? (
+              <EmptyState text="还没有游玩记录" hint="在「想玩清单」里点「玩了」记录一次" />
             ) : (
               <View style={styles.list}>
-                {wishlist.map((wish) => (
+                {played.map((record) => (
                   <SwipeRow
-                    key={wish.id}
+                    key={record.id}
                     actions={[
-                      {
-                        label: '编辑',
-                        color: theme.backgroundElement,
-                        textColor: theme.text,
-                        onPress: () => {
-                          setEditingWish(wish);
-                          setWishFormOpen(true);
-                        },
-                      },
-                      {
-                        label: '删除',
-                        color: '#D64545',
-                        onPress: () => setDeletingWish(wish),
-                      },
+                      { label: '删除', color: '#D64545', onPress: () => setDeletingPlayed(record) },
                     ]}>
-                    <ThemedView type="backgroundElement" style={styles.wishRow}>
-                      <View style={styles.wishInfo}>
-                        <ThemedText type="smallBold" style={styles.wishName}>
-                          {wish.name}
+                    <Pressable onPress={() => setEditingPlayed(record)}>
+                      <ThemedView type="backgroundElement" style={styles.playedCard}>
+                        <View style={styles.playedHeader}>
+                          <ThemedText type="smallBold" style={styles.playedName}>
+                            {record.game_name}
+                          </ThemedText>
+                          <StarRating value={record.rating} readOnly size={15} />
+                        </View>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {formatDay(record.played_date)} · {formatDuration(record.duration_minutes)}
                         </ThemedText>
-                        {wish.note ? (
-                          <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                            {wish.note}
+                        {record.experience ? (
+                          <ThemedText type="small" numberOfLines={3}>
+                            {record.experience}
                           </ThemedText>
                         ) : null}
-                      </View>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`标记已玩 ${wish.name}`}
-                        onPress={() => setPlayTarget(wish)}
-                        style={({ pressed }) => [
-                          styles.playButton,
-                          { backgroundColor: theme.text },
-                          pressed && styles.pressed,
-                        ]}>
-                        <ThemedText type="smallBold" style={{ color: theme.background }}>
-                          玩了
-                        </ThemedText>
-                      </Pressable>
-                    </ThemedView>
+                      </ThemedView>
+                    </Pressable>
                   </SwipeRow>
                 ))}
               </View>
-            )
-          ) : played.length === 0 ? (
-            <EmptyState text="还没有游玩记录" hint="在「想玩清单」里点「玩了」记录一次" />
-          ) : (
-            <View style={styles.list}>
-              {played.map((record) => (
-                <SwipeRow
-                  key={record.id}
-                  actions={[
-                    { label: '删除', color: '#D64545', onPress: () => setDeletingPlayed(record) },
-                  ]}>
-                  <Pressable onPress={() => setEditingPlayed(record)}>
-                    <ThemedView type="backgroundElement" style={styles.playedCard}>
-                      <View style={styles.playedHeader}>
-                        <ThemedText type="smallBold" style={styles.playedName}>
-                          {record.game_name}
-                        </ThemedText>
-                        <StarRating value={record.rating} readOnly size={15} />
-                      </View>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {formatDay(record.played_date)} · {formatDuration(record.duration_minutes)}
-                      </ThemedText>
-                      {record.experience ? (
-                        <ThemedText type="small" numberOfLines={3}>
-                          {record.experience}
-                        </ThemedText>
-                      ) : null}
-                    </ThemedView>
-                  </Pressable>
-                </SwipeRow>
-              ))}
-            </View>
-          )}
-        </ScrollView>
+            )}
+          </ScrollView>
+        </View>
 
         {tab === 'want' ? (
           <Pressable
@@ -301,7 +318,11 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.five,
     alignItems: 'center',
   },
+  swipeArea: {
+    flex: 1,
+  },
   content: {
+    flexGrow: 1,
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,
     paddingBottom: 96,
