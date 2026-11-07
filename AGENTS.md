@@ -28,6 +28,11 @@ npm run verify   # 一次跑完 单测 → tsc --noEmit → expo lint，失败�
 node tests/e2e/run.mjs   # 端到端（无头 Chrome，需先启动 Web dev server，见下方「已知坑」）
 ```
 
+## 版本日志
+
+- 小改动只在 `CHANGELOG.md` 里升补丁版本（v1.0.1、v1.0.2…），**不改 `app.json` 的 version，也不在 App 内加更新日志/提示**。
+- 只有用户明确说「进入下一个大版本」时，才动 App 内显示的版本号与日志；版本节奏由用户决定。
+
 ## 已知坑（本项目实践，改动前先读）
 
 ### 1. 行操作统一用长按菜单，不要再加左滑

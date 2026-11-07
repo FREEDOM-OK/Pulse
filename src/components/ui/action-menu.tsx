@@ -94,6 +94,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
   sheet: {
+    /** 固定宽度，避免卡片随标题/条目文字长短忽宽忽窄。 */
+    width: '100%',
+    maxWidth: 340,
+    alignSelf: 'center',
     borderRadius: Spacing.four,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.two,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ModalSheet } from '@/components/ui/modal-sheet';
+import { StatusDot } from '@/components/ui/status-dot';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMonth, monthGrid, parseDate, todayStr } from '@/lib/date';
@@ -86,17 +87,14 @@ export function MonthPicker({ visible, value, onSelect, onClose, marked }: Month
                   }}>
                   {parseDate(date).getDate()}
                 </ThemedText>
-                <View
-                  style={[
-                    styles.dot,
-                    {
-                      backgroundColor: hasRecord
-                        ? selected
-                          ? theme.background
-                          : theme.text
-                        : 'transparent',
-                    },
-                  ]}
+                <StatusDot
+                  color={
+                    hasRecord
+                      ? selected
+                        ? theme.background
+                        : theme.text
+                      : undefined
+                  }
                 />
               </Pressable>
             );
@@ -139,12 +137,6 @@ const styles = StyleSheet.create({
   },
   dayCell: {
     margin: 1,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 1,
   },
   pressed: {
     opacity: 0.6,

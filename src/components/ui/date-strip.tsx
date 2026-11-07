@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
+import { StatusDot } from '@/components/ui/status-dot';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addDays, formatDay, parseDate, todayStr } from '@/lib/date';
@@ -89,12 +90,7 @@ export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStrip
               <ThemedText type="smallBold" themeColor={selected ? 'text' : 'textSecondary'}>
                 {parseDate(date).getDate()}
               </ThemedText>
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: hasRecord ? theme.text : 'transparent' },
-                ]}
-              />
+              <StatusDot color={hasRecord ? theme.text : undefined} />
             </Pressable>
           );
         })}
@@ -155,11 +151,6 @@ const styles = StyleSheet.create({
   },
   weekday: {
     fontSize: 11,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
   },
   arrow: {
     width: 34,

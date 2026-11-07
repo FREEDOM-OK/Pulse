@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
+import { StatusDot } from '@/components/ui/status-dot';
 import { ModuleColors, Spacing } from '@/constants/theme';
 import type { DayFlags } from '@/db/repositories/calendar';
 import { useTheme } from '@/hooks/use-theme';
@@ -104,18 +105,12 @@ export function MonthView({
                   {parseDate(date).getDate()}
                 </ThemedText>
                 <View style={styles.dots}>
-                  {flags?.tasks ? (
-                    <View style={[styles.dot, { backgroundColor: active ? theme.background : ModuleColors.tasks }]} />
-                  ) : null}
+                  {flags?.tasks ? <StatusDot color={active ? theme.background : ModuleColors.tasks} /> : null}
                   {flags?.fitness ? (
-                    <View style={[styles.dot, { backgroundColor: active ? theme.background : ModuleColors.fitness }]} />
+                    <StatusDot color={active ? theme.background : ModuleColors.fitness} />
                   ) : null}
-                  {flags?.diet ? (
-                    <View style={[styles.dot, { backgroundColor: active ? theme.background : ModuleColors.diet }]} />
-                  ) : null}
-                  {flags?.games ? (
-                    <View style={[styles.dot, { backgroundColor: active ? theme.background : ModuleColors.games }]} />
-                  ) : null}
+                  {flags?.diet ? <StatusDot color={active ? theme.background : ModuleColors.diet} /> : null}
+                  {flags?.games ? <StatusDot color={active ? theme.background : ModuleColors.games} /> : null}
                 </View>
               </Pressable>
             );
@@ -168,11 +163,6 @@ const styles = StyleSheet.create({
     gap: 2,
     height: 5,
     alignItems: 'center',
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
   },
   pressed: {
     opacity: 0.7,
