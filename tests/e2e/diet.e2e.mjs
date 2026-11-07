@@ -35,15 +35,19 @@ export async function run(page, baseUrl) {
   await page.clickText('保存');
   await page.waitForText('未填热量');
 
-  // 编辑第一条（燕麦牛奶）热量为 350
-  await page.clickText('编辑');
+  // 长按第一条（燕麦牛奶）弹出菜单，选「编辑」把热量改成 350
+  await page.longPressText('燕麦牛奶');
+  await page.waitForLabel('编辑');
+  await page.clickLabel('编辑');
   await page.waitForText('编辑饮食记录');
   await page.fill('例如：520', '350');
   await page.clickText('保存');
   await page.waitForText('350 kcal');
 
-  // 删除第一条（燕麦牛奶）
-  await page.clickText('删除');
+  // 长按后删除第一条（燕麦牛奶）
+  await page.longPressText('燕麦牛奶');
+  await page.waitForLabel('删除');
+  await page.clickLabel('删除');
   await page.waitForText('删除这条饮食记录？');
   await page.clickText('确认删除');
   await sleep(400);

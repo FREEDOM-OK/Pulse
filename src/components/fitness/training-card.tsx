@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { SwipeRow } from '@/components/ui/swipe-row';
 import { Spacing } from '@/constants/theme';
 import type { TrainingItemRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,7 +18,8 @@ interface TrainingCardProps {
   /** 这个动作练的部位（胸/背/腿…），显示在卡片右下角。 */
   category?: string;
   onComplete: (values: CompleteValues) => void;
-  onDelete: () => void;
+  /** 长按卡片时打开「删除」菜单。 */
+  onMenu: () => void;
   onUpdate: (patch: { reps?: number; weight?: number; durationMinutes?: number }) => void;
 }
 
@@ -29,7 +29,7 @@ export function TrainingCard({
   doneSets,
   category,
   onComplete,
-  onDelete,
+  onMenu,
   onUpdate,
 }: TrainingCardProps) {
   const theme = useTheme();
@@ -98,7 +98,12 @@ export function TrainingCard({
   };
 
   return (
-    <SwipeRow actions={[{ label: '删除', color: '#D64545', onPress: onDelete }]}>
+    <Pressable
+      accessibilityLabel={`训练项目 ${item.exercise_name}`}
+      accessibilityHint="长按可删除"
+      delayLongPress={400}
+      onLongPress={onMenu}
+      style={({ pressed }) => [styles.pressable, pressed && styles.pressedCard]}>
       <ThemedView type="backgroundElement" style={styles.card}>
         <View style={styles.row}>
           <View style={styles.nameArea}>
@@ -193,11 +198,17 @@ export function TrainingCard({
           </View>
         )}
       </ThemedView>
-    </SwipeRow>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: {
+    borderRadius: Spacing.three,
+  },
+  pressedCard: {
+    opacity: 0.92,
+  },
   card: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three,

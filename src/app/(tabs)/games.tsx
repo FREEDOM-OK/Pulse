@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
@@ -7,9 +7,9 @@ import { ThemedView } from '@/components/themed-view';
 import { PlayForm, savePlayedEdit, type PlayedDraft } from '@/components/games/play-form';
 import { StarRating } from '@/components/games/star-rating';
 import { WishForm } from '@/components/games/wish-form';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
-import { SwipeRow } from '@/components/ui/swipe-row';
 import { Spacing } from '@/constants/theme';
 import {
   deletePlayed,
@@ -21,10 +21,14 @@ import {
 import type { PlayedGameRow, WishlistRow } from '@/db/types';
 import { formatDay, formatDuration } from '@/lib/date';
 import { isTabSwipe, tabAfterSwipe } from '@/lib/games-tab';
-import { clearRowGesture, isRowGestureActive } from '@/lib/gesture';
 import { useTheme } from '@/hooks/use-theme';
 
 type TabKey = 'want' | 'played';
+
+const TAB_SEGMENTS = [
+  { key: 'want' as TabKey, label: '想玩清单' },
+  { key: 'played' as TabKey, label: '已玩记录' },
+];
 
 export default function GamesScreen() {
   const theme = useTheme();
@@ -37,6 +41,35 @@ export default function GamesScreen() {
   const [editingPlayed, setEditingPlayed] = useState<PlayedGameRow | null>(null);
   const [deletingWish, setDeletingWish] = useState<WishlistRow | null>(null);
   const [deletingPlayed, setDeletingPlayed] = useState<PlayedGameRow | null>(null);
+  const [menuWish, setMenuWish] = useState<WishlistRow | null>(null);
+  const [menuPlayed, setMenuPlayed] = useState<PlayedGameRow | null>(null);
+
+  // 0 = 想玩清单，1 = 已玩记录；拖动时它连续变化，页面和顶部页签框都跟着手指走。
+  const progress = useRef(new Animated.Value(0)).current;
+  const progressRef = useRef(0);
+  const startProgress = useRef(0);
+  const [pageWidth, setPageWidth] = useState(0);
+  const [segmentsWidth, setSegmentsWidth] = useState(0);
+
+  useEffect(() => {
+    const id = progress.addListener(({ value }) => {
+      progressRef.current = value;
+    });
+    return () => progress.removeListener(id);
+  }, [progress]);
+
+  const animateTo = useCallback(
+    (index: number) => {
+      setTab(index === 0 ? 'want' : 'played');
+      Animated.spring(progress, {
+        toValue: index,
+        useNativeDriver: false,
+        bounciness: 0,
+        speed: 18,
+      }).start();
+    },
+    [progress]
+  );
 
   const load = useCallback(async () => {
     const [wishes, records] = await Promise.all([listWishlist(), listPlayed()]);
@@ -44,25 +77,40 @@ export default function GamesScreen() {
     setPlayed(records);
   }, []);
 
-  /** 在列表空白区域左右滑动，切换想玩 / 已玩页签。 */
+  /** 整块列表左右拖动：页面跟着手指平移，松手后吸附到最近的一页。 */
   const tabSwipe = useMemo(
     () =>
       PanResponder.create({
-        // 每次触摸开始先清掉上一次的「行内手势」标记；
-        // 若这一下其实落在某一行上，行会在冒泡阶段重新打上标记。
-        onStartShouldSetPanResponderCapture: () => {
-          clearRowGesture();
-          return false;
-        },
         onStartShouldSetPanResponder: () => false,
+        // 横向才接手势，纵向留给列表自己滚动。
         onMoveShouldSetPanResponder: (_, gesture) =>
-          !isRowGestureActive() && isTabSwipe(gesture.dx, gesture.dy),
-        onPanResponderTerminationRequest: () => false,
+          Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+        // 捕获阶段优先，避免内部可点卡片/滚动容器先吃掉横移。
+        onMoveShouldSetPanResponderCapture: (_, gesture) =>
+          isTabSwipe(gesture.dx, gesture.dy, 10),
+        onPanResponderGrant: () => {
+          startProgress.current = progressRef.current;
+        },
+        onPanResponderMove: (_, gesture) => {
+          if (pageWidth <= 0) return;
+          const raw = startProgress.current - gesture.dx / pageWidth;
+          // 到了两端继续拖时加阻尼，手感更像 iOS 的分页。
+          const damped = raw < 0 ? raw * 0.3 : raw > 1 ? 1 + (raw - 1) * 0.3 : raw;
+          progress.setValue(damped);
+        },
         onPanResponderRelease: (_, gesture) => {
-          setTab((current) => tabAfterSwipe(current, gesture.dx, gesture.dy));
+          const logical = tabAfterSwipe(tab, gesture.dx, gesture.dy);
+          if (logical !== tab) {
+            animateTo(logical === 'played' ? 1 : 0);
+            return;
+          }
+          animateTo(progressRef.current >= 0.5 ? 1 : 0);
+        },
+        onPanResponderTerminate: () => {
+          animateTo(progressRef.current >= 0.5 ? 1 : 0);
         },
       }),
-    []
+    [animateTo, pageWidth, progress, tab]
   );
 
   useFocusEffect(
@@ -99,23 +147,38 @@ export default function GamesScreen() {
           </ThemedText>
         </View>
 
-        <View style={[styles.segments, { backgroundColor: theme.backgroundElement }]}>
-          {(
-            [
-              { key: 'want' as TabKey, label: '想玩清单' },
-              { key: 'played' as TabKey, label: '已玩记录' },
-            ] as const
-          ).map((segment) => {
+        <View
+          style={[styles.segments, { backgroundColor: theme.backgroundElement }]}
+          onLayout={(event) => setSegmentsWidth(event.nativeEvent.layout.width)}>
+          {segmentsWidth > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              accessibilityLabel="页签指示器"
+              style={[
+                styles.indicator,
+                {
+                  width: segmentsWidth / 2 - 3,
+                  backgroundColor: theme.background,
+                  transform: [
+                    {
+                      translateX: progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, segmentsWidth / 2],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          ) : null}
+          {TAB_SEGMENTS.map((segment, index) => {
             const active = tab === segment.key;
             return (
               <Pressable
                 key={segment.key}
-                onPress={() => setTab(segment.key)}
-                style={({ pressed }) => [
-                  styles.segment,
-                  active && { backgroundColor: theme.background },
-                  pressed && styles.pressed,
-                ]}>
+                accessibilityLabel={segment.label}
+                onPress={() => animateTo(index)}
+                style={({ pressed }) => [styles.segment, pressed && styles.pressed]}>
                 <ThemedText type="small" themeColor={active ? 'text' : 'textSecondary'}>
                   {segment.label}
                 </ThemedText>
@@ -124,104 +187,119 @@ export default function GamesScreen() {
           })}
         </View>
 
-        <View accessibilityLabel="游戏列表区域" style={styles.swipeArea} {...tabSwipe.panHandlers}>
-          <ScrollView contentContainerStyle={styles.content}>
-            {tab === 'want' ? (
-              wishlist.length === 0 ? (
-                <EmptyState text="想玩清单是空的" hint="点右下角「＋」添加想玩的游戏" />
-              ) : (
-                <View style={styles.list}>
-                  {wishlist.map((wish) => (
-                    <SwipeRow
-                      key={wish.id}
-                      actions={[
-                        {
-                          label: '编辑',
-                          color: theme.backgroundElement,
-                          textColor: theme.text,
-                          onPress: () => {
-                            setEditingWish(wish);
-                            setWishFormOpen(true);
-                          },
-                        },
-                        {
-                          label: '删除',
-                          color: '#D64545',
-                          onPress: () => setDeletingWish(wish),
-                        },
-                      ]}>
-                      <ThemedView type="backgroundElement" style={styles.wishRow}>
-                        <View style={styles.wishInfo}>
-                          <ThemedText type="smallBold" style={styles.wishName}>
-                            {wish.name}
-                          </ThemedText>
-                          {wish.note ? (
-                            <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                              {wish.note}
-                            </ThemedText>
-                          ) : null}
-                        </View>
+        <View
+          accessibilityLabel="游戏列表区域"
+          style={styles.swipeArea}
+          onLayout={(event) => setPageWidth(event.nativeEvent.layout.width)}
+          {...tabSwipe.panHandlers}>
+          {pageWidth > 0 ? (
+            <Animated.View
+              style={[
+                styles.pager,
+                {
+                  width: pageWidth * 2,
+                  transform: [
+                    {
+                      translateX: progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -pageWidth],
+                      }),
+                    },
+                  ],
+                },
+              ]}>
+              {/* 想玩清单 */}
+              <View style={[styles.page, { width: pageWidth }]}>
+                <ScrollView contentContainerStyle={styles.content}>
+                  {wishlist.length === 0 ? (
+                    <EmptyState text="想玩清单是空的" hint="点右下角「＋」添加想玩的游戏" />
+                  ) : (
+                    <View style={styles.list}>
+                      {wishlist.map((wish) => (
                         <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`标记已玩 ${wish.name}`}
-                          onPress={() => setPlayTarget(wish)}
+                          key={wish.id}
+                          accessibilityLabel={`想玩 ${wish.name}`}
+                          accessibilityHint="长按可编辑或删除"
+                          delayLongPress={400}
+                          onLongPress={() => setMenuWish(wish)}
                           style={({ pressed }) => [
-                            styles.playButton,
-                            { backgroundColor: theme.text },
+                            styles.rowPressable,
                             pressed && styles.pressed,
                           ]}>
-                          <ThemedText type="smallBold" style={{ color: theme.background }}>
-                            玩了
-                          </ThemedText>
+                          <ThemedView type="backgroundElement" style={styles.wishRow}>
+                            <View style={styles.wishInfo}>
+                              <ThemedText type="smallBold" style={styles.wishName}>
+                                {wish.name}
+                              </ThemedText>
+                              {wish.note ? (
+                                <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
+                                  {wish.note}
+                                </ThemedText>
+                              ) : null}
+                            </View>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel={`标记已玩 ${wish.name}`}
+                              onPress={() => setPlayTarget(wish)}
+                              style={({ pressed }) => [
+                                styles.playButton,
+                                { backgroundColor: theme.text },
+                                pressed && styles.pressed,
+                              ]}>
+                              <ThemedText type="smallBold" style={{ color: theme.background }}>
+                                玩了
+                              </ThemedText>
+                            </Pressable>
+                          </ThemedView>
                         </Pressable>
-                      </ThemedView>
-                    </SwipeRow>
-                  ))}
-                </View>
-              )
-            ) : played.length === 0 ? (
-              <EmptyState text="还没有游玩记录" hint="在「想玩清单」里点「玩了」记录一次" />
-            ) : (
-              <View style={styles.list}>
-                {played.map((record) => (
-                  <SwipeRow
-                    key={record.id}
-                    actions={[
-                      {
-                        label: '编辑',
-                        color: theme.backgroundElement,
-                        textColor: theme.text,
-                        accessibilityLabel: '编辑',
-                        onPress: () => setEditingPlayed(record),
-                      },
-                      {
-                        label: '删除',
-                        color: '#D64545',
-                        accessibilityLabel: '删除',
-                        onPress: () => setDeletingPlayed(record),
-                      },
-                    ]}>
-                    <ThemedView type="backgroundElement" style={styles.playedCard}>
-                      <View style={styles.playedHeader}>
-                        <ThemedText type="smallBold" style={styles.playedName}>
-                          {record.game_name}
-                        </ThemedText>
-                        <StarRating value={record.rating} readOnly size={15} />
-                      </View>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {formatDay(record.played_date)} · {formatDuration(record.duration_minutes)}
-                      </ThemedText>
-                      {record.experience ? (
-                        <ThemedText type="small" numberOfLines={3}>
-                          {record.experience}
-                        </ThemedText>
-                      ) : null}
-                    </ThemedView>
-                  </SwipeRow>
-                ))}
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
               </View>
-            )}
-          </ScrollView>
+
+              {/* 已玩记录 */}
+              <View style={[styles.page, { width: pageWidth }]}>
+                <ScrollView contentContainerStyle={styles.content}>
+                  {played.length === 0 ? (
+                    <EmptyState text="还没有游玩记录" hint="在「想玩清单」里点「玩了」记录一次" />
+                  ) : (
+                    <View style={styles.list}>
+                      {played.map((record) => (
+                        <Pressable
+                          key={record.id}
+                          accessibilityLabel={`已玩 ${record.game_name}`}
+                          accessibilityHint="长按可编辑或删除"
+                          delayLongPress={400}
+                          onLongPress={() => setMenuPlayed(record)}
+                          style={({ pressed }) => [
+                            styles.rowPressable,
+                            pressed && styles.pressed,
+                          ]}>
+                          <ThemedView type="backgroundElement" style={styles.playedCard}>
+                            <View style={styles.playedHeader}>
+                              <ThemedText type="smallBold" style={styles.playedName}>
+                                {record.game_name}
+                              </ThemedText>
+                              <StarRating value={record.rating} readOnly size={15} />
+                            </View>
+                            <ThemedText type="small" themeColor="textSecondary">
+                              {formatDay(record.played_date)} · {formatDuration(record.duration_minutes)}
+                            </ThemedText>
+                            {record.experience ? (
+                              <ThemedText type="small" numberOfLines={3}>
+                                {record.experience}
+                              </ThemedText>
+                            ) : null}
+                          </ThemedView>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </Animated.View>
+          ) : null}
         </View>
 
         {tab === 'want' ? (
@@ -263,6 +341,49 @@ export default function GamesScreen() {
         onConfirm={(draft) => {
           handlePlayedConfirm(draft).catch(() => undefined);
         }}
+      />
+
+      <ActionMenu
+        visible={menuWish !== null}
+        title={menuWish ? menuWish.name : undefined}
+        message="长按想玩的游戏可以编辑或删除"
+        items={[
+          {
+            key: 'edit',
+            label: '编辑',
+            onPress: () => {
+              setEditingWish(menuWish);
+              setWishFormOpen(true);
+            },
+          },
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            onPress: () => setDeletingWish(menuWish),
+          },
+        ]}
+        onClose={() => setMenuWish(null)}
+      />
+
+      <ActionMenu
+        visible={menuPlayed !== null}
+        title={menuPlayed ? menuPlayed.game_name : undefined}
+        message="长按游玩记录可以编辑或删除"
+        items={[
+          {
+            key: 'edit',
+            label: '编辑',
+            onPress: () => setEditingPlayed(menuPlayed),
+          },
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            onPress: () => setDeletingPlayed(menuPlayed),
+          },
+        ]}
+        onClose={() => setMenuPlayed(null)}
       />
 
       <ConfirmDialog
@@ -328,7 +449,13 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.three,
     borderRadius: Spacing.five,
     padding: 3,
-    gap: 3,
+  },
+  indicator: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    left: 3,
+    borderRadius: Spacing.five,
   },
   segment: {
     flex: 1,
@@ -338,6 +465,17 @@ const styles = StyleSheet.create({
   },
   swipeArea: {
     flex: 1,
+    overflow: 'hidden',
+    // Web 上拖拽翻页时不要选中文字：选中会触发 selectionchange，把 PanResponder 的响应者抢走。
+    userSelect: 'none',
+  },
+  pager: {
+    flexDirection: 'row',
+    height: '100%',
+    userSelect: 'none',
+  },
+  page: {
+    height: '100%',
   },
   content: {
     flexGrow: 1,
@@ -347,6 +485,9 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: Spacing.two,
+  },
+  rowPressable: {
+    borderRadius: Spacing.three,
   },
   wishRow: {
     flexDirection: 'row',

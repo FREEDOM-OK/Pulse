@@ -16,7 +16,7 @@ import { deleteMemo, listMemos, toggleMemoPinned, type Memo } from '@/db/reposit
 import { getTaskStats, listTasksByDate } from '@/db/repositories/tasks';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
 import type { PlayedGameRow, TaskRow } from '@/db/types';
-import { formatDay, monthRange, parseDate, todayStr } from '@/lib/date';
+import { formatMonthDay, monthRange, parseDate, todayStr, weekdayLabel } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
 const PREVIEW_MEMOS = 4;
@@ -94,10 +94,10 @@ export default function HomeScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.header}>
             <ThemedText type="subtitle" style={styles.title}>
-              今天
+              {formatMonthDay(today)}
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {formatDay(today)}
+            <ThemedText type="small" themeColor="textSecondary" style={styles.weekday}>
+              {weekdayLabel(parseDate(today))}
             </ThemedText>
           </View>
 
@@ -364,11 +364,19 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: Spacing.two,
     paddingHorizontal: Spacing.one,
   },
   title: {
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 30,
+    lineHeight: 36,
+  },
+  weekday: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 3,
   },
   cardPressable: {
     borderRadius: Spacing.three,

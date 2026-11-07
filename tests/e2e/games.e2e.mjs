@@ -23,13 +23,31 @@ export async function run(page, baseUrl) {
   await page.clickText('游戏');
   await page.waitForText('想玩清单是空的');
 
-  // 空白区域左滑 -> 已玩记录，右滑 -> 回到想玩清单
+  // 空白区域左滑 -> 已玩记录；拖动过程中顶部页签框要跟着手指走
+  // 注意：Web 上要一小步一小步地移动（CDP 只发两次大跨度 mousemove 时不会触发 PanResponder）。
   const area = await page.rectOfLabel('游戏列表区域');
   if (!area) throw new Error('找不到游戏列表区域');
-  const swipeY = area.y + area.height - 160;
-  await page.drag(area.x + area.width * 0.75, swipeY, area.x + area.width * 0.1, swipeY);
+  const swipeY = area.y + area.height * 0.7;
+  const startX = area.x + area.width * 0.8;
+  const endX = area.x + area.width * 0.25;
+  const indicatorBefore = await page.rectOfLabel('页签指示器');
+  if (!indicatorBefore) throw new Error('找不到页签指示器');
+  await page.mouseDown(startX, swipeY);
+  for (let step = 1; step <= 8; step += 1) {
+    await page.mouseMove(startX + ((endX - startX) * step) / 8, swipeY);
+    await sleep(16);
+  }
+  await sleep(200);
+  const indicatorMid = await page.rectOfLabel('页签指示器');
+  await page.mouseUp(endX, swipeY);
+  await sleep(600);
+  const indicatorMoved = (indicatorMid ? indicatorMid.x : indicatorBefore.x) - indicatorBefore.x;
+  if (indicatorMoved < 8) {
+    throw new Error(`拖动时页签指示器没有跟着手走，只移动了 ${indicatorMoved}px`);
+  }
   await page.waitForText('还没有游玩记录');
-  await page.drag(area.x + area.width * 0.1, swipeY, area.x + area.width * 0.75, swipeY);
+  // 右滑回到想玩清单
+  await page.mouseDrag(area.x + area.width * 0.1, swipeY, area.x + area.width * 0.75, swipeY);
   await page.waitForText('想玩清单是空的');
   await page.waitForText('想玩 0 · 已玩 0');
 
@@ -42,11 +60,13 @@ export async function run(page, baseUrl) {
   await page.waitForText('塞尔达');
   await page.waitForText('听说探索感很强');
 
-  // 想玩清单的行左滑要能轻松划出「删除」
-  const wishMoved = await page.swipeLeft('听说探索感很强');
-  if (wishMoved < 40) {
-    throw new Error(`想玩清单左滑没有生效，只移动了 ${wishMoved}px`);
-  }
+  // 长按想玩行弹出「编辑 / 删除」菜单（不再用左滑）
+  await page.longPressText('听说探索感很强');
+  await page.waitForLabel('编辑');
+  await page.waitForLabel('删除');
+  await page.clickLabel('取消');
+  await sleep(400);
+  await page.waitForText('塞尔达');
 
   // 点了：默认今天，并改成另一个日期
   await page.clickText('玩了');
@@ -73,7 +93,9 @@ export async function run(page, baseUrl) {
   await page.waitForText('2 小时 30 分钟');
   await page.waitForLabel('评分 4 星');
 
-  // 编辑评分到 5 星（已玩卡片改为左滑「编辑」）
+  // 长按已玩卡片，选「编辑」把评分改到 5 星
+  await page.longPressText('探索感很强，地图很大');
+  await page.waitForLabel('编辑');
   await page.clickLabel('编辑');
   await page.waitForText('编辑已玩记录');
   await page.waitForLabel(`游玩日期 ${dateStr(selectedDate)}`);
@@ -89,14 +111,10 @@ export async function run(page, baseUrl) {
   await page.waitForText('塞尔达');
   await page.waitForText(dayLabel(selectedDate));
 
-  // 已玩记录卡片左滑也要能轻松划出「删除」
-  const playedMoved = await page.swipeLeft('探索感很强，地图很大');
-  if (playedMoved < 40) {
-    throw new Error(`已玩记录左滑没有生效，只移动了 ${playedMoved}px`);
-  }
-
-  // 删除已玩记录
-  await page.clickText('删除');
+  // 长按已玩卡片弹出菜单，删除这条记录
+  await page.longPressText('探索感很强，地图很大');
+  await page.waitForLabel('删除');
+  await page.clickLabel('删除');
   await page.waitForText('删除这条游玩记录？');
   await page.clickText('确认删除');
   await sleep(400);

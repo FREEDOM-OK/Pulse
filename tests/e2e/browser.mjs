@@ -260,41 +260,106 @@ class Page {
     await sleep(400);
   }
 
-  /** 触摸左滑：比鼠标拖拽更接近真机，也不会触发 Web 的文字选择。 */
-  async touchSwipeLeft(x, y, distance = 140) {
+  /**
+   * 鼠标按下/移动/松开三件套：可以在拖动中途取值（例如断言页签框跟着手走）。
+   * Web 上 PanResponder 只认鼠标拖动，CDP 的触摸拖动不会触发响应者协商，别用 touch 测这类手势。
+   */
+  async mouseDown(x, y) {
+    await this.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x,
+      y,
+      button: 'left',
+      clickCount: 1,
+    });
+  }
+
+  async mouseMove(x, y) {
+    await this.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x,
+      y,
+      button: 'left',
+      buttons: 1,
+    });
+  }
+
+  async mouseUp(x, y) {
+    await this.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x,
+      y,
+      button: 'left',
+      clickCount: 1,
+    });
+    await sleep(350);
+  }
+
+  /** 用鼠标把 (x,y) 拖到 (x2,y2)，中途不留手。 */
+  async mouseDrag(x, y, x2, y2, steps = 10) {
+    await this.mouseDown(x, y);
+    for (let step = 1; step <= steps; step += 1) {
+      await this.mouseMove(x + ((x2 - x) * step) / steps, y + ((y2 - y) * step) / steps);
+      await sleep(16);
+    }
+    await this.mouseUp(x2, y2);
+  }
+
+  /** 触摸拖拽三件套：可以在拖动中途取值（例如断言页签指示器跟着手指走）。 */
+  async touchStart(x, y) {
     await this.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
+    await this.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  }
+
+  async touchMove(x, y) {
+    await this.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
+  }
+
+  async touchEnd() {
+    await this.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await this.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+  }
+
+  /** 从 (x,y) 触摸拖到 (x2,y2)：比鼠标拖拽更接近真机，也不会触发 Web 的文字选择。 */
+  async touchDrag(x, y, x2, y2, steps = 12) {
+    await this.touchStart(x, y);
     try {
-      await this.send('Input.dispatchTouchEvent', {
-        type: 'touchStart',
-        touchPoints: [{ x, y }],
-      });
-      const steps = 12;
       for (let step = 1; step <= steps; step += 1) {
-        await this.send('Input.dispatchTouchEvent', {
-          type: 'touchMove',
-          touchPoints: [{ x: x - (distance * step) / steps, y }],
-        });
+        await this.touchMove(x + ((x2 - x) * step) / steps, y + ((y2 - y) * step) / steps);
         await sleep(16);
       }
-      await this.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await this.touchEnd();
     } finally {
-      await sleep(450);
-      await this.send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      await sleep(500);
     }
   }
 
-  /** 左滑包含指定文本的行，直到整行真的向左移动；返回移动的像素数。 */
-  async swipeLeft(text, attempts = 3) {
-    const before = await this.rectOf(text);
-    if (!before) throw new Error(`找不到要滑动的文本「${text}」`);
-    let moved = 0;
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      await this.touchSwipeLeft(before.x + 60, before.y);
-      const after = await this.rectOf(text);
-      moved = before.x - (after ? after.x : before.x);
-      if (moved >= 40) return moved;
+  async touchSwipeLeft(x, y, distance = 140) {
+    await this.touchDrag(x, y, x - distance, y);
+  }
+
+  /** 长按坐标；行内的长按阈值是 delayLongPress=400。 */
+  async longPress(x, y, holdMs = 700) {
+    await this.touchStart(x, y);
+    try {
+      await sleep(holdMs);
+      await this.touchEnd();
+    } finally {
+      await sleep(400);
     }
-    return moved;
+  }
+
+  /** 长按包含指定文本的元素，用于弹出「编辑 / 删除」菜单。 */
+  async longPressText(text, holdMs = 700) {
+    const rect = await this.rectOf(text);
+    if (!rect) throw new Error(`找不到要长按的文本「${text}」`);
+    await this.longPress(rect.x, rect.y, holdMs);
+  }
+
+  async longPressLabel(label, holdMs = 700) {
+    const rect = await this.rectOfLabel(label);
+    if (!rect) throw new Error(`找不到要长按的 aria-label「${label}」`);
+    await this.longPress(rect.x + rect.width / 2, rect.y + rect.height / 2, holdMs);
   }
 
   /** 取 aria-label 匹配元素的矩形区域（视口坐标）。 */

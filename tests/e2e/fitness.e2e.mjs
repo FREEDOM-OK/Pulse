@@ -53,20 +53,18 @@ export async function run(page, baseUrl) {
     throw new Error('修改次数后新记录没有使用新的次数');
   }
 
-  // 左滑第 4 组，露出「删除」按钮
-  const moved = await page.swipeLeft('第4组');
-  if (moved < 40) {
-    throw new Error(`左滑没有把记录向左移出，只移动了 ${moved}px`);
-  }
-
-  // 删除第 4 组，剩余组重新编号
-  await page.clickLabel('删除杠铃卧推第4组');
+  // 长按第 4 组，弹出「删除」菜单
+  await page.longPressText('第4组');
+  await page.waitForLabel('删除');
+  await page.clickLabel('删除');
   await page.waitForText('删除这组记录？');
   await page.clickText('确认删除');
   await page.waitForText('共 3 组');
   await page.waitForNoText('第4组');
 
-  // 删除卡片，历史记录仍保留
+  // 长按卡片弹出菜单，删除训练项目，历史记录仍保留
+  await page.longPressLabel('训练项目 杠铃卧推');
+  await page.waitForLabel('删除');
   await page.clickLabel('删除');
   await page.waitForText('删除这个训练项目？');
   await page.clickText('确认删除');

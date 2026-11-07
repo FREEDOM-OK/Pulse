@@ -40,8 +40,16 @@ export async function run(page, baseUrl) {
   await page.clickLabel('标记为完成');
   await page.waitForText('完成 1/1');
 
-  // 编辑任务内容
+  // 点任务本体 = 切换完成状态，不再进编辑
   await page.clickText('写周报');
+  await page.waitForText('完成 0/1');
+  await page.clickText('写周报');
+  await page.waitForText('完成 1/1');
+
+  // 编辑任务内容走长按菜单
+  await page.longPressText('写周报');
+  await page.waitForLabel('编辑');
+  await page.clickLabel('编辑');
   await page.waitForText('编辑任务');
   await page.fill('例如：写周报', '写月报');
   await page.clickText('保存');
@@ -63,8 +71,10 @@ export async function run(page, baseUrl) {
   await page.clickLabel('前一天');
   await page.waitForText('晨读');
 
-  // 删除任务（点击滑出后的删除按钮）
-  await page.clickText('删除');
+  // 长按任务弹出菜单，删除任务
+  await page.longPressText('写月报');
+  await page.waitForLabel('删除');
+  await page.clickLabel('删除');
   await page.waitForText('删除任务？');
   await page.clickText('确认删除');
   await sleep(400);

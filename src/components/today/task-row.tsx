@@ -1,28 +1,30 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { SwipeRow } from '@/components/ui/swipe-row';
 import { Spacing } from '@/constants/theme';
 import type { TaskRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 
 interface TaskRowItemProps {
   task: TaskRow;
+  /** 点击任务本体或勾选框：切换完成状态。 */
   onToggle: () => void;
+  /** 从长按菜单进入编辑。 */
   onEdit: () => void;
-  onDelete: () => void;
+  /** 长按任务打开「编辑 / 删除」菜单。 */
+  onMenu: () => void;
 }
 
-export function TaskRowItem({ task, onToggle, onEdit, onDelete }: TaskRowItemProps) {
+export function TaskRowItem({ task, onToggle, onEdit, onMenu }: TaskRowItemProps) {
   const theme = useTheme();
   const done = task.done === 1;
 
   return (
-    <SwipeRow
-      actions={[
-        { label: '编辑', color: theme.backgroundElement, textColor: theme.text, onPress: onEdit },
-        { label: '删除', color: '#D64545', onPress: onDelete },
-      ]}>
+    <Pressable
+      accessibilityHint="长按可编辑或删除"
+      delayLongPress={400}
+      onLongPress={onMenu}
+      style={({ pressed }) => [styles.pressable, pressed && styles.rowPressed]}>
       <ThemedView type="backgroundElement" style={styles.row}>
         <Pressable
           accessibilityRole="checkbox"
@@ -45,7 +47,13 @@ export function TaskRowItem({ task, onToggle, onEdit, onDelete }: TaskRowItemPro
           ) : null}
         </Pressable>
 
-        <Pressable style={styles.body} onPress={onEdit}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityHint="点击标记完成或取消，长按可编辑或删除"
+          style={styles.body}
+          onPress={onToggle}
+          delayLongPress={400}
+          onLongPress={onMenu}>
           <View style={styles.titleRow}>
             {task.time ? (
               <ThemedText
@@ -68,11 +76,17 @@ export function TaskRowItem({ task, onToggle, onEdit, onDelete }: TaskRowItemPro
           ) : null}
         </Pressable>
       </ThemedView>
-    </SwipeRow>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: {
+    borderRadius: Spacing.three,
+  },
+  rowPressed: {
+    opacity: 0.92,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',

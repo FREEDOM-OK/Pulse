@@ -30,17 +30,15 @@ node tests/e2e/run.mjs   # 端到端（无头 Chrome，需先启动 Web dev serv
 
 ## 已知坑（本项目实践，改动前先读）
 
-### 1. 行内左滑被父级横滑手势抢走
+### 1. 行操作统一用长按菜单，不要再加左滑
 
-游戏页列表外层有「空白区左右滑切页签」的 PanResponder，会吃掉行内 SwipeRow 的水平位移（早期还有整卡 Pressable 一起抢）。
+行内左滑（旧 `SwipeRow`）会被父级横滑 PanResponder 抢走手势，父子级判定很脆弱，已整体废弃（`swipe-row.tsx` 与 `lib/gesture.ts` 已删除）。
 
-约定（`src/lib/gesture.ts`）：
+约定：
 
-- 外层容器在**捕获阶段**清标记：`onStartShouldSetPanResponderCapture={() => { clearRowGesture(); return false; }}`
-- 行在自己的 start 阶段 `markRowGesture()` 并**返回 false**（不改父级夺取逻辑，与 RN 遍历方向无关）
-- 行的 `onMoveShouldSetPanResponderCapture` 用 `|dx| > 8 && |dx| > |dy| * 1.2`
-- 外层 move 判定必须是 `!isRowGestureActive() && isTabSwipe(...)`
-- 卡片上的「编辑」不要用整卡 Pressable，改放 SwipeRow 的动作按钮
+- 「删除 / 编辑」入口一律用 `Pressable` 的 `delayLongPress={400}` + `onLongPress`，弹出统一的 `src/components/ui/action-menu.tsx`（屏幕正中的操作卡，条目 `{ key, label, danger?, onPress }`）。
+- 行不要再包可横向拖动的容器；游戏页整块列表的 `PanResponder` 只在 `onMoveShouldSetPanResponderCapture` 用 `isTabSwipe(dx, dy, 10)` 接横向拖动 —— 长按没有位移，不会被抢。
+- 危险操作仍要 `ConfirmDialog` 二次确认。
 
 ### 2. 跑 E2E 前必须重启 Metro
 
@@ -48,10 +46,17 @@ Expo 在 `CI=1` 下不监听文件变化，8090 上可能是上一次甚至上�
 
 规则：先 `Stop-Process` 掉旧进程，再 `npx expo start --web --port 8090 --clear`，然后才 `node tests/e2e/run.mjs`。
 
-### 3. E2E 的两个细节
+### 3. 手势类改动交给真人验证，别硬写 E2E
 
-- Web 端 SwipeRow 用 CDP 鼠标拖拽无效（鼠标 drag 会变成选中文字）。必须用 `Input.dispatchTouchEvent`，即 `tests/e2e/browser.mjs` 的 `touchSwipeLeft` / `swipeLeft`，并断言行真的左移 ≥40px。
+「手势 + Web 模拟」两个变量相乘，自动化验证成本极高且结论不可信：
+
+- CDP 注入的 `touch` 事件驱动不了 react-native-web 的 PanResponder（逻辑没错也测不出位移）；鼠标拖拽又会在拖动时选中文字，`selectionchange` 会把响应者抢走。
+- 因此**滑动 / 拖拽 / 翻页 / 长按这类交互不要写自动化测试**，改完说明改动点，交给用户在自己手机上验证（用户 m01612 明确要求）。
+- 必须用 E2E 兜底拖拽时：`mouseDrag` 小步移动 8–10 步（大跨度两次移动不触发），拖动容器加 `userSelect: 'none'`，断言里先打印实际位移再比较。
+- 长按用 `longPress(text)`（touchStart → 等约 700ms → touchEnd）；长按松手后浏览器会补发 click，菜单遮罩必须用响应者手势关闭，不能用 `Pressable`（见 `action-menu.tsx` 注释）。
 - 场景之间会串数据：假设空库的场景开头先 `page.evaluate('localStorage.clear()')` 再 goto。
+
+**测试上限**：任何测试连续两轮仍失败或没有结果，直接跳过当前测试，并在汇报里写明跳过了什么、卡在哪（用户要求）。
 
 ### 4. Web 端数据层
 

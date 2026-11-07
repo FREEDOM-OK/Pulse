@@ -20,7 +20,8 @@ function lastMonthDate(day = 15) {
 /** P7 日历回顾：四色点、当日明细分组、切月、无记录日期 */
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
-  await page.waitForText('今天');
+  const now = new Date();
+  await page.waitForText(`${now.getMonth() + 1}月${now.getDate()}日`);
   await page.clickLabel('查看日历回顾');
   await page.waitForText('日历回顾');
   await page.waitForText('计划');

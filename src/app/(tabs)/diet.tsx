@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { DietForm } from '@/components/diet/diet-form';
 import { DietRowItem } from '@/components/diet/diet-row';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { DateStrip, dateLabel } from '@/components/ui/date-strip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MonthPicker } from '@/components/ui/month-picker';
@@ -24,6 +25,7 @@ export default function DietScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<DietRecordRow | null>(null);
   const [deleting, setDeleting] = useState<DietRecordRow | null>(null);
+  const [menuRecord, setMenuRecord] = useState<DietRecordRow | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -107,11 +109,7 @@ export default function DietScreen() {
                         <DietRowItem
                           key={record.id}
                           record={record}
-                          onEdit={() => {
-                            setEditing(record);
-                            setFormOpen(true);
-                          }}
-                          onDelete={() => setDeleting(record)}
+                          onMenu={() => setMenuRecord(record)}
                         />
                       ))}
                     </View>
@@ -157,6 +155,28 @@ export default function DietScreen() {
           setDate(selected);
           setCalendarOpen(false);
         }}
+      />
+
+      <ActionMenu
+        visible={menuRecord !== null}
+        title={menuRecord ? menuRecord.content : undefined}
+        items={[
+          {
+            key: 'edit',
+            label: '编辑',
+            onPress: () => {
+              setEditing(menuRecord);
+              setFormOpen(true);
+            },
+          },
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            onPress: () => setDeleting(menuRecord),
+          },
+        ]}
+        onClose={() => setMenuRecord(null)}
       />
 
       <ConfirmDialog

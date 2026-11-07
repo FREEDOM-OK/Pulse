@@ -3,12 +3,14 @@ import {
   addDays,
   formatDay,
   formatDuration,
+  formatMonthDay,
   isToday,
   monthGrid,
   monthRange,
   parseDate,
   toDateStr,
   todayStr,
+  weekdayLabel,
 } from '@/lib/date';
 
 describe('P1 日期工具', () => {
@@ -34,6 +36,13 @@ describe('P1 日期工具', () => {
 
   it('formatDay 输出中文日期与星期', () => {
     expect(formatDay('2026-11-06')).toBe('11月6日 周五');
+  });
+
+  it('formatMonthDay 只输出月日，星期单独给出', () => {
+    expect(formatMonthDay('2026-11-06')).toBe('11月6日');
+    expect(formatMonthDay('2026-01-01')).toBe('1月1日');
+    expect(weekdayLabel(parseDate('2026-11-06'))).toBe('周五');
+    expect(weekdayLabel(parseDate('2026-11-08'))).toBe('周日');
   });
 
   it('monthGrid 以周一开头并包含整月', () => {

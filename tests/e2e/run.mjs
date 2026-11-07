@@ -22,10 +22,18 @@ const scenarios = [
 async function main() {
   await waitForHttp(BASE_URL, 30000);
 
+  // 支持只跑某个场景：node tests/e2e/run.mjs P5
+  const filter = process.argv[2];
+  const selected = filter ? scenarios.filter((scenario) => scenario.name.includes(filter)) : scenarios;
+  if (selected.length === 0) {
+    console.error(`没有匹配「${filter}」的场景`);
+    process.exit(1);
+  }
+
   const browser = await launchBrowser();
   let failed = 0;
   try {
-    for (const scenario of scenarios) {
+    for (const scenario of selected) {
       const started = Date.now();
       try {
         await scenario.run(browser.page, BASE_URL);
@@ -49,7 +57,7 @@ async function main() {
     console.error(`\n${failed} 个 UI 场景失败`);
     process.exit(1);
   }
-  console.log(`\n${scenarios.length} 个 UI 场景全部通过`);
+  console.log(`\n${selected.length} 个 UI 场景全部通过`);
 }
 
 main().catch((error) => {

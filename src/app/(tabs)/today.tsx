@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { TaskForm } from '@/components/today/task-form';
 import { TaskRowItem } from '@/components/today/task-row';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { DateStrip, dateLabel } from '@/components/ui/date-strip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MonthPicker } from '@/components/ui/month-picker';
@@ -30,6 +31,7 @@ export default function TodayScreen() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TaskRow | null>(null);
   const [deleting, setDeleting] = useState<TaskRow | null>(null);
+  const [menuTask, setMenuTask] = useState<TaskRow | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [markedDays, setMarkedDays] = useState<Record<string, boolean>>({});
 
@@ -107,7 +109,7 @@ export default function TodayScreen() {
                 setEditing(item);
                 setFormOpen(true);
               }}
-              onDelete={() => setDeleting(item)}
+              onMenu={() => setMenuTask(item)}
             />
           )}
         />
@@ -148,6 +150,28 @@ export default function TodayScreen() {
           setDate(selected);
           setCalendarOpen(false);
         }}
+      />
+
+      <ActionMenu
+        visible={menuTask !== null}
+        title={menuTask ? menuTask.title : undefined}
+        items={[
+          {
+            key: 'edit',
+            label: '编辑',
+            onPress: () => {
+              setEditing(menuTask);
+              setFormOpen(true);
+            },
+          },
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            onPress: () => setDeleting(menuTask),
+          },
+        ]}
+        onClose={() => setMenuTask(null)}
       />
 
       <ConfirmDialog

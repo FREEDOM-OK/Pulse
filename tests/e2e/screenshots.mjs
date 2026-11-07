@@ -13,7 +13,7 @@ async function main() {
 
   try {
     await page.goto(BASE_URL);
-    await page.waitForText('今天');
+    await page.waitForText(`${new Date().getMonth() + 1}月${new Date().getDate()}日`);
 
     // 今日计划：两条任务，第一条完成
     await page.clickText('今日计划');
@@ -55,9 +55,10 @@ async function main() {
     await page.clickText('完成');
     await page.clickText('完成');
     await page.waitForText('共 2 组');
-    // 左滑第 2 组，让截图里能看到「删除」按钮
-    await page.swipeLeft('第2组');
-    await sleep(300);
+    // 长按第 2 组弹出「删除」菜单，截图里可见新的长按交互
+    await page.longPressText('第2组');
+    await page.waitForText('删除');
+    await sleep(400);
     await page.screenshot(path.join(OUT_DIR, 'fitness.png'));
 
     // 饮食
@@ -101,7 +102,7 @@ async function main() {
 
     // 深色主题
     await page.goto(BASE_URL);
-    await page.waitForText('今天');
+    await page.waitForText(`${new Date().getMonth() + 1}月${new Date().getDate()}日`);
     await page.clickText('设置');
     await page.waitForText('数据与偏好');
     await page.clickText('深色');

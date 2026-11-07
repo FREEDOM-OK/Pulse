@@ -8,6 +8,7 @@ import { ExercisePicker } from '@/components/fitness/exercise-picker';
 import { SetRecordItem } from '@/components/fitness/set-record-row';
 import { TrainingCard } from '@/components/fitness/training-card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { DateStrip } from '@/components/ui/date-strip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MonthPicker } from '@/components/ui/month-picker';
@@ -37,6 +38,8 @@ export default function FitnessScreen() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [deletingItem, setDeletingItem] = useState<TrainingItemRow | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<SetRecordRow | null>(null);
+  const [menuItem, setMenuItem] = useState<TrainingItemRow | null>(null);
+  const [menuRecord, setMenuRecord] = useState<SetRecordRow | null>(null);
   const [markedDays, setMarkedDays] = useState<Record<string, boolean>>({});
   const [categoryById, setCategoryById] = useState<Record<number, string>>({});
 
@@ -164,7 +167,7 @@ export default function FitnessScreen() {
                       .then(load)
                       .catch(() => undefined);
                   }}
-                  onDelete={() => setDeletingItem(item)}
+                  onMenu={() => setMenuItem(item)}
                 />
               ))}
             </View>
@@ -173,7 +176,7 @@ export default function FitnessScreen() {
           <View style={[styles.sectionHeader, styles.sectionGap]}>
             <ThemedText type="smallBold">已完成</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              共 {totalSets} 组 · 左滑可删除
+              共 {totalSets} 组 · 长按可删除
             </ThemedText>
           </View>
 
@@ -185,7 +188,7 @@ export default function FitnessScreen() {
                 <SetRecordItem
                   key={record.id}
                   record={record}
-                  onDelete={() => setDeletingRecord(record)}
+                  onMenu={() => setMenuRecord(record)}
                 />
               ))}
             </View>
@@ -211,6 +214,35 @@ export default function FitnessScreen() {
           setDate(selected);
           setCalendarOpen(false);
         }}
+      />
+
+      <ActionMenu
+        visible={menuItem !== null}
+        title={menuItem ? menuItem.exercise_name : undefined}
+        message="长按训练卡片可以删除它"
+        items={[
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            onPress: () => setDeletingItem(menuItem),
+          },
+        ]}
+        onClose={() => setMenuItem(null)}
+      />
+
+      <ActionMenu
+        visible={menuRecord !== null}
+        title={menuRecord ? `${menuRecord.exercise_name} 第${menuRecord.set_index}组` : undefined}
+        items={[
+          {
+            key: 'delete',
+            label: '删除',
+            danger: true,
+            onPress: () => setDeletingRecord(menuRecord),
+          },
+        ]}
+        onClose={() => setMenuRecord(null)}
       />
 
       <ConfirmDialog

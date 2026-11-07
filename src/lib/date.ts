@@ -45,6 +45,12 @@ export function formatDay(dateStr: string): string {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${WEEKDAY_LABELS[date.getDay()]}`;
 }
 
+/** 只到「几月几日」，星期另由 weekdayLabel 拼接（首页大标题用）。 */
+export function formatMonthDay(dateStr: string): string {
+  const date = parseDate(dateStr);
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
 export function formatMonth(year: number, monthIndex: number): string {
   return `${year}年${monthIndex + 1}月`;
 }

@@ -1,26 +1,24 @@
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { SwipeRow } from '@/components/ui/swipe-row';
 import { Spacing } from '@/constants/theme';
 import type { DietRecordRow } from '@/db/types';
-import { useTheme } from '@/hooks/use-theme';
 
 interface DietRowItemProps {
   record: DietRecordRow;
-  onEdit: () => void;
-  onDelete: () => void;
+  /** 长按这一行时打开「编辑 / 删除」菜单。 */
+  onMenu: () => void;
 }
 
-export function DietRowItem({ record, onEdit, onDelete }: DietRowItemProps) {
-  const theme = useTheme();
-
+export function DietRowItem({ record, onMenu }: DietRowItemProps) {
   return (
-    <SwipeRow
-      actions={[
-        { label: '编辑', color: theme.backgroundElement, textColor: theme.text, onPress: onEdit },
-        { label: '删除', color: '#D64545', onPress: onDelete },
-      ]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`饮食记录 ${record.content}`}
+      accessibilityHint="长按可编辑或删除"
+      delayLongPress={400}
+      onLongPress={onMenu}
+      style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}>
       <ThemedView type="backgroundElement" style={styles.row}>
         <ThemedText type="small" style={styles.content} numberOfLines={2}>
           {record.content}
@@ -29,11 +27,14 @@ export function DietRowItem({ record, onEdit, onDelete }: DietRowItemProps) {
           {record.calories != null ? `${record.calories} kcal` : '未填热量'}
         </ThemedText>
       </ThemedView>
-    </SwipeRow>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  pressable: {
+    borderRadius: Spacing.three,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -45,5 +46,8 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     fontSize: 14,
+  },
+  pressed: {
+    opacity: 0.7,
   },
 });

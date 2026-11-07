@@ -10,7 +10,11 @@ function todayStr() {
 /** P6 首页：摘要、备忘增删改置顶、迷你月历跳转 */
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
-  await page.waitForText('今天');
+  // 顶部大标题是「几月几日」，后面跟星期几，不再有「今天」大字
+  const now = new Date();
+  const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
+  await page.waitForText(`${now.getMonth() + 1}月${now.getDate()}日`);
+  await page.waitForText(weekday);
   await page.waitForText('快速备忘');
   await page.waitForText('今日计划');
   await page.waitForText('kcal');
