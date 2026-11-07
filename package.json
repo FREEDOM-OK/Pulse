@@ -48,6 +48,7 @@
     "lint": "expo lint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "verify": "node scripts/verify.mjs",
     "test:e2e": "node tests/e2e/run.mjs"
   },
   "private": true
