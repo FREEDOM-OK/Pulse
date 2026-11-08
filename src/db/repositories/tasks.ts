@@ -9,6 +9,7 @@ export interface CreateTaskInput {
   title: string;
   note?: string | null;
   time?: string | null;
+  pinned?: boolean;
 }
 
 export interface TaskPatch {
@@ -16,6 +17,7 @@ export interface TaskPatch {
   note?: string | null;
   time?: string | null;
   done?: boolean;
+  pinned?: boolean;
 }
 
 export interface TaskStats {
@@ -57,9 +59,17 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
   const driver = getDriver();
   const sortOrder = await nextSortOrder(input.date);
   const result = await driver.runAsync(
-    `INSERT INTO tasks (date, title, note, time, done, completed_at, repeat_group_id, sort_order, created_at)
-     VALUES (?, ?, ?, ?, 0, NULL, NULL, ?, ?)`,
-    [input.date, input.title, input.note ?? null, input.time ?? null, sortOrder, nowIso()]
+    `INSERT INTO tasks (date, title, note, time, done, completed_at, repeat_group_id, sort_order, pinned, created_at)
+     VALUES (?, ?, ?, ?, 0, NULL, NULL, ?, ?, ?)`,
+    [
+      input.date,
+      input.title,
+      input.note ?? null,
+      input.time ?? null,
+      sortOrder,
+      input.pinned ? 1 : 0,
+      nowIso(),
+    ]
   );
   return result.lastInsertRowId;
 }
@@ -79,8 +89,8 @@ export async function createTaskSeries(
       const date = addDaysLocal(input.date, offset);
       const sortOrder = await nextSortOrder(date);
       const result = await driver.runAsync(
-        `INSERT INTO tasks (date, title, note, time, done, completed_at, repeat_group_id, sort_order, created_at)
-         VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?)`,
+        `INSERT INTO tasks (date, title, note, time, done, completed_at, repeat_group_id, sort_order, pinned, created_at)
+         VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?, ?)`,
         [
           date,
           input.title,
@@ -88,6 +98,7 @@ export async function createTaskSeries(
           input.time ?? null,
           groupId,
           sortOrder,
+          input.pinned ? 1 : 0,
           createdAt,
         ]
       );
@@ -129,10 +140,18 @@ export async function updateTask(id: number, patch: TaskPatch): Promise<void> {
     fields.push('done = ?', 'completed_at = ?');
     params.push(patch.done ? 1 : 0, patch.done ? nowIso() : null);
   }
+  if (patch.pinned !== undefined) {
+    fields.push('pinned = ?');
+    params.push(patch.pinned ? 1 : 0);
+  }
   if (fields.length === 0) return;
 
   params.push(id);
   await getDriver().runAsync(`UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`, params);
+}
+
+export async function setTaskPinned(id: number, pinned: boolean): Promise<void> {
+  await getDriver().runAsync('UPDATE tasks SET pinned = ? WHERE id = ?', [pinned ? 1 : 0, id]);
 }
 
 export async function toggleTask(id: number): Promise<boolean> {

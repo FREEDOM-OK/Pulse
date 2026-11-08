@@ -3,7 +3,11 @@ import { listTasksByDate } from './tasks';
 import { getDayExercises } from './training';
 import { listEventsByDate } from './events';
 import { listPlayedInRange } from './games';
-import type { EventRow, PlayedGameRow, TaskRow } from '../types';
+import { listMemosByDate } from './memos';
+import { listCourses } from './courses';
+import { getPeriodTimes, getTermConfig } from './settings';
+import { coursesOnDate, type CourseOnDate } from '@/lib/timetable';
+import type { EventRow, MemoRow, PlayedGameRow, TaskRow } from '../types';
 
 export interface DayFlags {
   tasks: boolean;
@@ -17,6 +21,8 @@ export interface DayDetail {
   fitness: { exerciseName: string; sets: number }[];
   events: EventRow[];
   games: PlayedGameRow[];
+  memos: MemoRow[];
+  courses: CourseOnDate[];
 }
 
 /** 某个月每一天有哪些模块的数据（日历色点用）。 */
@@ -61,12 +67,23 @@ export async function getMonthActivity(
 
 /** 某一天的全部明细（日历回顾用）。 */
 export async function getDayDetail(date: string): Promise<DayDetail> {
-  const [tasks, fitness, events, games] = await Promise.all([
+  const [tasks, fitness, events, games, memos, courses, term, periodTimes] = await Promise.all([
     listTasksByDate(date),
     getDayExercises(date),
     listEventsByDate(date),
     listPlayedInRange(date, date),
+    listMemosByDate(date),
+    listCourses(),
+    getTermConfig(),
+    getPeriodTimes(),
   ]);
 
-  return { tasks, fitness, events, games };
+  return {
+    tasks,
+    fitness,
+    events,
+    games,
+    memos,
+    courses: coursesOnDate(date, courses, term.startDate, periodTimes),
+  };
 }

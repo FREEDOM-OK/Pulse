@@ -149,7 +149,51 @@ DROP TABLE IF EXISTS diet_records;
 DROP TABLE IF EXISTS memos;
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3];
+/**
+ * v1.2：任务加置顶；重建备忘表（v3 删过，这里按新结构建）；
+ * 新增课表两张表（课程 + 上课时段）。
+ */
+export const MIGRATION_V4 = `
+ALTER TABLE tasks ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS memos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  content TEXT NOT NULL,
+  time TEXT,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_memos_date ON memos(date);
+
+CREATE TABLE IF NOT EXISTS courses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  teacher TEXT,
+  room TEXT,
+  color TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS course_slots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL,
+  weekday INTEGER NOT NULL,
+  start_period INTEGER NOT NULL,
+  end_period INTEGER NOT NULL,
+  weeks TEXT NOT NULL DEFAULT '[]',
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_slots_course ON course_slots(course_id);
+CREATE INDEX IF NOT EXISTS idx_course_slots_weekday ON course_slots(weekday);
+`;
+
+export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -160,6 +204,9 @@ export const ALL_TABLES = [
   'played_games',
   'wishlist',
   'tasks',
+  'memos',
+  'course_slots',
+  'courses',
   'events',
   'exercises',
   'settings',

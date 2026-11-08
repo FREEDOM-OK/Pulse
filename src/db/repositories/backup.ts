@@ -17,6 +17,9 @@ export interface BackupData {
   wishlist: Record<string, unknown>[];
   playedGames: Record<string, unknown>[];
   events: Record<string, unknown>[];
+  memos: Record<string, unknown>[];
+  courses: Record<string, unknown>[];
+  courseSlots: Record<string, unknown>[];
   settings: Record<string, string>;
 }
 
@@ -49,6 +52,7 @@ interface TaskRow {
   completed_at: string | null;
   repeat_group_id: string | null;
   sort_order: number;
+  pinned: number;
   created_at: string;
 }
 interface ExerciseRow {
@@ -110,6 +114,34 @@ interface PlayedRow {
   rating: number;
   created_at: string;
 }
+interface MemoRow {
+  id: number;
+  date: string;
+  content: string;
+  time: string | null;
+  pinned: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+interface CourseRow {
+  id: number;
+  name: string;
+  teacher: string | null;
+  room: string | null;
+  color: string | null;
+  note: string | null;
+  created_at: string;
+}
+interface CourseSlotRow {
+  id: number;
+  course_id: number;
+  weekday: number;
+  start_period: number;
+  end_period: number;
+  weeks: string;
+  created_at: string;
+}
 
 const LEGACY_MEAL_LABELS: Record<string, string> = {
   breakfast: '早餐',
@@ -141,8 +173,18 @@ export function legacyDietToEvents(rows: Record<string, unknown>[]): Record<stri
 export async function exportBackup(): Promise<BackupPayload> {
   const driver = getDriver();
 
-  const [tasks, exercises, trainingItems, setRecords, wishlist, playedGames, events] =
-    await Promise.all([
+  const [
+    tasks,
+    exercises,
+    trainingItems,
+    setRecords,
+    wishlist,
+    playedGames,
+    events,
+    memos,
+    courses,
+    courseSlots,
+  ] = await Promise.all([
       driver.getAllAsync<TaskRow>('SELECT * FROM tasks ORDER BY id ASC'),
       driver.getAllAsync<ExerciseRow>('SELECT * FROM exercises WHERE is_preset = 0 ORDER BY id ASC'),
       driver.getAllAsync<TrainingRow>('SELECT * FROM training_items ORDER BY id ASC'),
@@ -150,6 +192,9 @@ export async function exportBackup(): Promise<BackupPayload> {
       driver.getAllAsync<WishRow>('SELECT * FROM wishlist ORDER BY id ASC'),
       driver.getAllAsync<PlayedRow>('SELECT * FROM played_games ORDER BY id ASC'),
       driver.getAllAsync<EventRow>('SELECT * FROM events ORDER BY id ASC'),
+      driver.getAllAsync<MemoRow>('SELECT * FROM memos ORDER BY id ASC'),
+      driver.getAllAsync<CourseRow>('SELECT * FROM courses ORDER BY id ASC'),
+      driver.getAllAsync<CourseSlotRow>('SELECT * FROM course_slots ORDER BY id ASC'),
     ]);
 
   const settingsRows = await driver.getAllAsync<{ key: string; value: string }>(
@@ -171,6 +216,7 @@ export async function exportBackup(): Promise<BackupPayload> {
         completedAt: row.completed_at,
         repeatGroupId: row.repeat_group_id,
         sortOrder: row.sort_order,
+        pinned: row.pinned,
         createdAt: row.created_at,
       })),
       exercises: exercises.map((row) => ({
@@ -230,6 +276,34 @@ export async function exportBackup(): Promise<BackupPayload> {
         title: row.title,
         amount: row.amount,
         note: row.note,
+        createdAt: row.created_at,
+      })),
+      memos: memos.map((row) => ({
+        id: row.id,
+        date: row.date,
+        content: row.content,
+        time: row.time,
+        pinned: row.pinned,
+        sortOrder: row.sort_order,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+      courses: courses.map((row) => ({
+        id: row.id,
+        name: row.name,
+        teacher: row.teacher,
+        room: row.room,
+        color: row.color,
+        note: row.note,
+        createdAt: row.created_at,
+      })),
+      courseSlots: courseSlots.map((row) => ({
+        id: row.id,
+        courseId: row.course_id,
+        weekday: row.weekday,
+        startPeriod: row.start_period,
+        endPeriod: row.end_period,
+        weeks: row.weeks,
         createdAt: row.created_at,
       })),
       settings: Object.fromEntries(
@@ -298,6 +372,18 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
     if (typeof settingValue === 'string') normalizedSettings[key] = settingValue;
   }
 
+  // v4 起才有备忘与课表。更早版本里的 memos 是已废弃的旧结构（无 date 字段），直接忽略。
+  const isV4 = version >= 4;
+  const memos = isV4 && Array.isArray(dataObject.memos)
+    ? (dataObject.memos as Record<string, unknown>[])
+    : [];
+  const courses = isV4 && Array.isArray(dataObject.courses)
+    ? (dataObject.courses as Record<string, unknown>[])
+    : [];
+  const courseSlots = isV4 && Array.isArray(dataObject.courseSlots)
+    ? (dataObject.courseSlots as Record<string, unknown>[])
+    : [];
+
   return {
     app: BACKUP_APP_ID,
     schemaVersion: version,
@@ -310,6 +396,9 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
       wishlist: dataObject.wishlist as Record<string, unknown>[],
       playedGames: dataObject.playedGames as Record<string, unknown>[],
       events,
+      memos,
+      courses,
+      courseSlots,
       settings: normalizedSettings,
     },
   };
@@ -324,6 +413,9 @@ export function summarizeBackup(payload: BackupPayload) {
     wishlist: payload.data.wishlist.length,
     playedGames: payload.data.playedGames.length,
     events: payload.data.events.length,
+    memos: payload.data.memos.length,
+    courses: payload.data.courses.length,
+    courseSlots: payload.data.courseSlots.length,
     exercises: payload.data.exercises.length,
   };
 }
@@ -371,8 +463,8 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
     for (const row of data.tasks) {
       const result = await driver.runAsync(
         `INSERT INTO tasks
-         (date, title, note, time, done, completed_at, repeat_group_id, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (date, title, note, time, done, completed_at, repeat_group_id, sort_order, pinned, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           value<string>(row, 'date'),
           value<string>(row, 'title'),
@@ -382,6 +474,7 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<string | null>(row, 'completedAt') ?? null,
           value<string | null>(row, 'repeatGroupId') ?? null,
           value<number>(row, 'sortOrder') ?? 0,
+          value<number>(row, 'pinned') ?? 0,
           value<string>(row, 'createdAt'),
         ]
       );
@@ -490,6 +583,56 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
       );
     }
 
+    for (const row of data.memos) {
+      const createdAt = value<string>(row, 'createdAt');
+      await driver.runAsync(
+        `INSERT INTO memos (date, content, time, pinned, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          value<string>(row, 'date'),
+          value<string>(row, 'content'),
+          value<string | null>(row, 'time') ?? null,
+          value<number>(row, 'pinned') ?? 0,
+          value<number>(row, 'sortOrder') ?? 0,
+          createdAt,
+          value<string | null>(row, 'updatedAt') ?? createdAt,
+        ]
+      );
+    }
+
+    const courseIds = new Map<number, number>();
+    for (const row of data.courses) {
+      const result = await driver.runAsync(
+        `INSERT INTO courses (name, teacher, room, color, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          value<string>(row, 'name'),
+          value<string | null>(row, 'teacher') ?? null,
+          value<string | null>(row, 'room') ?? null,
+          value<string | null>(row, 'color') ?? null,
+          value<string | null>(row, 'note') ?? null,
+          value<string>(row, 'createdAt'),
+        ]
+      );
+      rememberId(courseIds, row, result);
+    }
+
+    for (const row of data.courseSlots) {
+      await driver.runAsync(
+        `INSERT INTO course_slots
+         (course_id, weekday, start_period, end_period, weeks, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          remap(courseIds, row, 'courseId'),
+          value<number>(row, 'weekday') ?? 1,
+          value<number>(row, 'startPeriod') ?? 1,
+          value<number>(row, 'endPeriod') ?? 1,
+          normalizeWeeksField(row.weeks),
+          value<string>(row, 'createdAt'),
+        ]
+      );
+    }
+
     for (const [key, settingValue] of Object.entries(data.settings)) {
       await driver.runAsync('INSERT INTO settings (key, value) VALUES (?, ?)', [key, settingValue]);
     }
@@ -502,6 +645,20 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
      SET exercise_id = (SELECT id FROM exercises WHERE exercises.name = training_items.exercise_name)
      WHERE exercise_id IS NULL`
   );
+}
+
+/** 备份里的 weeks 可能是数组或 JSON 字符串，统一成 JSON 字符串落库。 */
+function normalizeWeeksField(raw: unknown): string {
+  if (typeof raw === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return JSON.stringify(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return '[]';
+    }
+  }
+  if (Array.isArray(raw)) return JSON.stringify(raw);
+  return '[]';
 }
 
 function rememberId(

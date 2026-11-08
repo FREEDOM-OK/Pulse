@@ -20,6 +20,9 @@ const SAMPLE: BackupPayload = {
     events: [{ id: 1, type: 'meal', title: '牛肉面', amount: 28.5 }],
     wishlist: [],
     playedGames: [],
+    memos: [],
+    courses: [],
+    courseSlots: [],
     settings: { theme: 'dark', 'fitness.defaultReps': '12', 'profile.name': '小明' },
   },
 };
