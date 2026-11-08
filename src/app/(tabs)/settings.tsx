@@ -177,8 +177,7 @@ export default function SettingsScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`账号 ${profile?.name ?? '用户'}`}
-            delayLongPress={400}
-            onLongPress={() => router.push('/profile')}
+            onPress={() => router.push('/profile')}
             style={({ pressed }) => [styles.account, pressed && styles.pressed]}>
             <View style={[styles.accountAvatar, { backgroundColor: theme.backgroundElement }]}>
               {profile?.avatarUri ? (

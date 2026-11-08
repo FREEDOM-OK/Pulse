@@ -53,6 +53,8 @@ export default function TodayScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // 每次进入今日计划都回到今天，避免停留在上次翻到的日期
+      setDate((current) => (current === todayStr() ? current : todayStr()));
       load().catch(() => undefined);
     }, [load])
   );

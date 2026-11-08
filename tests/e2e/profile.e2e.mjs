@@ -1,4 +1,4 @@
-/** P8b 个人资料：长按设置页账号进入资料页，改名/性别/生日后保存并持久化。 */
+/** P8b 个人资料：点击设置页账号进入资料页，改名/性别/生日后保存并持久化。 */
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
   await page.evaluate('localStorage.clear()');
@@ -8,7 +8,7 @@ export async function run(page, baseUrl) {
   await page.waitForText('数据与偏好');
 
   await page.waitForLabel('账号 用户');
-  await page.longPressLabel('账号 用户');
+  await page.clickLabel('账号 用户');
   await page.waitForText('个人资料');
 
   await page.fillByLabel('用户名', '小明');
@@ -28,7 +28,7 @@ export async function run(page, baseUrl) {
   await page.reload();
   await page.clickText('设置');
   await page.waitForLabel('账号 小明');
-  await page.longPressLabel('账号 小明');
+  await page.clickLabel('账号 小明');
   await page.waitForText('个人资料');
   const birthday = await page.evaluate(`(() => ({
     year: document.querySelector('[aria-label="生日年份"]')?.value ?? null,

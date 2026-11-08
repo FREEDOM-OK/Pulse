@@ -22,7 +22,8 @@ export async function run(page, baseUrl) {
   await page.waitForText('去健身');
   await page.waitForText('今天还没练');
   await page.waitForText('游戏');
-  await page.waitForText('还没有游玩记录');
+  await page.waitForText('还没有想玩的游戏');
+  await page.waitForText('备忘录');
 
   // 添加一条重大消费（带小数金额）
   await page.clickLabel('添加事件');
@@ -55,6 +56,27 @@ export async function run(page, baseUrl) {
   await sleep(300);
   await page.waitForText('今日 2 条');
 
+  // 备忘录：点框弹出卡片，保存后显示在框里，刷新后仍在
+  await page.clickLabel('备忘录');
+  await page.waitForLabel('备忘录内容');
+  await page.fillByLabel('备忘录内容', '记得买猫粮');
+  await page.clickLabel('保存备忘');
+  await page.waitForText('记得买猫粮');
+  await page.reload();
+  await page.waitForText('记得买猫粮');
+
+  // 游戏框显示想玩清单：去游戏页加一款，再回首页
+  await page.clickText('游戏');
+  await page.waitForText('想玩清单是空的');
+  await page.clickLabel('添加想玩的游戏');
+  await page.waitForText('添加想玩的游戏');
+  await page.fill('例如：塞尔达：王国之泪', '塞尔达');
+  await page.clickText('保存');
+  await page.waitForText('塞尔达');
+  await page.clickText('首页');
+  await page.waitForText('想玩 1 款');
+  await page.waitForText('塞尔达');
+
   // 在今日计划里加一条任务，回到首页勾选，进度必须立即变化
   await page.clickLabel('打开今日计划');
   await page.waitForText('完成 0/0');
@@ -78,7 +100,7 @@ export async function run(page, baseUrl) {
   // 问候语使用个人资料里的名字
   await page.clickText('设置');
   await page.waitForText('数据与偏好');
-  await page.longPressLabel('账号 用户');
+  await page.clickLabel('账号 用户');
   await page.waitForText('个人资料');
   await page.fillByLabel('用户名', '小明');
   await page.clickLabel('保存个人资料');

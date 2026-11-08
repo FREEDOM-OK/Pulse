@@ -12,20 +12,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CalendarPanel } from '@/components/calendar/calendar-panel';
 import { EventForm } from '@/components/home/event-form';
+import { MemoEditor } from '@/components/home/memo-editor';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { ModuleColors, Spacing } from '@/constants/theme';
 import { countEventsByDate } from '@/db/repositories/events';
-import { getLatestPlayed } from '@/db/repositories/games';
+import { listWishlist } from '@/db/repositories/games';
+import { getQuickMemo } from '@/db/repositories/memo';
 import { getProfile } from '@/db/repositories/profile';
 import { getTaskStats, listTasksByDate, toggleTask } from '@/db/repositories/tasks';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
 import {
   EVENT_TYPES,
   type EventType,
-  type PlayedGameRow,
   type TaskRow,
+  type WishlistRow,
 } from '@/db/types';
 import { formatMonthDay, parseDate, todayStr, weekdayLabel } from '@/lib/date';
 import { INITIAL_SCROLL_STATE, resolvePagerTarget, type ScrollState } from '@/lib/home-pager';
@@ -50,7 +52,9 @@ export default function HomeScreen() {
     items: 0,
     firstExercise: null,
   });
-  const [latestPlayed, setLatestPlayed] = useState<PlayedGameRow | null>(null);
+  const [wishes, setWishes] = useState<WishlistRow[]>([]);
+  const [memo, setMemo] = useState('');
+  const [memoOpen, setMemoOpen] = useState(false);
   const [eventCount, setEventCount] = useState(0);
   const [eventMenuOpen, setEventMenuOpen] = useState(false);
   const [eventType, setEventType] = useState<EventType | null>(null);
@@ -69,27 +73,34 @@ export default function HomeScreen() {
   const planViewportHeight = useRef(0);
 
   const load = useCallback(async () => {
-    const [profile, taskList, taskStats, trainingSummary, played, events] = await Promise.all([
-      getProfile(),
-      listTasksByDate(today),
-      getTaskStats(today),
-      getTrainingSummary(today),
-      getLatestPlayed(),
-      countEventsByDate(today),
-    ]);
+    const [profile, taskList, taskStats, trainingSummary, wishList, quickMemo, events] =
+      await Promise.all([
+        getProfile(),
+        listTasksByDate(today),
+        getTaskStats(today),
+        getTrainingSummary(today),
+        listWishlist(),
+        getQuickMemo(),
+        countEventsByDate(today),
+      ]);
     setName(profile.name);
     setTasks(taskList);
     setStats(taskStats);
     setTraining(trainingSummary);
-    setLatestPlayed(played);
+    setWishes(wishList);
+    setMemo(quickMemo);
     setEventCount(events);
   }, [today]);
 
   useFocusEffect(
     useCallback(() => {
+      // 每次回到首页都回到第一页（上下翻页的另一页只作为日历查看用）
+      progress.setValue(0);
+      progressRef.current = 0;
+      startProgress.current = 0;
       load().catch(() => undefined);
       setRefreshToken((token) => token + 1);
-    }, [load])
+    }, [load, progress])
   );
 
   useEffect(() => {
@@ -257,11 +268,11 @@ export default function HomeScreen() {
                         accessibilityState={{ checked: task.done === 1 }}
                         onPress={() => handleToggleTask(task)}
                         style={({ pressed }) => [styles.taskRow, pressed && styles.pressed]}>
-                        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                        <ThemedText type="small" style={[styles.taskMeta, { color: theme.textSecondary }]}>
                           {task.done === 1 ? '☑' : '☐'}
                         </ThemedText>
                         {task.time ? (
-                          <ThemedText type="small" themeColor="textSecondary">
+                          <ThemedText type="small" themeColor="textSecondary" style={styles.taskMeta}>
                             {task.time}
                           </ThemedText>
                         ) : null}
@@ -285,12 +296,14 @@ export default function HomeScreen() {
                   accessibilityLabel="添加事件"
                   onPress={() => setEventMenuOpen(true)}
                   style={({ pressed }) => [styles.halfBox, pressed && styles.pressed]}>
-                  <ThemedView type="backgroundElement" style={styles.fill}>
+                  <ThemedView type="backgroundElement" style={[styles.fill, styles.fillCenter]}>
                     <ThemedText type="subtitle" style={[styles.plus, { color: ModuleColors.events }]}>
                       ＋
                     </ThemedText>
-                    <ThemedText type="smallBold">添加事件</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
+                    <ThemedText type="smallBold" style={styles.centerText}>
+                      添加事件
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
                       {eventCount > 0 ? `今日 ${eventCount} 条` : '消费 / 购物 / 好饭'}
                     </ThemedText>
                   </ThemedView>
@@ -301,19 +314,44 @@ export default function HomeScreen() {
                   accessibilityLabel="去健身"
                   onPress={() => router.navigate('/fitness')}
                   style={({ pressed }) => [styles.halfBox, pressed && styles.pressed]}>
-                  <ThemedView type="backgroundElement" style={styles.fill}>
+                  <ThemedView type="backgroundElement" style={[styles.fill, styles.fillCenter]}>
                     <ThemedText type="subtitle" style={[styles.boxIcon, { color: ModuleColors.fitness }]}>
                       练
                     </ThemedText>
-                    <ThemedText type="smallBold">去健身</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
+                    <ThemedText type="smallBold" style={styles.centerText}>
+                      去健身
+                    </ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.centerText}>
                       {training.sets > 0 ? `今日 ${training.sets} 组` : '今天还没练'}
                     </ThemedText>
                   </ThemedView>
                 </Pressable>
               </View>
 
-              {/* 框 4：游戏（通栏） */}
+              {/* 框 4：备忘录（点开编辑） */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="备忘录"
+                onPress={() => setMemoOpen(true)}
+                style={({ pressed }) => [styles.memoBox, pressed && styles.pressed]}>
+                <ThemedView type="backgroundElement" style={styles.fill}>
+                  <View style={styles.memoHeader}>
+                    <ThemedText type="smallBold">备忘录</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      编辑 ›
+                    </ThemedText>
+                  </View>
+                  <ThemedText
+                    type="small"
+                    numberOfLines={2}
+                    themeColor={memo ? 'text' : 'textSecondary'}
+                    style={styles.memoText}>
+                    {memo || '记一笔想做的事…'}
+                  </ThemedText>
+                </ThemedView>
+              </Pressable>
+
+              {/* 框 5：游戏（显示想玩清单） */}
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="游戏"
@@ -321,18 +359,26 @@ export default function HomeScreen() {
                 style={({ pressed }) => [styles.gamesBox, pressed && styles.pressed]}>
                 <ThemedView type="backgroundElement" style={styles.fill}>
                   <View style={styles.gamesRow}>
-                    <ThemedText type="smallBold" style={styles.gamesLabel}>
-                      游戏
-                    </ThemedText>
+                    <ThemedText type="smallBold">游戏</ThemedText>
                     <ThemedText type="small" themeColor="textSecondary" style={styles.gamesValue}>
-                      {latestPlayed
-                        ? `${latestPlayed.game_name} · ${'★'.repeat(latestPlayed.rating)}`
-                        : '还没有游玩记录'}
+                      {wishes.length > 0 ? `想玩 ${wishes.length} 款` : '还没有想玩的游戏'}
                     </ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
                       ›
                     </ThemedText>
                   </View>
+                  {wishes.length > 0 ? (
+                    <ThemedText
+                      type="small"
+                      themeColor="textSecondary"
+                      numberOfLines={1}
+                      style={styles.gamesWish}>
+                      {wishes
+                        .slice(0, 3)
+                        .map((wish) => wish.name)
+                        .join('、')}
+                    </ThemedText>
+                  ) : null}
                 </ThemedView>
               </Pressable>
             </View>
@@ -385,6 +431,16 @@ export default function HomeScreen() {
           load().catch(() => undefined);
         }}
       />
+
+      <MemoEditor
+        visible={memoOpen}
+        value={memo}
+        onClose={() => setMemoOpen(false)}
+        onSaved={() => {
+          setMemoOpen(false);
+          load().catch(() => undefined);
+        }}
+      />
     </ThemedView>
   );
 }
@@ -433,8 +489,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.one,
   },
   greeting: {
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 32,
+    lineHeight: 40,
   },
   dateRow: {
     flexDirection: 'row',
@@ -442,14 +498,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   dateText: {
-    fontSize: 16,
+    fontSize: 19,
   },
   weekday: {
-    fontSize: 13,
+    fontSize: 15,
     marginBottom: 1,
   },
   planCard: {
-    flex: 2,
+    flex: 22,
     minHeight: 96,
   },
   card: {
@@ -480,13 +536,16 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 16,
+  },
+  taskMeta: {
+    fontSize: 15,
   },
   doneText: {
     textDecorationLine: 'line-through',
   },
   middleRow: {
-    flex: 1,
+    flex: 10,
     minHeight: 88,
     flexDirection: 'row',
     gap: Spacing.three,
@@ -502,6 +561,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
+  fillCenter: {
+    alignItems: 'center',
+  },
+  centerText: {
+    textAlign: 'center',
+  },
   plus: {
     fontSize: 22,
     lineHeight: 26,
@@ -510,9 +575,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 24,
   },
+  memoBox: {
+    flex: 9,
+    minHeight: 64,
+    borderRadius: Spacing.three,
+  },
+  memoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  memoText: {
+    fontSize: 15,
+    lineHeight: 21,
+  },
   gamesBox: {
-    flex: 1,
-    minHeight: 72,
+    flex: 6,
+    minHeight: 60,
     borderRadius: Spacing.three,
   },
   gamesRow: {
@@ -520,12 +599,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
   },
-  gamesLabel: {
-    width: 44,
-  },
   gamesValue: {
     flex: 1,
     textAlign: 'right',
+  },
+  gamesWish: {
+    fontSize: 13,
   },
   pressed: {
     opacity: 0.7,

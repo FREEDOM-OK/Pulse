@@ -95,7 +95,7 @@ async function main() {
     // 个人资料页
     await page.goto(`${BASE_URL}/settings`);
     await page.waitForText('数据与偏好');
-    await page.longPressLabel('账号 用户');
+    await page.clickLabel('账号 用户');
     await page.waitForText('个人资料');
     await sleep(400);
     await page.screenshot(path.join(OUT_DIR, 'profile.png'));

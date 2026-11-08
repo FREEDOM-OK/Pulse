@@ -66,6 +66,8 @@ export default function FitnessScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      // 每次进入健身都回到今天，避免停留在上次翻到的日期
+      setDate((current) => (current === todayStr() ? current : todayStr()));
       load().catch(() => undefined);
     }, [load])
   );
