@@ -2,14 +2,16 @@ import { sleep } from './browser.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** P2 今日计划：添加 / 3 天批量 / 勾选 / 编辑 / 删除 / 重新加载持久化 */
+/** P2 今日计划：混合列表、新建任务/备忘、勾选、长按编辑、3 天批量、日期切换、持久化 */
 export async function run(page, baseUrl) {
   await page.goto(`${baseUrl}/today`);
-  await page.waitForText('完成 0/0');
-  await page.waitForText('这一天还没有任务');
+  await page.waitForText('Today');
+  await page.waitForText('这一天还没有安排');
 
-  // 添加一条带时间的任务
-  await page.clickLabel('添加任务');
+  // 从列表尾部「＋ 新建」建一条带时间的任务
+  await page.clickLabel('新建任务或备忘');
+  await page.waitForText('新建任务');
+  await page.clickText('新建任务');
   await page.waitForText('添加任务');
   await page.fill('例如：写周报', '写周报');
   await page.fill('补充说明', '周五下班前交');
@@ -19,7 +21,12 @@ export async function run(page, baseUrl) {
   await page.waitForText('09:30');
   await page.waitForText('完成 0/1');
 
-  // 日历圆点：有任务的日子，日期条和月历里对应的日子下面都有一点
+  // 重新加载页面，数据应仍在（本地存储持久化）
+  await page.reload();
+  await page.clickLabel('计划');
+  await page.waitForText('写周报');
+
+  // 日历圆点：有任务的日子，日期条里对应的日子带「有记录」
   const todayStr = dateStr(new Date());
   await page.waitForLabel(`日期 ${todayStr} 有记录`);
   await page.clickLabel('打开日历');
@@ -27,20 +34,16 @@ export async function run(page, baseUrl) {
   await page.clickLabel(`选择日期 ${todayStr} 有记录`);
   await sleep(300);
 
-  // 重新加载页面，数据应仍在（本地存储持久化）
-  await page.reload();
-  await page.clickText('今日计划');
-  await page.waitForText('写周报');
-
-  // 勾选完成
+  // 勾选完成：任务沉到「已完成」折叠区
   await page.clickLabel('标记为完成');
   await page.waitForText('完成 1/1');
+  await page.waitForText('已完成 1 项');
 
-  // 点任务本体 = 切换完成状态，不再进编辑
-  await page.clickText('写周报');
+  // 展开已完成并取消勾选
+  await page.clickText('已完成 1 项');
+  await sleep(200);
+  await page.clickLabel('标记为未完成');
   await page.waitForText('完成 0/1');
-  await page.clickText('写周报');
-  await page.waitForText('完成 1/1');
 
   // 编辑任务内容走长按菜单
   await page.longPressText('写周报');
@@ -52,19 +55,20 @@ export async function run(page, baseUrl) {
   await page.waitForText('写月报');
 
   // 3 天批量添加
-  await page.clickLabel('添加任务');
+  await page.clickLabel('新建任务或备忘');
+  await page.clickText('新建任务');
   await page.waitForText('添加任务');
   await page.fill('例如：写周报', '晨读');
   await page.clickText('今天起 3 天');
   await page.clickText('保存');
   await page.waitForText('晨读');
 
-  const today = new Date();
-  const tomorrowLabel = formatMonthDay(new Date(today.getTime() + DAY_MS));
-  await page.clickLabel('后一天');
+  // 点日期条切到明天，批量的任务应出现在明天
+  const tomorrow = new Date(Date.now() + DAY_MS);
+  await page.clickLabelContaining(`日期 ${dateStr(tomorrow)}`);
   await page.waitForText('晨读');
-  await page.waitForText(tomorrowLabel);
-  await page.clickLabel('前一天');
+  await page.waitForText(formatMonthDay(tomorrow));
+  await page.clickLabelContaining(`日期 ${todayStr}`);
   await page.waitForText('晨读');
 
   // 长按任务弹出菜单，删除任务
@@ -78,6 +82,16 @@ export async function run(page, baseUrl) {
 
   // 今天的批量任务仍在
   await page.waitForText('晨读');
+
+  // 再建一条备忘，验证置顶与备忘样式进入列表
+  await page.clickLabel('新建任务或备忘');
+  await page.clickText('新建备忘');
+  await page.waitForText('新建备忘');
+  await page.fill('例如：周五前交房租', '周五前交房租');
+  await page.clickLabel('置顶备忘');
+  await page.clickText('保存');
+  await page.waitForText('周五前交房租');
+  await page.waitForText('置顶');
 }
 
 function formatMonthDay(date) {

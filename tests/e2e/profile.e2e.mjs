@@ -4,7 +4,7 @@ export async function run(page, baseUrl) {
   await page.evaluate('localStorage.clear()');
   await page.goto(baseUrl);
   await page.waitForText('首页');
-  await page.clickText('设置');
+  await page.clickLabel('我的');
   await page.waitForText('数据与偏好');
 
   await page.waitForLabel('账号 用户');
@@ -26,7 +26,7 @@ export async function run(page, baseUrl) {
 
   // 刷新后仍然保留
   await page.reload();
-  await page.clickText('设置');
+  await page.clickLabel('我的');
   await page.waitForLabel('账号 小明');
   await page.clickLabel('账号 小明');
   await page.waitForText('个人资料');
@@ -42,7 +42,7 @@ export async function run(page, baseUrl) {
   // 回到首页再进设置，清空数据后资料回到默认值
   await page.goto(baseUrl);
   await page.waitForText('首页');
-  await page.clickText('设置');
+  await page.clickLabel('我的');
   await page.waitForText('数据与偏好');
   await page.clickLabel('清空所有数据');
   await page.waitForText('清空所有数据？');

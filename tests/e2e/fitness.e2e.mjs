@@ -11,7 +11,7 @@ function dateStr(date) {
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
   await page.waitForText('首页');
-  await page.clickText('健身');
+  await page.clickLabel('健身');
   await page.waitForText('待训练');
   await page.waitForText('还没有待训练的动作');
 
@@ -74,7 +74,7 @@ export async function run(page, baseUrl) {
   await page.waitForText('杠铃卧推');
 
   // 待训练清单跨日期共享：切到后一天仍能看到已加的动作（这里卡片前面已删，故为空）
-  await page.clickLabel('后一天');
+  await page.clickLabelContaining(`日期 ${dateStr(new Date(Date.now() + 86400000))}`);
   await page.waitForText('还没有待训练的动作');
   await page.waitForNoText('今日 0 组');
   await page.waitForText('共 0 组');
@@ -103,7 +103,7 @@ export async function run(page, baseUrl) {
   await page.waitForText('20分钟');
 
   // 回到今天：已完成仍是 3 组；壶铃摇摆的待训练卡片还在，但今天的记录里没有它
-  await page.clickLabel('前一天');
+  await page.clickLabelContaining(`日期 ${dateStr(new Date())}`);
   await page.waitForText('共 3 组');
   await page.waitForText('壶铃摇摆');
   await page.waitForNoText('20分钟');

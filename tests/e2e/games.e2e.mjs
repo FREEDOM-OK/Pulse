@@ -18,9 +18,7 @@ export async function run(page, baseUrl) {
   const todayDate = dateStr(today);
   const selectedDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() === 1 ? 2 : 1);
 
-  await page.goto(baseUrl);
-  await page.waitForText('首页');
-  await page.clickText('游戏');
+  await page.goto(`${baseUrl}/games`);
   await page.waitForText('想玩清单是空的');
 
   // 空白区域左滑 -> 已玩记录；拖动过程中顶部页签框要跟着手指走
@@ -106,7 +104,7 @@ export async function run(page, baseUrl) {
 
   // 刷新后仍在
   await page.reload();
-  await page.clickText('游戏');
+  await page.goto(`${baseUrl}/games`);
   await page.clickText('已玩记录');
   await page.waitForText('塞尔达');
   await page.waitForText(dayLabel(selectedDate));

@@ -20,7 +20,7 @@ export async function run(page, baseUrl) {
   await page.evaluate('localStorage.clear()');
   await page.goto(baseUrl);
   await page.waitForText('首页');
-  await page.clickText('设置');
+  await page.clickLabel('我的');
   await page.waitForText('数据与偏好');
 
   // 默认跟随系统
@@ -37,7 +37,7 @@ export async function run(page, baseUrl) {
 
   // 刷新后仍是深色
   await page.reload();
-  await page.clickText('设置');
+  await page.clickLabel('我的');
   if ((await checkedTheme(page)) !== '深色') {
     throw new Error('刷新后深色主题没有保持');
   }
@@ -48,7 +48,7 @@ export async function run(page, baseUrl) {
   await page.clickLabel('保存健身默认值');
   await page.waitForText('健身默认值已保存。');
 
-  await page.clickText('健身');
+  await page.clickLabel('健身');
   await page.waitForText('待训练');
   await page.clickText('添加');
   await page.waitForText('选择动作');
@@ -64,7 +64,7 @@ export async function run(page, baseUrl) {
     throw new Error(`新增动作没有采用健身默认值：${JSON.stringify(defaults)}`);
   }
 
-  await page.clickText('设置');
+  await page.clickLabel('我的');
   await page.waitForText('数据与偏好');
 
   // 导出备份
@@ -81,6 +81,6 @@ export async function run(page, baseUrl) {
   }
 
   // 首页回到空状态
-  await page.clickText('首页');
-  await page.waitForText('今天还没有计划');
+  await page.clickLabel('首页');
+  await page.waitForText('今天还没有安排');
 }

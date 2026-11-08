@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -64,12 +64,16 @@ export default function FitnessScreen() {
     setCategoryById(categories);
   }, [date]);
 
+  useEffect(() => {
+    load().catch(() => undefined);
+  }, [load]);
+
   useFocusEffect(
     useCallback(() => {
-      // 每次进入健身都回到今天，避免停留在上次翻到的日期
+      // 每次进入健身都回到今天，避免停留在上次翻到的日期。
+      // 注意不要依赖 load（它跟着 date 变），否则切日期会被立刻重置回今天。
       setDate((current) => (current === todayStr() ? current : todayStr()));
-      load().catch(() => undefined);
-    }, [load])
+    }, [])
   );
 
   const setsByItem = useMemo(() => {

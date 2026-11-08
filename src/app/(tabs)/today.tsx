@@ -31,10 +31,11 @@ export default function TodayScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // 每次进入今日计划都回到今天，避免停留在上次翻到的日期
-      setDate((current) => (current === todayStr() ? current : todayStr()));
-      loadMarks(date).catch(() => undefined);
-    }, [date, loadMarks])
+      // 每次进入今日计划都回到今天，避免停留在上次翻到的日期。
+      // 注意不要把 date 放进依赖：否则用户点日期条切走时会被立刻重置回今天。
+      setDate(todayStr());
+      loadMarks(todayStr()).catch(() => undefined);
+    }, [loadMarks])
   );
 
   useEffect(() => {
