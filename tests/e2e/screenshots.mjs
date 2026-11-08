@@ -13,10 +13,25 @@ async function main() {
 
   try {
     await page.goto(BASE_URL);
-    await page.waitForText(`${new Date().getMonth() + 1}月${new Date().getDate()}日`);
+    await page.waitForText('Hi，');
+    await page.evaluate('localStorage.clear()');
+    await page.reload();
+    await page.waitForText('Hi，');
+
+    // 首页第一页：添加一条消费事件
+    await page.clickLabel('添加事件');
+    await page.waitForText('添加重大消费');
+    await page.clickText('添加重大消费');
+    await page.waitForText('金额');
+    await page.fillByLabel('事件名称', '超市采购');
+    await page.fillByLabel('金额', '128.5');
+    await page.clickLabel('保存事件');
+    await page.waitForText('今日 1 条');
+    await sleep(300);
+    await page.screenshot(path.join(OUT_DIR, 'home-light.png'));
 
     // 今日计划：两条任务，第一条完成
-    await page.clickText('今日计划');
+    await page.goto(`${BASE_URL}/today`);
     await page.waitForText('这一天还没有任务');
     await page.clickLabel('添加任务');
     await page.waitForText('添加任务');
@@ -34,18 +49,8 @@ async function main() {
     await sleep(300);
     await page.screenshot(path.join(OUT_DIR, 'today.png'));
 
-    // 备忘
-    await page.clickText('首页');
-    await page.waitForText('快速备忘');
-    await page.clickLabel('添加备忘');
-    await page.fill('例如：交房租', '交房租');
-    await page.fill('例如：财务，生活', '财务');
-    await page.clickText('保存');
-    await page.waitForText('交房租');
-    await page.screenshot(path.join(OUT_DIR, 'home-light.png'));
-
-    // 健身：添加卧推，完成两组
-    await page.clickText('健身');
+    // 健身：添加卧推，完成两组，长按第 2 组露出删除菜单
+    await page.goto(`${BASE_URL}/fitness`);
     await page.waitForText('还没有待训练的动作');
     await page.clickText('添加');
     await page.waitForText('选择动作');
@@ -55,26 +60,14 @@ async function main() {
     await page.clickText('完成');
     await page.clickText('完成');
     await page.waitForText('共 2 组');
-    // 长按第 2 组弹出「删除」菜单，截图里可见新的长按交互
     await page.longPressText('第2组');
-    await page.waitForText('删除');
+    await page.waitForLabel('删除');
     await sleep(400);
     await page.screenshot(path.join(OUT_DIR, 'fitness.png'));
-
-    // 饮食
-    await page.clickText('饮食');
-    await page.waitForText('今天还没有饮食记录');
-    await page.clickLabel('添加饮食');
-    await page.waitForText('今日饮食添加');
-    await page.clickText('午餐');
-    await page.fill('例如：鸡胸肉饭', '鸡胸肉饭');
-    await page.fill('例如：520', '520');
-    await page.clickText('保存');
-    await page.waitForText('鸡胸肉饭');
-    await page.screenshot(path.join(OUT_DIR, 'diet.png'));
+    await page.clickLabel('取消');
 
     // 游戏：想玩 -> 玩了
-    await page.clickText('游戏');
+    await page.goto(`${BASE_URL}/games`);
     await page.waitForText('想玩清单是空的');
     await page.clickLabel('添加想玩的游戏');
     await page.fill('例如：塞尔达：王国之泪', '塞尔达：王国之泪');
@@ -92,30 +85,34 @@ async function main() {
     await page.waitForText('探索感很强，地图很大');
     await page.screenshot(path.join(OUT_DIR, 'games.png'));
 
-    // 日历回顾
-    await page.clickText('首页');
-    await page.waitForText('查看完整日历回顾');
-    await page.clickLabel('查看日历回顾');
-    await page.waitForText('日历回顾');
-    await sleep(500);
+    // 首页第二页：完整日历回顾
+    await page.goto(BASE_URL);
+    await page.waitForText('Hi，');
+    await page.mouseDrag(488, 820, 488, 180, 14);
+    await sleep(900);
     await page.screenshot(path.join(OUT_DIR, 'calendar.png'));
 
+    // 个人资料页
+    await page.goto(`${BASE_URL}/settings`);
+    await page.waitForText('数据与偏好');
+    await page.longPressLabel('账号 用户');
+    await page.waitForText('个人资料');
+    await sleep(400);
+    await page.screenshot(path.join(OUT_DIR, 'profile.png'));
+
     // 深色主题
-    await page.goto(BASE_URL);
-    await page.waitForText(`${new Date().getMonth() + 1}月${new Date().getDate()}日`);
-    await page.clickText('设置');
+    await page.goto(`${BASE_URL}/settings`);
     await page.waitForText('数据与偏好');
     await page.clickText('深色');
     await sleep(500);
     await page.screenshot(path.join(OUT_DIR, 'settings-dark.png'));
 
-    await page.clickText('首页');
-    await page.waitForText('快速备忘');
-    await sleep(400);
+    await page.goto(BASE_URL);
+    await sleep(600);
     await page.screenshot(path.join(OUT_DIR, 'home-dark.png'));
 
-    await page.clickText('健身');
-    await sleep(500);
+    await page.goto(`${BASE_URL}/fitness`);
+    await sleep(600);
     await page.screenshot(path.join(OUT_DIR, 'fitness-dark.png'));
 
     console.log('截图已生成：', fs.readdirSync(OUT_DIR).join(', '));

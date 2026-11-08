@@ -292,6 +292,8 @@ const styles = StyleSheet.create({
   },
   birthdayInput: {
     flex: 1,
+    // Web 上 <input> 默认 size=20，min-content 约 188px，minWidth 必须是 0 才能被 flex 压缩
+    minWidth: 0,
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.two,

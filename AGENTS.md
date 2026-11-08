@@ -33,6 +33,12 @@ node tests/e2e/run.mjs   # 端到端（无头 Chrome，需先启动 Web dev serv
 - 小改动只在 `CHANGELOG.md` 里升补丁版本（v1.0.1、v1.0.2…），**不改 `app.json` 的 version，也不在 App 内加更新日志/提示**。
 - 只有用户明确说「进入下一个大版本」时，才动 App 内显示的版本号与日志；版本节奏由用户决定。
 
+## 数据模型（v1.1）
+
+- 5 个 Tab：`index`（首页两页）/ `today` / `fitness` / `games` / `settings`；二级页 `calendar`、`profile`。
+- `SCHEMA_VERSION = 3`：`events(date, type, title, amount, note, created_at)` 替代已删除的 `diet_records` / `memos`；资料存在 `settings` 的 `profile.name|gender|birthday|avatar`。
+- 备份 `BACKUP_VERSION = 3`：导入 v1/v2 时 `dietRecords` 自动转成 `type='meal'` 事件、`memos` 忽略；导出不含预置动作与头像文件；清空数据保留 44 个预置动作并重置资料。
+
 ## 已知坑（本项目实践，改动前先读）
 
 ### 1. 行操作统一用长按菜单，不要再加左滑
