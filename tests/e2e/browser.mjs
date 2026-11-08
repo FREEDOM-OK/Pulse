@@ -338,12 +338,12 @@ class Page {
     await this.touchDrag(x, y, x - distance, y);
   }
 
-  /** 长按坐标；行内的长按阈值是 delayLongPress=400。 */
+  /** 长按坐标；行内的长按阈值是 delayLongPress=400。用鼠标事件触发 RNW 的 Pressable。 */
   async longPress(x, y, holdMs = 700) {
-    await this.touchStart(x, y);
+    await this.mouseDown(x, y);
     try {
       await sleep(holdMs);
-      await this.touchEnd();
+      await this.mouseUp(x, y);
     } finally {
       await sleep(400);
     }
@@ -367,6 +367,7 @@ class Page {
     return this.evaluate(`(() => {
       const el = document.querySelector('[aria-label="${label}"]');
       if (!el) return null;
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const rect = el.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
     })()`);
@@ -378,6 +379,7 @@ class Page {
         .filter((node) => node.textContent.trim() === ${JSON.stringify(text)})
         .filter((node) => node.children.length === 0)[0];
       if (!el) return null;
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
       const rect = el.getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);

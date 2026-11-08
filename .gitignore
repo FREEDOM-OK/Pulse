@@ -21,6 +21,9 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# E2E 失败截图
+tests/e2e/failure-*.png
+
 # debug
 npm-debug.*
 yarn-debug.*

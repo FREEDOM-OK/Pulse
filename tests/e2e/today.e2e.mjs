@@ -4,11 +4,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** P2 今日计划：添加 / 3 天批量 / 勾选 / 编辑 / 删除 / 重新加载持久化 */
 export async function run(page, baseUrl) {
-  await page.goto(baseUrl);
-  await page.waitForText('首页');
-
-  // 进入今日计划
-  await page.clickText('今日计划');
+  await page.goto(`${baseUrl}/today`);
   await page.waitForText('完成 0/0');
   await page.waitForText('这一天还没有任务');
 

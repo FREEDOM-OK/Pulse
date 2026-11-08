@@ -15,8 +15,8 @@ const scenarios = [
   { name: 'P3 健身', run: runFitness },
   
   { name: 'P5 游戏', run: runGames },
-  { name: 'P6 首页', run: runHome },
   { name: 'P7 日历回顾', run: runCalendar },
+  { name: 'P6 首页', run: runHome },
   { name: 'P8 数据与设置', run: runSettings },
   { name: 'P8b 个人资料', run: runProfile },
 ];

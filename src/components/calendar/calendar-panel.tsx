@@ -1,0 +1,299 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { MonthView } from '@/components/calendar/month-view';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Spacing } from '@/constants/theme';
+import { getDayDetail, getMonthActivity, type DayDetail, type DayFlags } from '@/db/repositories/calendar';
+import { formatDay, formatDuration, monthRange, parseDate, todayStr } from '@/lib/date';
+import { EVENT_TYPE_LABELS } from '@/db/types';
+import { formatAmount } from '@/lib/format';
+import type { ScrollState } from '@/lib/home-pager';
+import { useTheme } from '@/hooks/use-theme';
+
+export interface CalendarPanelProps {
+  /** 初始选中的日期，默认今天。 */
+  initialDate?: string;
+  /** 外部数据变化时递增，用来触发重新加载。 */
+  refreshToken?: number;
+  scrollEnabled?: boolean;
+  onScrollState?: (state: ScrollState) => void;
+  style?: StyleProp<ViewStyle>;
+  contentContainerStyle?: StyleProp<ViewStyle>;
+}
+
+export function CalendarPanel({
+  initialDate,
+  refreshToken = 0,
+  scrollEnabled = true,
+  onScrollState,
+  style,
+  contentContainerStyle,
+}: CalendarPanelProps) {
+  const theme = useTheme();
+  const startDate = initialDate ?? todayStr();
+
+  const [selected, setSelected] = useState(startDate);
+  const [cursor, setCursor] = useState(() => {
+    const parsed = parseDate(startDate);
+    return { year: parsed.getFullYear(), month: parsed.getMonth() };
+  });
+  const [activity, setActivity] = useState<Record<string, DayFlags>>({});
+  const [detail, setDetail] = useState<DayDetail | null>(null);
+
+  const loadMonth = useCallback(async () => {
+    const { from, to } = monthRange(cursor.year, cursor.month);
+    setActivity(await getMonthActivity(from, to));
+  }, [cursor]);
+
+  useEffect(() => {
+    loadMonth().catch(() => undefined);
+  }, [loadMonth, refreshToken]);
+
+  useEffect(() => {
+    getDayDetail(selected)
+      .then(setDetail)
+      .catch(() => setDetail(null));
+  }, [selected, refreshToken]);
+
+  const hasAny = useMemo(() => {
+    if (!detail) return false;
+    return (
+      detail.tasks.length > 0 ||
+      detail.fitness.length > 0 ||
+      detail.events.length > 0 ||
+      detail.games.length > 0
+    );
+  }, [detail]);
+
+  const taskStats = useMemo(() => {
+    if (!detail) return { total: 0, completed: 0 };
+    return {
+      total: detail.tasks.length,
+      completed: detail.tasks.filter((task) => task.done === 1).length,
+    };
+  }, [detail]);
+
+  const fitnessSets = useMemo(
+    () => (detail ? detail.fitness.reduce((sum, item) => sum + item.sets, 0) : 0),
+    [detail]
+  );
+
+  return (
+    <ScrollView
+      style={style}
+      scrollEnabled={scrollEnabled}
+      contentContainerStyle={[styles.content, contentContainerStyle]}
+      scrollEventThrottle={16}
+      onScroll={(event) => {
+        if (!onScrollState) return;
+        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+        const scrollable = contentSize.height > layoutMeasurement.height + 1;
+        onScrollState({
+          atTop: contentOffset.y <= 1,
+          atBottom: contentOffset.y + layoutMeasurement.height >= contentSize.height - 1,
+          scrollable,
+        });
+      }}>
+      <MonthView
+        year={cursor.year}
+        month={cursor.month}
+        activity={activity}
+        selected={selected}
+        onChangeMonth={(delta) => {
+          const next = new Date(cursor.year, cursor.month + delta, 1);
+          setCursor({ year: next.getFullYear(), month: next.getMonth() });
+        }}
+        onSelect={setSelected}
+      />
+
+      <View style={[styles.divider, { backgroundColor: theme.backgroundElement }]} />
+
+      <View style={styles.dayHeader}>
+        <ThemedText type="smallBold" style={styles.dayTitle}>
+          {formatDay(selected)}
+        </ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {selected === todayStr() ? '今天' : '历史'}
+        </ThemedText>
+      </View>
+
+      {!hasAny ? (
+        <EmptyState text="这天没有记录" />
+      ) : (
+        <View style={styles.sections}>
+          {detail && detail.tasks.length > 0 ? (
+            <ThemedView type="backgroundElement" style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="smallBold">计划</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  共 {taskStats.total} 条 · 完成 {taskStats.completed}
+                </ThemedText>
+              </View>
+              {detail.tasks.map((task) => (
+                <View key={task.id} style={styles.plainRow}>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {task.done === 1 ? '☑' : '☐'}
+                  </ThemedText>
+                  {task.time ? (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {task.time}
+                    </ThemedText>
+                  ) : null}
+                  <ThemedText
+                    type="small"
+                    themeColor={task.done === 1 ? 'textSecondary' : 'text'}
+                    style={[styles.flexText, task.done === 1 && styles.doneText]}>
+                    {task.title}
+                  </ThemedText>
+                </View>
+              ))}
+            </ThemedView>
+          ) : null}
+
+          {detail && detail.fitness.length > 0 ? (
+            <ThemedView type="backgroundElement" style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="smallBold">健身</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  共 {fitnessSets} 组
+                </ThemedText>
+              </View>
+              {detail.fitness.map((item) => (
+                <View key={item.exerciseName} style={styles.plainRow}>
+                  <ThemedText type="small" style={styles.flexText}>
+                    {item.exerciseName}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {item.sets} 组
+                  </ThemedText>
+                </View>
+              ))}
+            </ThemedView>
+          ) : null}
+
+          {detail && detail.events.length > 0 ? (
+            <ThemedView type="backgroundElement" style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="smallBold">事件</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {detail.events.length} 条
+                </ThemedText>
+              </View>
+              {detail.events.map((event) => (
+                <View key={event.id} style={styles.plainRow}>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.eventType}>
+                    {EVENT_TYPE_LABELS[event.type]}
+                  </ThemedText>
+                  <View style={styles.flexText}>
+                    <ThemedText type="small" numberOfLines={1}>
+                      {event.title}
+                    </ThemedText>
+                    {event.note ? (
+                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                        {event.note}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  {event.amount != null ? (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {formatAmount(event.amount)}
+                    </ThemedText>
+                  ) : null}
+                </View>
+              ))}
+            </ThemedView>
+          ) : null}
+
+          {detail && detail.games.length > 0 ? (
+            <ThemedView type="backgroundElement" style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="smallBold">游戏</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {detail.games.length} 条
+                </ThemedText>
+              </View>
+              {detail.games.map((record) => (
+                <View key={record.id} style={styles.gameRow}>
+                  <View style={styles.gameTitleRow}>
+                    <ThemedText type="small" style={styles.flexText}>
+                      {record.game_name}
+                    </ThemedText>
+                    <ThemedText type="small" style={styles.stars}>
+                      {'★'.repeat(record.rating)}
+                    </ThemedText>
+                  </View>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {formatDuration(record.duration_minutes)}
+                  </ThemedText>
+                </View>
+              ))}
+            </ThemedView>
+          ) : null}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.six,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Spacing.three,
+  },
+  dayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.two,
+    paddingHorizontal: Spacing.one,
+  },
+  dayTitle: {
+    fontSize: 15,
+  },
+  sections: {
+    gap: Spacing.two,
+  },
+  section: {
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: Spacing.two,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  plainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  flexText: {
+    flex: 1,
+    fontSize: 14,
+  },
+  eventType: {
+    width: 60,
+  },
+  doneText: {
+    textDecorationLine: 'line-through',
+  },
+  gameRow: {
+    gap: 2,
+  },
+  gameTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  stars: {
+    color: '#F2B33D',
+  },
+});

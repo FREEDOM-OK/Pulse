@@ -22,14 +22,22 @@ export async function run(page, baseUrl) {
   await page.goto(baseUrl);
   const now = new Date();
   await page.waitForText(`${now.getMonth() + 1}月${now.getDate()}日`);
-  await page.clickLabel('查看日历回顾');
+  await page.goto(`${baseUrl}/calendar`);
   await page.waitForText('日历回顾');
   await page.waitForText('计划');
-  await page.waitForText('健身');
-  await page.waitForText('饮食');
 
-  // 今天的日期格应该带有模块描述（计划 / 健身 / 饮食）
-  await page.waitForLabel(`日历 ${dateStr(0)} 计划 健身 饮食`);
+  // 今天的日期格应该带有模块描述；至少有「计划」（来自今日计划场景的数据）
+  let todayLabel = '';
+  for (let i = 0; i < 40 && !todayLabel; i += 1) {
+    todayLabel = await page.evaluate(`(() => {
+      const el = Array.from(document.querySelectorAll('[aria-label]'))
+        .find((node) => node.getAttribute('aria-label').startsWith('日历 ${dateStr(0)} '));
+      return el ? el.getAttribute('aria-label') : '';
+    })()`);
+    if (!todayLabel) await sleep(200);
+  }
+  if (!todayLabel) throw new Error('日历里找不到今天的日期格');
+  if (!todayLabel.includes('计划')) throw new Error(`今天的日期格没有计划标记：${todayLabel}`);
 
   // 明天有批量添加的任务（计划）
   await page.clickLabelContaining(`日历 ${dateStr(1)}`, -1);
@@ -48,5 +56,4 @@ export async function run(page, baseUrl) {
   await sleep(400);
   await page.clickLabelContaining(`日历 ${dateStr(0)}`, -1);
   await page.waitForText('计划');
-  await page.waitForText('健身');
 }

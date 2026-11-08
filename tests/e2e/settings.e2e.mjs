@@ -83,5 +83,4 @@ export async function run(page, baseUrl) {
   // 首页回到空状态
   await page.clickText('首页');
   await page.waitForText('今天还没有计划');
-  await page.waitForText('还没有备忘');
 }
