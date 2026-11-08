@@ -58,6 +58,10 @@ function AppStack() {
           name="games"
           options={{ headerShown: true, title: '游戏', headerBackTitle: '返回' }}
         />
+        <Stack.Screen
+          name="timetable"
+          options={{ headerShown: true, title: '课表', headerBackTitle: '返回' }}
+        />
       </Stack>
     </ThemeProvider>
   );

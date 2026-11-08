@@ -1,5 +1,5 @@
 import { SymbolView } from 'expo-symbols';
-import { useFocusEffect, useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -206,7 +206,7 @@ export default function TodayScreen() {
       <CourseRowItem
         course={course}
         onPress={() =>
-          router.push(`/timetable?courseId=${course.courseId}` as Href)
+          router.push({ pathname: '/timetable', params: { courseId: String(course.courseId) } })
         }
       />
     );
