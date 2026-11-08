@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -22,6 +23,9 @@ import {
 } from '@/db/repositories/settings';
 import { buildAutoBackupName, buildBackupFileName, parseBackupText, serializeBackup } from '@/lib/backup-text';
 import { pickBackupText, saveAutoBackup, saveBackupFile } from '@/lib/backup-file';
+import { deleteAvatarFile } from '@/lib/avatar';
+import { getProfile } from '@/db/repositories/profile';
+import type { ProfileRow } from '@/db/types';
 import { useThemePreference } from '@/theme/theme-context';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -40,6 +44,9 @@ function errorMessage(error: unknown): string {
 export default function SettingsScreen() {
   const theme = useTheme();
   const { preference, setPreference } = useThemePreference();
+  const router = useRouter();
+
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,6 +64,14 @@ export default function SettingsScreen() {
       })
       .catch(() => undefined);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      getProfile()
+        .then(setProfile)
+        .catch(() => undefined);
+    }, [])
+  );
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -110,6 +125,8 @@ export default function SettingsScreen() {
       const current = serializeBackup(await exportBackup());
       const location = await saveAutoBackup(buildAutoBackupName(), current);
       await clearAllData();
+      await deleteAvatarFile(profile?.avatarUri ?? null);
+      setProfile(null);
       await setPreference('system');
       setMessage(`已清空所有数据，主题恢复为「跟随系统」。${location}`);
     } catch (reason) {
@@ -156,6 +173,28 @@ export default function SettingsScreen() {
               数据与偏好
             </ThemedText>
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`账号 ${profile?.name ?? '用户'}`}
+            delayLongPress={400}
+            onLongPress={() => router.push('/profile')}
+            style={({ pressed }) => [styles.account, pressed && styles.pressed]}>
+            <View style={[styles.accountAvatar, { backgroundColor: theme.backgroundElement }]}>
+              {profile?.avatarUri ? (
+                <Image
+                  key={profile.avatarUri}
+                  source={{ uri: profile.avatarUri }}
+                  style={styles.accountAvatarImage}
+                />
+              ) : (
+                <ThemedText type="subtitle" style={styles.accountInitial}>
+                  {(profile?.name ?? '用户').slice(0, 1)}
+                </ThemedText>
+              )}
+            </View>
+            <ThemedText style={styles.accountName}>{profile?.name ?? '用户'}</ThemedText>
+          </Pressable>
 
           {message ? (
             <ThemedView type="backgroundElement" style={styles.messageBox}>
@@ -411,6 +450,34 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     lineHeight: 32,
+  },
+  account: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.one,
+    paddingVertical: Spacing.two,
+    marginBottom: Spacing.two,
+  },
+  accountAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  accountInitial: {
+    fontSize: 22,
+    lineHeight: 28,
+  },
+  accountName: {
+    fontSize: 22,
+    fontWeight: 600,
   },
   sectionLabel: {
     marginTop: Spacing.three,

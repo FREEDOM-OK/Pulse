@@ -50,6 +50,10 @@ function AppStack() {
           name="calendar"
           options={{ headerShown: true, title: '日历回顾', headerBackTitle: '返回' }}
         />
+        <Stack.Screen
+          name="profile"
+          options={{ headerShown: true, title: '个人资料', headerBackTitle: '返回' }}
+        />
       </Stack>
     </ThemeProvider>
   );
