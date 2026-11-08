@@ -137,11 +137,8 @@ export default function GamesScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
         <View style={styles.header}>
-          <ThemedText type="subtitle" style={styles.title}>
-            游戏
-          </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             想玩 {wishlist.length} · 已玩 {played.length}
           </ThemedText>

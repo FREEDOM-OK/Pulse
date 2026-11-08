@@ -54,6 +54,10 @@ function AppStack() {
           name="profile"
           options={{ headerShown: true, title: '个人资料', headerBackTitle: '返回' }}
         />
+        <Stack.Screen
+          name="games"
+          options={{ headerShown: true, title: '游戏', headerBackTitle: '返回' }}
+        />
       </Stack>
     </ThemeProvider>
   );
