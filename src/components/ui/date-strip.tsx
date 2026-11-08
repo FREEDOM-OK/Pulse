@@ -1,29 +1,34 @@
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
-import { StatusDot } from '@/components/ui/status-dot';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addDays, formatDay, parseDate, todayStr } from '@/lib/date';
 
-const ITEM_WIDTH = 54;
-const ITEM_GAP = Spacing.one;
+const ITEM_WIDTH = 44;
+const ITEM_GAP = 8;
+const CAPSULE_HEIGHT = 62;
 const RANGE_DAYS = 45;
 
 interface DateStripProps {
   value: string;
   onChange: (date: string) => void;
-  onOpenCalendar: () => void;
-  /** 有记录的日子：下面对应显示一个小圆点。 */
+  /** 传入则日期条尾部显示日历入口；今日计划把入口放在页头，不传。 */
+  onOpenCalendar?: () => void;
+  /** 有记录的日子：下面显示一个小圆点。 */
   marked?: Record<string, boolean>;
 }
 
 const WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六'];
 
-/** 顶部日期条：左右滑动选日期，点日历图标打开月历。 */
+/**
+ * 日期条：数字在上、星期在下，选中项是黑色胶囊。
+ * 左右滑动 45 天，选中项自动居中；日历入口放在页面右上角，不在这里。
+ */
 export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStripProps) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const today = todayStr();
 
   const days = useMemo(() => {
@@ -39,91 +44,90 @@ export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStrip
   }, [today, value]);
 
   const selectedIndex = days.indexOf(value);
-  const contentOffset = { x: Math.max(0, selectedIndex * (ITEM_WIDTH + ITEM_GAP) - 120), y: 0 };
-
-  const step = (delta: number) => {
-    const index = Math.min(days.length - 1, Math.max(0, selectedIndex + delta));
-    onChange(days[index]);
+  const contentOffset = {
+    x: Math.max(0, selectedIndex * (ITEM_WIDTH + ITEM_GAP) + ITEM_WIDTH / 2 - width / 2),
+    y: 0,
   };
 
   return (
     <View style={styles.container}>
-      <Pressable
-        accessibilityLabel="前一天"
-        onPress={() => step(-1)}
-        style={({ pressed }) => [styles.arrow, pressed && styles.pressed]}>
-        <ThemedText type="subtitle" style={styles.arrowText}>
-          ‹
-        </ThemedText>
-      </Pressable>
-
       <ScrollView
         key={value}
         horizontal
+        style={styles.scroll}
         showsHorizontalScrollIndicator={false}
         contentOffset={contentOffset}
         contentContainerStyle={styles.scrollContent}>
         {days.map((date) => {
           const selected = date === value;
-          const isToday = date === today;
           const weekday = WEEKDAY_SHORT[parseDate(date).getDay()];
           const hasRecord = Boolean(marked?.[date]);
           return (
             <Pressable
               key={date}
+              accessibilityRole="button"
               accessibilityLabel={`日期 ${date}${hasRecord ? ' 有记录' : ''}`}
+              accessibilityState={{ selected }}
               onPress={() => onChange(date)}
               style={({ pressed }) => [
                 styles.item,
-                {
-                  backgroundColor: selected ? theme.backgroundSelected : 'transparent',
-                  borderColor: isToday ? theme.textSecondary : 'transparent',
-                },
+                selected && { backgroundColor: theme.text },
                 pressed && styles.pressed,
               ]}>
               <ThemedText
-                type="small"
-                themeColor={selected ? 'text' : 'textSecondary'}
-                style={styles.weekday}>
-                {weekday}
-              </ThemedText>
-              <ThemedText type="smallBold" themeColor={selected ? 'text' : 'textSecondary'}>
+                style={[
+                  styles.day,
+                  { color: selected ? theme.background : theme.text },
+                ]}>
                 {parseDate(date).getDate()}
               </ThemedText>
-              <StatusDot color={hasRecord ? theme.text : undefined} />
+              <ThemedText
+                style={[
+                  styles.weekday,
+                  { color: selected ? theme.background : theme.textSecondary },
+                ]}>
+                {weekday}
+              </ThemedText>
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor: selected
+                      ? theme.background
+                      : hasRecord
+                        ? theme.textSecondary
+                        : 'transparent',
+                  },
+                ]}
+              />
             </Pressable>
           );
         })}
       </ScrollView>
 
-      <Pressable
-        accessibilityLabel="后一天"
-        onPress={() => step(1)}
-        style={({ pressed }) => [styles.arrow, pressed && styles.pressed]}>
-        <ThemedText type="subtitle" style={styles.arrowText}>
-          ›
-        </ThemedText>
-      </Pressable>
-
-      <Pressable
-        accessibilityLabel="打开日历"
-        onPress={onOpenCalendar}
-        style={({ pressed }) => [
-          styles.arrow,
-          { backgroundColor: theme.backgroundElement },
-          pressed && styles.pressed,
-        ]}>
-        <SymbolView
-          name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
-          size={18}
-          tintColor={theme.text}
-        />
-      </Pressable>
+      {onOpenCalendar ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="打开日历"
+          onPress={onOpenCalendar}
+          hitSlop={8}
+          style={({ pressed }) => [
+            styles.calendarButton,
+            { backgroundColor: theme.backgroundElement },
+            pressed && styles.pressed,
+          ]}>
+          <SymbolView
+            name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
+            size={18}
+            tintColor={theme.text}
+          />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
-/** 供页面标题使用：11月6日 周五 / 今天 */
+/** 供页面标题使用：11月6日 周五 */
 export function dateLabel(date: string): string {
   return date === todayStr() ? `今天 · ${formatDay(date)}` : formatDay(date);
 }
@@ -132,38 +136,49 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.one,
-    paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  scroll: {
+    flex: 1,
+  },
+  calendarButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.three,
   },
   scrollContent: {
     gap: ITEM_GAP,
-    paddingHorizontal: Spacing.one,
+    paddingHorizontal: Spacing.four,
     alignItems: 'center',
   },
   item: {
     width: ITEM_WIDTH,
-    paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
-    borderWidth: StyleSheet.hairlineWidth,
+    height: CAPSULE_HEIGHT,
+    borderRadius: 22,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 2,
+  },
+  day: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '700',
   },
   weekday: {
     fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '500',
   },
-  arrow: {
-    width: 34,
-    height: 38,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowText: {
-    fontSize: 22,
-    lineHeight: 26,
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 3,
   },
   pressed: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
 });

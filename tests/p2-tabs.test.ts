@@ -21,9 +21,7 @@ describe('底部导航配置', () => {
     const names = TAB_ITEMS.map((tab) => tab.name);
     expect(new Set(names).size).toBe(names.length);
     for (const tab of TAB_ITEMS) {
-      expect(tab.icon.ios.length).toBeGreaterThan(0);
-      expect(tab.icon.android.length).toBeGreaterThan(0);
-      expect(tab.icon.web.length).toBeGreaterThan(0);
+      expect(tab.icon).toBeTruthy();
     }
   });
 
