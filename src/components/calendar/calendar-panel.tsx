@@ -9,8 +9,13 @@ import { getDayDetail, getMonthActivity, type DayDetail, type DayFlags } from '@
 import { formatDay, formatDuration, monthRange, parseDate, todayStr } from '@/lib/date';
 import { EVENT_TYPE_LABELS } from '@/db/types';
 import { formatAmount } from '@/lib/format';
-import type { ScrollState } from '@/lib/home-pager';
 import { useTheme } from '@/hooks/use-theme';
+
+export interface PanelScrollState {
+  atTop: boolean;
+  atBottom: boolean;
+  scrollable: boolean;
+}
 
 export interface CalendarPanelProps {
   /** 初始选中的日期，默认今天。 */
@@ -18,7 +23,7 @@ export interface CalendarPanelProps {
   /** 外部数据变化时递增，用来触发重新加载。 */
   refreshToken?: number;
   scrollEnabled?: boolean;
-  onScrollState?: (state: ScrollState) => void;
+  onScrollState?: (state: PanelScrollState) => void;
   style?: StyleProp<ViewStyle>;
   contentContainerStyle?: StyleProp<ViewStyle>;
 }

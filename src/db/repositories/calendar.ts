@@ -65,6 +65,25 @@ export async function getMonthActivity(
   return flags;
 }
 
+/** 区间内的记录条数（首页日历卡「本月 N 条 · 今天 N 条」用）。 */
+export async function countRecordsInRange(from: string, to: string): Promise<number> {
+  const driver = getDriver();
+  const count = async (sql: string) => {
+    const row = await driver.getFirstAsync<{ n: number }>(sql, [from, to]);
+    return row?.n ?? 0;
+  };
+
+  const [tasks, memos, events, games, sets] = await Promise.all([
+    count('SELECT COUNT(*) AS n FROM tasks WHERE date BETWEEN ? AND ?'),
+    count('SELECT COUNT(*) AS n FROM memos WHERE date BETWEEN ? AND ?'),
+    count('SELECT COUNT(*) AS n FROM events WHERE date BETWEEN ? AND ?'),
+    count('SELECT COUNT(*) AS n FROM played_games WHERE played_date BETWEEN ? AND ?'),
+    count('SELECT COUNT(*) AS n FROM set_records WHERE date BETWEEN ? AND ?'),
+  ]);
+
+  return tasks + memos + events + games + sets;
+}
+
 /** 某一天的全部明细（日历回顾用）。 */
 export async function getDayDetail(date: string): Promise<DayDetail> {
   const [tasks, fitness, events, games, memos, courses, term, periodTimes] = await Promise.all([

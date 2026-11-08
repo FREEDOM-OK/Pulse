@@ -62,6 +62,10 @@ function AppStack() {
           name="timetable"
           options={{ headerShown: true, title: '课表', headerBackTitle: '返回' }}
         />
+        <Stack.Screen
+          name="cards"
+          options={{ headerShown: true, title: '首页卡片', headerBackTitle: '返回' }}
+        />
       </Stack>
     </ThemeProvider>
   );

@@ -33,9 +33,14 @@ describe('课表页结构（PRDv1.2 P4）', () => {
     expect(steps).toContain('第一节课');
   });
 
-  it('今日计划的课程行不再使用 Href 强制断言', () => {
+  it('今日计划的课程行跳转课表且不使用 Href 强制断言', () => {
     const today = readApp('(tabs)/today.tsx');
+    const list = fs.readFileSync(
+      path.join(ROOT, 'src', 'components', 'today', 'today-list.tsx'),
+      'utf8'
+    );
     expect(today).not.toContain('as Href');
-    expect(today).toContain("pathname: '/timetable'");
+    expect(`${today}${list}`).not.toContain('as Href');
+    expect(list).toContain("pathname: '/timetable'");
   });
 });
