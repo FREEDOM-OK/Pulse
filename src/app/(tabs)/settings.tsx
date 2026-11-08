@@ -18,14 +18,22 @@ import {
 } from '@/db/repositories/backup';
 import {
   getFitnessDefaults,
+  getSortMode,
   setFitnessDefaults,
+  setSortMode,
   type ThemeSetting,
 } from '@/db/repositories/settings';
+import {
+  SORT_MODES,
+  SORT_MODE_LABELS,
+  type ProfileRow,
+  type SortMode,
+} from '@/db/types';
+import { bumpDataVersion } from '@/lib/data-version';
 import { buildAutoBackupName, buildBackupFileName, parseBackupText, serializeBackup } from '@/lib/backup-text';
 import { pickBackupText, saveAutoBackup, saveBackupFile } from '@/lib/backup-file';
 import { deleteAvatarFile } from '@/lib/avatar';
 import { getProfile } from '@/db/repositories/profile';
-import type { ProfileRow } from '@/db/types';
 import { useThemePreference } from '@/theme/theme-context';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -55,6 +63,8 @@ export default function SettingsScreen() {
   const [clearOpen, setClearOpen] = useState(false);
   const [defaultRepsText, setDefaultRepsText] = useState('8');
   const [defaultWeightText, setDefaultWeightText] = useState('0');
+  const [sortMode, setSortModeState] = useState<SortMode>('memo-first');
+  const [sortOpen, setSortOpen] = useState(false);
 
   useEffect(() => {
     getFitnessDefaults()
@@ -69,6 +79,9 @@ export default function SettingsScreen() {
     useCallback(() => {
       getProfile()
         .then(setProfile)
+        .catch(() => undefined);
+      getSortMode()
+        .then(setSortModeState)
         .catch(() => undefined);
     }, [])
   );
@@ -194,6 +207,45 @@ export default function SettingsScreen() {
             </View>
             <ThemedText style={styles.accountName}>{profile?.name ?? '用户'}</ThemedText>
           </Pressable>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            首页
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="首页卡片"
+              onPress={() => router.push('/cards')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">首页卡片</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  调整万事卡的顺序与显示开关
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="列表排序"
+              onPress={() => setSortOpen(true)}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">列表排序</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  首页与今日计划共用
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {SORT_MODE_LABELS[sortMode]} ›
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
 
           {message ? (
             <ThemedView type="backgroundElement" style={styles.messageBox}>
@@ -417,6 +469,50 @@ export default function SettingsScreen() {
         ) : null}
       </ModalSheet>
 
+      <ModalSheet
+        visible={sortOpen}
+        title="列表排序"
+        onClose={() => setSortOpen(false)}>
+        <View style={styles.summaryList}>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.warning}>
+            同时作用于首页 Tasks 与今日计划。置顶内容始终排在最前，已完成的沉在底部。
+          </ThemedText>
+          {SORT_MODES.map((mode) => {
+            const active = sortMode === mode;
+            return (
+              <Pressable
+                key={mode}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
+                onPress={() => {
+                  setSortModeState(mode);
+                  setSortOpen(false);
+                  setSortMode(mode)
+                    .then(() => bumpDataVersion())
+                    .catch(() => undefined);
+                }}
+                style={({ pressed }) => [
+                  styles.sortRow,
+                  { backgroundColor: active ? theme.background : 'transparent' },
+                  pressed && styles.pressed,
+                ]}>
+                <ThemedText type="small">
+                  {active ? '✓ ' : ''}
+                  {SORT_MODE_LABELS[mode]}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  {mode === 'memo-first'
+                    ? '备忘置顶、有时间的在前'
+                    : mode === 'task-first'
+                      ? '计划置顶、有时间的在前'
+                      : '只按时间排列'}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ModalSheet>
+
       <ConfirmDialog
         visible={clearOpen}
         title="清空所有数据？"
@@ -574,5 +670,11 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  sortRow: {
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    gap: 2,
   },
 });
