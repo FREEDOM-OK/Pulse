@@ -7,6 +7,8 @@ import { run as runHome } from './home.e2e.mjs';
 import { run as runCalendar } from './calendar.e2e.mjs';
 import { run as runSettings } from './settings.e2e.mjs';
 import { run as runProfile } from './profile.e2e.mjs';
+import { run as runTimetable } from './timetable.e2e.mjs';
+import { run as runCards } from './cards.e2e.mjs';
 
 const BASE_URL = process.env.E2E_URL ?? 'http://localhost:8090';
 
@@ -16,7 +18,9 @@ const scenarios = [
   
   { name: 'P5 游戏', run: runGames },
   { name: 'P7 日历回顾', run: runCalendar },
+  { name: 'P4 课表', run: runTimetable },
   { name: 'P6 首页', run: runHome },
+  { name: 'P6b 卡片管理', run: runCards },
   { name: 'P8 数据与设置', run: runSettings },
   { name: 'P8b 个人资料', run: runProfile },
 ];

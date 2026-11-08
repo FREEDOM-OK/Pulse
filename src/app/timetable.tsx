@@ -103,7 +103,7 @@ export default function TimetableScreen() {
           <View style={styles.weekLabel}>
             <ThemedText type="subtitle">第 {week} 周</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              共 {term.totalWeeks} 周 · 今天周{weekdayLabel(parseDate(todayStr()))}
+              共 {term.totalWeeks} 周 · 今天{weekdayLabel(parseDate(todayStr()))}
             </ThemedText>
           </View>
 

@@ -261,6 +261,7 @@ export function CourseForm({
                 <Pressable
                   key={label}
                   accessibilityRole="button"
+                  accessibilityLabel={`周${label}`}
                   accessibilityState={{ selected }}
                   onPress={() => setDraftWeekday(weekday)}
                   style={[
