@@ -11,7 +11,7 @@ const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 const MODULE_LABELS: { key: keyof DayFlags; label: string }[] = [
   { key: 'tasks', label: '计划' },
   { key: 'fitness', label: '健身' },
-  { key: 'diet', label: '饮食' },
+  { key: 'events', label: '事件' },
   { key: 'games', label: '游戏' },
 ];
 
@@ -109,7 +109,9 @@ export function MonthView({
                   {flags?.fitness ? (
                     <StatusDot color={active ? theme.background : ModuleColors.fitness} />
                   ) : null}
-                  {flags?.diet ? <StatusDot color={active ? theme.background : ModuleColors.diet} /> : null}
+                  {flags?.events ? (
+                    <StatusDot color={active ? theme.background : ModuleColors.events} />
+                  ) : null}
                   {flags?.games ? <StatusDot color={active ? theme.background : ModuleColors.games} /> : null}
                 </View>
               </Pressable>

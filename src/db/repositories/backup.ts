@@ -1,6 +1,7 @@
 import { getDriver } from '../connection';
 import { ALL_TABLES, SCHEMA_VERSION } from '../schema';
 import { seedExercises } from '../seed';
+import { resetProfile } from './profile';
 import type { SqlParam } from '../driver';
 
 export const BACKUP_APP_ID = 'my-life-app';
@@ -9,14 +10,13 @@ export const BACKUP_VERSION = SCHEMA_VERSION;
 export class BackupError extends Error {}
 
 export interface BackupData {
-  memos: Record<string, unknown>[];
   tasks: Record<string, unknown>[];
   exercises: Record<string, unknown>[];
   trainingItems: Record<string, unknown>[];
   setRecords: Record<string, unknown>[];
-  dietRecords: Record<string, unknown>[];
   wishlist: Record<string, unknown>[];
   playedGames: Record<string, unknown>[];
+  events: Record<string, unknown>[];
   settings: Record<string, string>;
 }
 
@@ -27,25 +27,18 @@ export interface BackupPayload {
   data: BackupData;
 }
 
-const ARRAY_KEYS = [
-  'memos',
+/** 头像路径换机后无意义，不进备份。 */
+const PROFILE_AVATAR_KEY = 'profile.avatar';
+
+const REQUIRED_ARRAY_KEYS = [
   'tasks',
   'exercises',
   'trainingItems',
   'setRecords',
-  'dietRecords',
   'wishlist',
   'playedGames',
 ] as const;
 
-interface MemoRow {
-  id: number;
-  content: string;
-  tags: string;
-  pinned: number;
-  created_at: string;
-  updated_at: string;
-}
 interface TaskRow {
   id: number;
   date: string;
@@ -91,12 +84,13 @@ interface SetRow {
   completed_at: string;
   sort_order: number;
 }
-interface DietRow {
+interface EventRow {
   id: number;
   date: string;
-  meal_type: string;
-  content: string;
-  calories: number | null;
+  type: string;
+  title: string;
+  amount: number | null;
+  note: string | null;
   created_at: string;
 }
 interface WishRow {
@@ -117,19 +111,45 @@ interface PlayedRow {
   created_at: string;
 }
 
+const LEGACY_MEAL_LABELS: Record<string, string> = {
+  breakfast: '早餐',
+  lunch: '午餐',
+  dinner: '晚餐',
+  snack: '加餐',
+};
+
+/** v1/v2 备份里的饮食记录 → 今日好饭事件。 */
+export function legacyDietToEvents(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.map((row) => {
+    const mealType = String(row.mealType ?? '');
+    const calories = Number(row.calories);
+    const note =
+      (LEGACY_MEAL_LABELS[mealType] ?? '加餐') +
+      (Number.isFinite(calories) && calories > 0 ? ` · ${calories} 千卡` : '');
+    return {
+      id: row.id,
+      date: row.date,
+      type: 'meal',
+      title: row.content,
+      amount: null,
+      note,
+      createdAt: row.createdAt,
+    };
+  });
+}
+
 export async function exportBackup(): Promise<BackupPayload> {
   const driver = getDriver();
 
-  const [memos, tasks, exercises, trainingItems, setRecords, dietRecords, wishlist, playedGames] =
+  const [tasks, exercises, trainingItems, setRecords, wishlist, playedGames, events] =
     await Promise.all([
-      driver.getAllAsync<MemoRow>('SELECT * FROM memos ORDER BY id ASC'),
       driver.getAllAsync<TaskRow>('SELECT * FROM tasks ORDER BY id ASC'),
-      driver.getAllAsync<ExerciseRow>('SELECT * FROM exercises ORDER BY id ASC'),
+      driver.getAllAsync<ExerciseRow>('SELECT * FROM exercises WHERE is_preset = 0 ORDER BY id ASC'),
       driver.getAllAsync<TrainingRow>('SELECT * FROM training_items ORDER BY id ASC'),
       driver.getAllAsync<SetRow>('SELECT * FROM set_records ORDER BY id ASC'),
-      driver.getAllAsync<DietRow>('SELECT * FROM diet_records ORDER BY id ASC'),
       driver.getAllAsync<WishRow>('SELECT * FROM wishlist ORDER BY id ASC'),
       driver.getAllAsync<PlayedRow>('SELECT * FROM played_games ORDER BY id ASC'),
+      driver.getAllAsync<EventRow>('SELECT * FROM events ORDER BY id ASC'),
     ]);
 
   const settingsRows = await driver.getAllAsync<{ key: string; value: string }>(
@@ -141,14 +161,6 @@ export async function exportBackup(): Promise<BackupPayload> {
     schemaVersion: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     data: {
-      memos: memos.map((row) => ({
-        id: row.id,
-        content: row.content,
-        tags: row.tags,
-        pinned: row.pinned,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      })),
       tasks: tasks.map((row) => ({
         id: row.id,
         date: row.date,
@@ -194,14 +206,6 @@ export async function exportBackup(): Promise<BackupPayload> {
         completedAt: row.completed_at,
         sortOrder: row.sort_order,
       })),
-      dietRecords: dietRecords.map((row) => ({
-        id: row.id,
-        date: row.date,
-        mealType: row.meal_type,
-        content: row.content,
-        calories: row.calories,
-        createdAt: row.created_at,
-      })),
       wishlist: wishlist.map((row) => ({
         id: row.id,
         name: row.name,
@@ -219,7 +223,20 @@ export async function exportBackup(): Promise<BackupPayload> {
         rating: row.rating,
         createdAt: row.created_at,
       })),
-      settings: Object.fromEntries(settingsRows.map((row) => [row.key, row.value])),
+      events: events.map((row) => ({
+        id: row.id,
+        date: row.date,
+        type: row.type,
+        title: row.title,
+        amount: row.amount,
+        note: row.note,
+        createdAt: row.created_at,
+      })),
+      settings: Object.fromEntries(
+        settingsRows
+          .filter((row) => row.key !== PROFILE_AVATAR_KEY)
+          .map((row) => [row.key, row.value])
+      ),
     },
   };
 }
@@ -248,10 +265,25 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
   }
   const dataObject = data as Record<string, unknown>;
 
-  for (const key of ARRAY_KEYS) {
+  for (const key of REQUIRED_ARRAY_KEYS) {
     if (!Array.isArray(dataObject[key])) {
       throw new BackupError(`备份文件格式不完整：缺少 ${key}`);
     }
+  }
+
+  const legacyDietRows = Array.isArray(dataObject.dietRecords)
+    ? (dataObject.dietRecords as Record<string, unknown>[])
+    : null;
+
+  let events: Record<string, unknown>[];
+  if (Array.isArray(dataObject.events)) {
+    events = dataObject.events as Record<string, unknown>[];
+  } else if (legacyDietRows) {
+    events = legacyDietToEvents(legacyDietRows);
+  } else if (version >= 3) {
+    throw new BackupError('备份文件格式不完整：缺少 events');
+  } else {
+    events = [];
   }
 
   const settings = dataObject.settings;
@@ -259,11 +291,27 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
     throw new BackupError('备份文件格式不完整：缺少 settings');
   }
 
+  const settingsObject = settings as Record<string, unknown>;
+  const normalizedSettings: Record<string, string> = {};
+  for (const [key, settingValue] of Object.entries(settingsObject)) {
+    if (key === PROFILE_AVATAR_KEY) continue;
+    if (typeof settingValue === 'string') normalizedSettings[key] = settingValue;
+  }
+
   return {
     app: BACKUP_APP_ID,
     schemaVersion: version,
     exportedAt: String(payload.exportedAt ?? ''),
-    data: dataObject as unknown as BackupData,
+    data: {
+      tasks: dataObject.tasks as Record<string, unknown>[],
+      exercises: dataObject.exercises as Record<string, unknown>[],
+      trainingItems: dataObject.trainingItems as Record<string, unknown>[],
+      setRecords: dataObject.setRecords as Record<string, unknown>[],
+      wishlist: dataObject.wishlist as Record<string, unknown>[],
+      playedGames: dataObject.playedGames as Record<string, unknown>[],
+      events,
+      settings: normalizedSettings,
+    },
   };
 }
 
@@ -271,12 +319,11 @@ export function summarizeBackup(payload: BackupPayload) {
   return {
     exportedAt: payload.exportedAt,
     tasks: payload.data.tasks.length,
-    memos: payload.data.memos.length,
     trainingItems: payload.data.trainingItems.length,
     setRecords: payload.data.setRecords.length,
-    dietRecords: payload.data.dietRecords.length,
     wishlist: payload.data.wishlist.length,
     playedGames: payload.data.playedGames.length,
+    events: payload.data.events.length,
     exercises: payload.data.exercises.length,
   };
 }
@@ -308,7 +355,7 @@ function value<T>(record: Record<string, unknown>, key: string): T {
   return record[key] as T;
 }
 
-/** 整体替换：清空后用备份内容重建。 */
+/** 整体替换：清空后用备份内容重建；ID 交给数据库重新分配，父子关系按导入后的新 ID 重建。 */
 export async function importBackup(payload: BackupPayload): Promise<void> {
   const driver = getDriver();
   const data = payload.data;
@@ -316,27 +363,17 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
   await driver.withTransactionAsync(async () => {
     await clearTables();
 
-    for (const row of data.memos) {
-      await driver.runAsync(
-        'INSERT INTO memos (id, content, tags, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [
-          value<number>(row, 'id'),
-          value<string>(row, 'content'),
-          value<string>(row, 'tags') ?? '[]',
-          value<number>(row, 'pinned') ?? 0,
-          value<string>(row, 'createdAt'),
-          value<string>(row, 'updatedAt'),
-        ]
-      );
-    }
+    const taskIds = new Map<number, number>();
+    const exerciseIds = new Map<number, number>();
+    const trainingIds = new Map<number, number>();
+    const wishlistIds = new Map<number, number>();
 
     for (const row of data.tasks) {
-      await driver.runAsync(
+      const result = await driver.runAsync(
         `INSERT INTO tasks
-         (id, date, title, note, time, done, completed_at, repeat_group_id, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (date, title, note, time, done, completed_at, repeat_group_id, sort_order, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          value<number>(row, 'id'),
           value<string>(row, 'date'),
           value<string>(row, 'title'),
           value<string | null>(row, 'note') ?? null,
@@ -348,15 +385,14 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<string>(row, 'createdAt'),
         ]
       );
+      rememberId(taskIds, row, result);
     }
 
     for (const row of data.exercises) {
-      await driver.runAsync(
-        `INSERT INTO exercises
-         (id, name, category, is_preset, tracking_type, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+      const result = await driver.runAsync(
+        `INSERT INTO exercises (name, category, is_preset, tracking_type, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
         [
-          value<number>(row, 'id'),
           value<string>(row, 'name'),
           value<string>(row, 'category'),
           value<number>(row, 'isPreset') ?? 0,
@@ -364,18 +400,18 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<string>(row, 'createdAt'),
         ]
       );
+      rememberId(exerciseIds, row, result);
     }
 
     for (const row of data.trainingItems) {
-      await driver.runAsync(
+      const result = await driver.runAsync(
         `INSERT INTO training_items
-         (id, date, exercise_id, exercise_name, reps, weight,
+         (date, exercise_id, exercise_name, reps, weight,
           tracking_type, duration_minutes, sort_order, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          value<number>(row, 'id'),
           value<string>(row, 'date'),
-          value<number | null>(row, 'exerciseId') ?? null,
+          remap(exerciseIds, row, 'exerciseId'),
           value<string>(row, 'exerciseName'),
           value<number>(row, 'reps') ?? 1,
           value<number>(row, 'weight') ?? 0,
@@ -385,17 +421,17 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<string>(row, 'createdAt'),
         ]
       );
+      rememberId(trainingIds, row, result);
     }
 
     for (const row of data.setRecords) {
       await driver.runAsync(
         `INSERT INTO set_records
-         (id, training_item_id, date, exercise_name, set_index, reps, weight,
+         (training_item_id, date, exercise_name, set_index, reps, weight,
           tracking_type, duration_minutes, completed_at, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          value<number>(row, 'id'),
-          value<number | null>(row, 'trainingItemId') ?? null,
+          remap(trainingIds, row, 'trainingItemId'),
           value<string>(row, 'date'),
           value<string>(row, 'exerciseName'),
           value<number>(row, 'setIndex') ?? 1,
@@ -409,47 +445,46 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
       );
     }
 
-    for (const row of data.dietRecords) {
-      await driver.runAsync(
-        `INSERT INTO diet_records (id, date, meal_type, content, calories, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          value<number>(row, 'id'),
-          value<string>(row, 'date'),
-          value<string>(row, 'mealType'),
-          value<string>(row, 'content'),
-          value<number | null>(row, 'calories') ?? null,
-          value<string>(row, 'createdAt'),
-        ]
-      );
-    }
-
     for (const row of data.wishlist) {
-      await driver.runAsync(
-        'INSERT INTO wishlist (id, name, note, status, created_at) VALUES (?, ?, ?, ?, ?)',
+      const result = await driver.runAsync(
+        'INSERT INTO wishlist (name, note, status, created_at) VALUES (?, ?, ?, ?)',
         [
-          value<number>(row, 'id'),
           value<string>(row, 'name'),
           value<string | null>(row, 'note') ?? null,
           value<string>(row, 'status') ?? 'want',
           value<string>(row, 'createdAt'),
         ]
       );
+      rememberId(wishlistIds, row, result);
     }
 
     for (const row of data.playedGames) {
       await driver.runAsync(
         `INSERT INTO played_games
-         (id, wishlist_id, game_name, played_date, duration_minutes, experience, rating, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (wishlist_id, game_name, played_date, duration_minutes, experience, rating, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
-          value<number>(row, 'id'),
-          value<number | null>(row, 'wishlistId') ?? null,
+          remap(wishlistIds, row, 'wishlistId'),
           value<string>(row, 'gameName'),
           value<string>(row, 'playedDate'),
           value<number>(row, 'durationMinutes') ?? 0,
           value<string | null>(row, 'experience') ?? null,
           value<number>(row, 'rating') ?? 3,
+          value<string>(row, 'createdAt'),
+        ]
+      );
+    }
+
+    for (const row of data.events) {
+      await driver.runAsync(
+        `INSERT INTO events (date, type, title, amount, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          value<string>(row, 'date'),
+          value<string>(row, 'type') ?? 'meal',
+          value<string>(row, 'title'),
+          value<number | null>(row, 'amount') ?? null,
+          value<string | null>(row, 'note') ?? null,
           value<string>(row, 'createdAt'),
         ]
       );
@@ -461,13 +496,39 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
   });
 
   await seedExercises();
+  // 预置动作不随备份导出，导入后按名称把训练项目挂回动作库。
+  await getDriver().runAsync(
+    `UPDATE training_items
+     SET exercise_id = (SELECT id FROM exercises WHERE exercises.name = training_items.exercise_name)
+     WHERE exercise_id IS NULL`
+  );
 }
 
-/** 清空所有业务数据；基础必备动作永久保留。 */
+function rememberId(
+  map: Map<number, number>,
+  row: Record<string, unknown>,
+  result: { lastInsertRowId: number | bigint }
+): void {
+  const oldId = Number(row.id);
+  if (Number.isFinite(oldId)) map.set(oldId, Number(result.lastInsertRowId));
+}
+
+/** 子表外键按新 ID 重映射；备份里没有该父记录时保留空值。 */
+function remap(
+  map: Map<number, number>,
+  row: Record<string, unknown>,
+  key: string
+): number | null {
+  const oldId = Number(row[key]);
+  if (!Number.isFinite(oldId)) return null;
+  return map.get(oldId) ?? null;
+}
+
+/** 清空所有业务数据与个人资料；基础必备动作永久保留。 */
 export async function clearAllData(): Promise<void> {
-  const driver = getDriver();
-  await driver.withTransactionAsync(async () => {
+  await getDriver().withTransactionAsync(async () => {
     await clearTables(true);
   });
+  await resetProfile();
   await seedExercises();
 }

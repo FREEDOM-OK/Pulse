@@ -13,15 +13,14 @@ const SAMPLE: BackupPayload = {
   schemaVersion: BACKUP_VERSION,
   exportedAt: '2026-11-06T10:00:00.000Z',
   data: {
-    memos: [],
     tasks: [{ id: 1, title: '写周报' }],
     exercises: [{ id: 1, name: '卧推' }],
     trainingItems: [],
     setRecords: [],
-    dietRecords: [],
+    events: [{ id: 1, type: 'meal', title: '牛肉面', amount: 28.5 }],
     wishlist: [],
     playedGames: [],
-    settings: { theme: 'dark', 'fitness.defaultReps': '12' },
+    settings: { theme: 'dark', 'fitness.defaultReps': '12', 'profile.name': '小明' },
   },
 };
 

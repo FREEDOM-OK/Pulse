@@ -8,7 +8,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Spacing } from '@/constants/theme';
 import { getDayDetail, getMonthActivity, type DayDetail, type DayFlags } from '@/db/repositories/calendar';
 import { formatDay, formatDuration, monthRange, parseDate, todayStr } from '@/lib/date';
-import { MEAL_LABEL } from '@/db/types';
+import { EVENT_TYPE_LABELS } from '@/db/types';
+import { formatAmount } from '@/lib/format';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function CalendarScreen() {
@@ -44,7 +45,7 @@ export default function CalendarScreen() {
     return (
       detail.tasks.length > 0 ||
       detail.fitness.length > 0 ||
-      detail.diet.records.length > 0 ||
+      detail.events.length > 0 ||
       detail.games.length > 0
     );
   }, [detail]);
@@ -142,25 +143,34 @@ export default function CalendarScreen() {
               </ThemedView>
             ) : null}
 
-            {detail && detail.diet.records.length > 0 ? (
+            {detail && detail.events.length > 0 ? (
               <ThemedView type="backgroundElement" style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <ThemedText type="smallBold">饮食</ThemedText>
+                  <ThemedText type="smallBold">事件</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {detail.diet.totalCalories} kcal
+                    {detail.events.length} 条
                   </ThemedText>
                 </View>
-                {detail.diet.records.map((record) => (
-                  <View key={record.id} style={styles.plainRow}>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.mealLabel}>
-                      {MEAL_LABEL[record.meal_type]}
+                {detail.events.map((event) => (
+                  <View key={event.id} style={styles.plainRow}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.eventType}>
+                      {EVENT_TYPE_LABELS[event.type]}
                     </ThemedText>
-                    <ThemedText type="small" style={styles.flexText} numberOfLines={1}>
-                      {record.content}
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {record.calories != null ? `${record.calories} kcal` : '未填'}
-                    </ThemedText>
+                    <View style={styles.flexText}>
+                      <ThemedText type="small" numberOfLines={1}>
+                        {event.title}
+                      </ThemedText>
+                      {event.note ? (
+                        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                          {event.note}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    {event.amount != null ? (
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {formatAmount(event.amount)}
+                      </ThemedText>
+                    ) : null}
                   </View>
                 ))}
               </ThemedView>
@@ -243,8 +253,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
   },
-  mealLabel: {
-    width: 34,
+  eventType: {
+    width: 60,
   },
   doneText: {
     textDecorationLine: 'line-through',

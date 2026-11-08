@@ -14,19 +14,7 @@ export function parseTimeInput(input: string): { value: string | null; error: st
   return { value: trimmed, error: null };
 }
 
-/** 空字符串表示"不填热量"；非法输入返回 error。 */
-export function parseCaloriesInput(input: string): { value: number | null; error: string | null } {
-  const trimmed = input.trim();
-  if (trimmed === '') return { value: null, error: null };
-  if (!/^\d+$/.test(trimmed)) {
-    return { value: null, error: '热量只能填整数' };
-  }
-  const value = Number(trimmed);
-  if (value > 10000) {
-    return { value: null, error: '热量数值过大' };
-  }
-  return { value, error: null };
-}
+
 
 export function validateTaskTitle(title: string): string | null {
   if (title.trim() === '') return '任务内容不能为空';
@@ -34,11 +22,7 @@ export function validateTaskTitle(title: string): string | null {
   return null;
 }
 
-export function validateMemoContent(content: string): string | null {
-  if (content.trim() === '') return '备忘内容不能为空';
-  if (content.trim().length > 200) return '备忘内容最多 200 个字';
-  return null;
-}
+
 
 export function validateGameName(name: string): string | null {
   if (name.trim() === '') return '游戏名不能为空';

@@ -12,12 +12,12 @@ import {
   updateTask,
 } from '@/db/repositories/tasks';
 import {
-  createMemo,
-  deleteMemo,
-  listMemos,
-  toggleMemoPinned,
-  updateMemo,
-} from '@/db/repositories/memos';
+  countEventsByDate,
+  createEvent,
+  deleteEvent,
+  getEventDays,
+  listEventsByDate,
+} from '@/db/repositories/events';
 import {
   createCustomExercise,
   deleteExercise,
@@ -38,13 +38,7 @@ import {
   undoSet,
   updateTrainingItem,
 } from '@/db/repositories/training';
-import {
-  addDietRecord,
-  deleteDietRecord,
-  getDietSummary,
-  listDietByDate,
-  updateDietRecord,
-} from '@/db/repositories/diet';
+
 import {
   addWish,
   deletePlayed,
@@ -138,31 +132,31 @@ describe('P1 今日计划仓储', () => {
   });
 });
 
-describe('P1 备忘仓储', () => {
-  it('标签最多保留 3 个，置顶排最前', async () => {
+describe('P1 事件仓储', () => {
+  it('只有名称必填；金额可空可小数；按创建时间倒序', async () => {
     await createTestContext();
-    const a = await createMemo({ content: '交房租', tags: ['财务', '生活', '多余', '第四个'] });
-    const b = await createMemo({ content: '给车做保养', tags: ['生活'] });
+    await createEvent({ date: DATE, type: 'expense', title: '买键盘', amount: 399 });
+    await createEvent({ date: DATE, type: 'shopping', title: '跑鞋' });
+    await createEvent({ date: DATE, type: 'meal', title: '牛肉面', amount: 28.5, note: '加蛋' });
 
-    let memos = await listMemos();
-    expect(memos).toHaveLength(2);
-    const memoA = memos.find((memo) => memo.id === a);
-    expect(memoA?.tags).toEqual(['财务', '生活', '多余']);
+    const events = await listEventsByDate(DATE);
+    expect(events.map((event) => event.title)).toEqual(['牛肉面', '跑鞋', '买键盘']);
+    expect(events.map((event) => event.amount)).toEqual([28.5, null, 399]);
+    expect(events[0].note).toBe('加蛋');
+    expect(await countEventsByDate(DATE)).toBe(3);
+  });
 
-    await toggleMemoPinned(b);
-    memos = await listMemos();
-    expect(memos[0].content).toBe('给车做保养');
-    expect(memos[0].pinned).toBe(true);
-    expect(memos[1].content).toBe('交房租');
+  it('名称不能为空；不同日期互不影响；可删除', async () => {
+    await createTestContext();
+    await expect(createEvent({ date: DATE, type: 'meal', title: '   ' })).rejects.toThrow();
 
-    await toggleMemoPinned(b);
-    await updateMemo(a, { content: '交房租和水电费', tags: ['财务'] });
-    memos = await listMemos();
-    expect(memos[0].content).toBe('交房租和水电费');
-    expect(memos[0].tags).toEqual(['财务']);
+    const keep = await createEvent({ date: DATE, type: 'meal', title: '早餐' });
+    await createEvent({ date: '2026-11-07', type: 'meal', title: '午餐' });
 
-    await deleteMemo(a);
-    expect(await listMemos()).toHaveLength(1);
+    expect(await getEventDays('2026-11-01', '2026-11-30')).toEqual([DATE, '2026-11-07']);
+    await deleteEvent(keep);
+    expect(await listEventsByDate(DATE)).toHaveLength(0);
+    expect(await countEventsByDate(DATE)).toBe(0);
   });
 });
 
@@ -300,31 +294,7 @@ describe('P1 健身仓储', () => {
   });
 });
 
-describe('P1 饮食仓储', () => {
-  it('按餐次记录、热量合计、编辑与删除', async () => {
-    await createTestContext();
-    await addDietRecord({ date: DATE, mealType: 'breakfast', content: '燕麦牛奶', calories: 320 });
-    await addDietRecord({ date: DATE, mealType: 'lunch', content: '鸡胸肉饭', calories: 780 });
-    await addDietRecord({ date: DATE, mealType: 'snack', content: '苹果' });
 
-    const records = await listDietByDate(DATE);
-    expect(records).toHaveLength(3);
-    expect(records.map((row) => row.meal_type)).toEqual(['breakfast', 'lunch', 'snack']);
-    expect(await getDietSummary(DATE)).toEqual({ totalCalories: 1100, records: 3 });
-
-    await updateDietRecord(records[2].id, { calories: 90 });
-    expect((await getDietSummary(DATE)).totalCalories).toBe(1190);
-
-    await deleteDietRecord(records[0].id);
-    expect((await getDietSummary(DATE)).totalCalories).toBe(870);
-  });
-
-  it('不填热量的记录不计入合计', async () => {
-    await createTestContext();
-    await addDietRecord({ date: DATE, mealType: 'dinner', content: '随便吃了点' });
-    expect(await getDietSummary(DATE)).toEqual({ totalCalories: 0, records: 1 });
-  });
-});
 
 describe('P1 游戏仓储', () => {
   it('想玩 -> 玩了：生成已玩记录并移出想玩清单', async () => {

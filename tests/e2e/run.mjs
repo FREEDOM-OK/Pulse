@@ -1,7 +1,7 @@
 import { launchBrowser, waitForHttp } from './browser.mjs';
 import { run as runToday } from './today.e2e.mjs';
 import { run as runFitness } from './fitness.e2e.mjs';
-import { run as runDiet } from './diet.e2e.mjs';
+
 import { run as runGames } from './games.e2e.mjs';
 import { run as runHome } from './home.e2e.mjs';
 import { run as runCalendar } from './calendar.e2e.mjs';
@@ -12,7 +12,7 @@ const BASE_URL = process.env.E2E_URL ?? 'http://localhost:8090';
 const scenarios = [
   { name: 'P2 今日计划', run: runToday },
   { name: 'P3 健身', run: runFitness },
-  { name: 'P4 饮食', run: runDiet },
+  
   { name: 'P5 游戏', run: runGames },
   { name: 'P6 首页', run: runHome },
   { name: 'P7 日历回顾', run: runCalendar },

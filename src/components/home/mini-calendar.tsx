@@ -83,7 +83,9 @@ export function MiniCalendar({
                   {flags?.fitness ? (
                     <View style={[styles.dot, { backgroundColor: ModuleColors.fitness }]} />
                   ) : null}
-                  {flags?.diet ? <View style={[styles.dot, { backgroundColor: ModuleColors.diet }]} /> : null}
+                  {flags?.events ? (
+                    <View style={[styles.dot, { backgroundColor: ModuleColors.events }]} />
+                  ) : null}
                   {flags?.games ? (
                     <View style={[styles.dot, { backgroundColor: ModuleColors.games }]} />
                   ) : null}

@@ -18,6 +18,10 @@ export async function setSetting(key: string, value: string): Promise<void> {
   );
 }
 
+export async function deleteSetting(key: string): Promise<void> {
+  await getDriver().runAsync('DELETE FROM settings WHERE key = ?', [key]);
+}
+
 export async function getAllSettings(): Promise<Record<string, string>> {
   const rows = await getDriver().getAllAsync<{ key: string; value: string }>(
     'SELECT key, value FROM settings'

@@ -3,9 +3,9 @@ import { resetDriverForTests, getDriver } from '@/db/connection';
 import { createTestContext } from './helpers/node-driver';
 import { clearAllData, exportBackup, importBackup, parseBackupPayload } from '@/db/repositories/backup';
 import { getDayDetail, getMonthActivity } from '@/db/repositories/calendar';
-import { PRESET_EXERCISES } from '@/db/seed-data';
+
 import { addDays } from '@/lib/date';
-import { validateMemoContent, validateTaskTitle } from '@/lib/validation';
+import { validateTaskTitle } from '@/lib/validation';
 
 function measure(fn: () => Promise<void>): Promise<number> {
   const start = performance.now();
@@ -17,23 +17,26 @@ afterEach(() => {
 });
 
 describe('P9 边界与性能', () => {
-  it('长文本边界：任务 120 字、备忘 200 字', () => {
+  it('长文本边界：任务 120 字', () => {
     expect(validateTaskTitle('x'.repeat(120))).toBeNull();
     expect(validateTaskTitle('x'.repeat(121))).not.toBeNull();
-    expect(validateMemoContent('小'.repeat(200))).toBeNull();
-    expect(validateMemoContent('小'.repeat(201))).not.toBeNull();
   });
 
   it('空库导出、清空、导入都不报错', async () => {
     await createTestContext();
     const payload = await exportBackup();
     expect(payload.data.tasks).toHaveLength(0);
-    expect(payload.data.exercises.length).toBeGreaterThan(0);
+    // 预置动作永久保留、不随备份导出，所以空库里没有自定义动作。
+    expect(payload.data.exercises).toHaveLength(0);
 
     await clearAllData();
     await clearAllData();
-    // 基础必备动作永久保留，清空数据不会删除它们。
-    expect((await exportBackup()).data.exercises).toHaveLength(PRESET_EXERCISES.length);
+    // 基础必备动作永久保留，但不在备份里；所以导出的自定义动作为 0。
+    expect((await exportBackup()).data.exercises).toHaveLength(0);
+    const presetCount = await getDriver().getFirstAsync<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM exercises WHERE is_preset = 1'
+    );
+    expect(presetCount?.n).toBeGreaterThan(0);
 
     await importBackup(parseBackupPayload(JSON.parse(JSON.stringify(payload))));
     expect((await exportBackup()).data.exercises).toEqual(payload.data.exercises);
@@ -45,7 +48,7 @@ describe('P9 边界与性能', () => {
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
   });
 
-  it('大量数据下查询仍然很快（3000 组训练 + 1000 条饮食）', async () => {
+  it('大量数据下查询仍然很快（3000 组训练 + 1000 条事件）', async () => {
     await createTestContext();
     const driver = getDriver();
 
@@ -62,8 +65,8 @@ describe('P9 边界与性能', () => {
       for (let index = 0; index < 1000; index += 1) {
         const date = `2026-11-${String((index % 28) + 1).padStart(2, '0')}`;
         await driver.runAsync(
-          `INSERT INTO diet_records (date, meal_type, content, calories, created_at)
-           VALUES (?, 'lunch', '测试餐', 500, '2026-11-06T10:00:00.000Z')`,
+          `INSERT INTO events (date, type, title, amount, note, created_at)
+           VALUES (?, 'meal', '测试餐', 20.5, NULL, '2026-11-06T10:00:00.000Z')`,
           [date]
         );
       }

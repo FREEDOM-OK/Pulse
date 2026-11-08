@@ -4,22 +4,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MemoForm } from '@/components/home/memo-form';
 import { MiniCalendar } from '@/components/home/mini-calendar';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ModalSheet } from '@/components/ui/modal-sheet';
 import { Spacing } from '@/constants/theme';
 import { getMonthActivity, type DayFlags } from '@/db/repositories/calendar';
-import { getDietSummary } from '@/db/repositories/diet';
 import { getLatestPlayed } from '@/db/repositories/games';
-import { deleteMemo, listMemos, toggleMemoPinned, type Memo } from '@/db/repositories/memos';
 import { getTaskStats, listTasksByDate } from '@/db/repositories/tasks';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
 import type { PlayedGameRow, TaskRow } from '@/db/types';
 import { formatMonthDay, monthRange, parseDate, todayStr, weekdayLabel } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
-const PREVIEW_MEMOS = 4;
 const PREVIEW_TASKS = 3;
 
 export default function HomeScreen() {
@@ -30,33 +24,21 @@ export default function HomeScreen() {
 
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [stats, setStats] = useState({ total: 0, completed: 0 });
-  const [memos, setMemos] = useState<Memo[]>([]);
   const [training, setTraining] = useState<TrainingSummary>({ sets: 0, items: 0, firstExercise: null });
-  const [diet, setDiet] = useState({ totalCalories: 0, records: 0 });
   const [latestPlayed, setLatestPlayed] = useState<PlayedGameRow | null>(null);
   const [cursor, setCursor] = useState({ year: parsed.getFullYear(), month: parsed.getMonth() });
   const [activity, setActivity] = useState<Record<string, DayFlags>>({});
 
-  const [memoFormOpen, setMemoFormOpen] = useState(false);
-  const [editingMemo, setEditingMemo] = useState<Memo | null>(null);
-  const [actionMemo, setActionMemo] = useState<Memo | null>(null);
-  const [deletingMemo, setDeletingMemo] = useState<Memo | null>(null);
-
   const load = useCallback(async () => {
-    const [taskList, taskStats, memoList, trainingSummary, dietSummary, played] =
-      await Promise.all([
-        listTasksByDate(today),
-        getTaskStats(today),
-        listMemos(),
-        getTrainingSummary(today),
-        getDietSummary(today),
-        getLatestPlayed(),
-      ]);
+    const [taskList, taskStats, trainingSummary, played] = await Promise.all([
+      listTasksByDate(today),
+      getTaskStats(today),
+      getTrainingSummary(today),
+      getLatestPlayed(),
+    ]);
     setTasks(taskList);
     setStats(taskStats);
-    setMemos(memoList);
     setTraining(trainingSummary);
-    setDiet(dietSummary);
     setLatestPlayed(played);
   }, [today]);
 
@@ -76,17 +58,6 @@ export default function HomeScreen() {
       loadMonth().catch(() => undefined);
     }, [loadMonth])
   );
-
-  const openMemoForm = (memo: Memo | null) => {
-    setEditingMemo(memo);
-    setMemoFormOpen(true);
-  };
-
-  const handlePin = async (memo: Memo) => {
-    await toggleMemoPinned(memo.id);
-    setActionMemo(null);
-    await load();
-  };
 
   return (
     <ThemedView style={styles.container}>
@@ -143,68 +114,6 @@ export default function HomeScreen() {
             </ThemedView>
           </Pressable>
 
-          {/* 快速备忘 */}
-          <ThemedView type="backgroundElement" style={styles.card}>
-            <View style={styles.cardHeader}>
-              <ThemedText type="smallBold">快速备忘</ThemedText>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="添加备忘"
-                onPress={() => openMemoForm(null)}
-                hitSlop={8}>
-                <ThemedText type="linkPrimary">＋</ThemedText>
-              </Pressable>
-            </View>
-
-            {memos.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                还没有备忘
-              </ThemedText>
-            ) : (
-              memos.slice(0, PREVIEW_MEMOS).map((memo) => (
-                <View key={memo.id} style={styles.memoRow}>
-                  <Pressable style={styles.memoBody} onPress={() => openMemoForm(memo)}>
-                    <View style={styles.memoTitleRow}>
-                      {memo.pinned ? (
-                        <ThemedText type="small" style={styles.pin}>
-                          📌
-                        </ThemedText>
-                      ) : null}
-                      <ThemedText type="small" numberOfLines={2} style={styles.memoContent}>
-                        {memo.content}
-                      </ThemedText>
-                    </View>
-                    {memo.tags.length > 0 ? (
-                      <View style={styles.tagRow}>
-                        {memo.tags.map((tag) => (
-                          <View key={tag} style={styles.tag}>
-                            <ThemedText type="small" style={styles.tagText}>
-                              #{tag}
-                            </ThemedText>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel={`备忘操作 ${memo.content}`}
-                    onPress={() => setActionMemo(memo)}
-                    hitSlop={8}
-                    style={styles.moreButton}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      ⋯
-                    </ThemedText>
-                  </Pressable>
-                </View>
-              ))
-            )}
-            {memos.length > PREVIEW_MEMOS ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                还有 {memos.length - PREVIEW_MEMOS} 条…
-              </ThemedText>
-            ) : null}
-          </ThemedView>
-
           {/* 模块摘要 */}
           <View style={styles.summaryList}>
             <Pressable onPress={() => router.navigate('/fitness')} style={styles.cardPressable}>
@@ -216,22 +125,6 @@ export default function HomeScreen() {
                   {training.sets > 0
                     ? `今日 ${training.sets} 组${training.firstExercise ? ` · ${training.firstExercise}` : ''}`
                     : '今天还没练'}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  ›
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-
-            <Pressable onPress={() => router.navigate('/diet')} style={styles.cardPressable}>
-              <ThemedView type="backgroundElement" style={styles.summaryRow}>
-                <ThemedText type="smallBold" style={styles.summaryLabel}>
-                  饮食
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.summaryValue}>
-                  {diet.records > 0
-                    ? `${diet.totalCalories} kcal · ${diet.records} 条`
-                    : '今天还没有记录'}
                 </ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   ›
@@ -281,72 +174,7 @@ export default function HomeScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <MemoForm
-        visible={memoFormOpen}
-        memo={editingMemo}
-        onClose={() => setMemoFormOpen(false)}
-        onSaved={() => {
-          setMemoFormOpen(false);
-          load().catch(() => undefined);
-        }}
-      />
-
-      <ModalSheet
-        visible={actionMemo !== null}
-        title="备忘操作"
-        onClose={() => setActionMemo(null)}>
-        <View style={styles.actionList}>
-          <Pressable
-            onPress={() => {
-              if (actionMemo) {
-                const memo = actionMemo;
-                setActionMemo(null);
-                openMemoForm(memo);
-              }
-            }}
-            style={styles.actionButton}>
-            <ThemedText type="small">编辑</ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              if (actionMemo) handlePin(actionMemo).catch(() => undefined);
-            }}
-            style={styles.actionButton}>
-            <ThemedText type="small">{actionMemo?.pinned ? '取消置顶' : '置顶'}</ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              if (actionMemo) {
-                setDeletingMemo(actionMemo);
-                setActionMemo(null);
-              }
-            }}
-            style={styles.actionButton}>
-            <ThemedText type="small" style={styles.deleteText}>
-              删除
-            </ThemedText>
-          </Pressable>
-        </View>
-      </ModalSheet>
-
-      <ConfirmDialog
-        visible={deletingMemo !== null}
-        title="删除这条备忘？"
-        message={deletingMemo ? `「${deletingMemo.content}」删除后无法恢复。` : undefined}
-        confirmLabel="确认删除"
-        danger
-        onCancel={() => setDeletingMemo(null)}
-        onConfirm={() => {
-          if (!deletingMemo) return;
-          deleteMemo(deletingMemo.id)
-            .then(() => {
-              setDeletingMemo(null);
-              return load();
-            })
-            .catch(() => undefined);
-        }}
-      />
-    </ThemedView>
+      </ThemedView>
   );
 }
 

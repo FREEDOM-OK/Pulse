@@ -110,7 +110,46 @@ ALTER TABLE set_records ADD COLUMN tracking_type TEXT NOT NULL DEFAULT 'sets';
 ALTER TABLE set_records ADD COLUMN duration_minutes INTEGER;
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2];
+/**
+ * v1.1：新增事件表；饮食记录整体转成「今日好饭」事件后删表；
+ * 快速备忘功能废弃，直接删表。
+ */
+export const MIGRATION_V3 = `
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  date TEXT NOT NULL,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  amount REAL,
+  note TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
+
+INSERT INTO events (date, type, title, amount, note, created_at)
+  SELECT date,
+         'meal',
+         content,
+         NULL,
+         CASE meal_type
+           WHEN 'breakfast' THEN '早餐'
+           WHEN 'lunch' THEN '午餐'
+           WHEN 'dinner' THEN '晚餐'
+           ELSE '加餐'
+         END
+         || CASE
+              WHEN calories IS NULL OR calories <= 0 THEN ''
+              ELSE ' · ' || calories || ' 千卡'
+            END,
+         created_at
+    FROM diet_records;
+
+DROP TABLE IF EXISTS diet_records;
+DROP TABLE IF EXISTS memos;
+`;
+
+export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -118,11 +157,10 @@ export const SCHEMA_VERSION = MIGRATIONS.length;
 export const ALL_TABLES = [
   'set_records',
   'training_items',
-  'diet_records',
   'played_games',
   'wishlist',
   'tasks',
-  'memos',
+  'events',
   'exercises',
   'settings',
 ] as const;

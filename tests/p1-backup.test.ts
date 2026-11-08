@@ -11,9 +11,9 @@ import {
   summarizeBackup,
 } from '@/db/repositories/backup';
 import { createTask } from '@/db/repositories/tasks';
-import { createMemo } from '@/db/repositories/memos';
 import { addTrainingItem, completeSet } from '@/db/repositories/training';
-import { addDietRecord } from '@/db/repositories/diet';
+import { createEvent, listEventsByDate } from '@/db/repositories/events';
+import { getProfile, saveProfile } from '@/db/repositories/profile';
 import { addWish, markPlayed } from '@/db/repositories/games';
 import { setTheme } from '@/db/repositories/settings';
 import { createCustomExercise, findExerciseByName } from '@/db/repositories/exercises';
@@ -31,16 +31,17 @@ async function countRows(table: string): Promise<number> {
 
 async function seedSampleData() {
   await createTask({ date: DATE, title: '写周报', time: '09:00' });
-  await createMemo({ content: '交房租', tags: ['财务'] });
+  const bench = await findExerciseByName('杠铃卧推');
+  if (!bench) throw new Error('预置动作「杠铃卧推」缺失');
   const itemId = await addTrainingItem({
     date: DATE,
-    exerciseId: 1,
-    exerciseName: '卧推',
+    exerciseId: bench.id,
+    exerciseName: bench.name,
     reps: 4,
     weight: 60,
   });
   await completeSet(itemId);
-  await addDietRecord({ date: DATE, mealType: 'breakfast', content: '燕麦牛奶', calories: 320 });
+  await createEvent({ date: DATE, type: 'meal', title: '燕麦牛奶', amount: 12.5, note: '早餐' });
   const wishId = await addWish('塞尔达');
   await markPlayed(wishId, {
     durationMinutes: 150,
@@ -49,6 +50,12 @@ async function seedSampleData() {
     playedDate: DATE,
   });
   await setTheme('dark');
+  await saveProfile({
+    name: '小明',
+    gender: 'male',
+    birthday: '2000-01-02',
+    avatarUri: 'file:///avatar.jpg',
+  });
 }
 
 afterEach(() => {
@@ -56,7 +63,7 @@ afterEach(() => {
 });
 
 describe('P1 备份与恢复', () => {
-  it('导出包含全部模块数据与设置', async () => {
+  it('导出包含全部模块数据与设置，个人信息不含头像路径', async () => {
     await createTestContext();
     await seedSampleData();
     const payload = await exportBackup();
@@ -64,17 +71,22 @@ describe('P1 备份与恢复', () => {
     expect(payload.app).toBe(BACKUP_APP_ID);
     expect(payload.schemaVersion).toBe(SCHEMA_VERSION);
     expect(payload.data.tasks).toHaveLength(1);
-    expect(payload.data.memos).toHaveLength(1);
     expect(payload.data.trainingItems).toHaveLength(1);
     expect(payload.data.setRecords).toHaveLength(1);
-    expect(payload.data.dietRecords).toHaveLength(1);
+    expect(payload.data.events).toHaveLength(1);
     expect(payload.data.playedGames).toHaveLength(1);
-    expect(payload.data.settings).toEqual({ theme: 'dark' });
-    expect(payload.data.exercises.length).toBeGreaterThanOrEqual(35);
+    expect(payload.data.settings).toMatchObject({
+      theme: 'dark',
+      'profile.name': '小明',
+      'profile.gender': 'male',
+      'profile.birthday': '2000-01-02',
+    });
+    expect(payload.data.settings).not.toHaveProperty('profile.avatar');
 
     const summary = summarizeBackup(payload);
     expect(summary.tasks).toBe(1);
     expect(summary.setRecords).toBe(1);
+    expect(summary.events).toBe(1);
   });
 
   it('清空后导入备份，数据完全恢复', async () => {
@@ -84,29 +96,25 @@ describe('P1 备份与恢复', () => {
 
     await clearAllData();
     expect(await countRows('tasks')).toBe(0);
-    expect(await countRows('memos')).toBe(0);
     expect(await countRows('set_records')).toBe(0);
-    expect(await countRows('diet_records')).toBe(0);
+    expect(await countRows('events')).toBe(0);
     expect(await countRows('played_games')).toBe(0);
     expect(await countRows('exercises')).toBe(PRESET_EXERCISES.length);
-    const presetCount = await getDriver().getFirstAsync<{ total: number }>(
-      'SELECT COUNT(*) AS total FROM exercises WHERE is_preset = 1'
-    );
-    expect(Number(presetCount?.total)).toBe(PRESET_EXERCISES.length);
+    expect((await getProfile()).name).toBe('用户');
 
     const parsed = parseBackupPayload(JSON.parse(JSON.stringify(before)));
     await importBackup(parsed);
 
     const after = await exportBackup();
     expect(after.data.tasks).toEqual(before.data.tasks);
-    expect(after.data.memos).toEqual(before.data.memos);
     expect(after.data.trainingItems).toEqual(before.data.trainingItems);
     expect(after.data.setRecords).toEqual(before.data.setRecords);
-    expect(after.data.dietRecords).toEqual(before.data.dietRecords);
+    expect(after.data.events).toEqual(before.data.events);
     expect(after.data.playedGames).toEqual(before.data.playedGames);
     expect(after.data.wishlist).toEqual(before.data.wishlist);
     expect(after.data.exercises).toEqual(before.data.exercises);
     expect(after.data.settings).toEqual(before.data.settings);
+    expect((await getProfile()).name).toBe('小明');
   });
 
   it('清空全部数据时保留基础动作，只删除自定义动作', async () => {
@@ -170,10 +178,55 @@ describe('P1 备份与恢复', () => {
     await clearAllData();
     await importBackup(payload);
 
-    const id = await createTask({ date: DATE, title: '导入后的新任务' });
-    expect(id).toBeGreaterThan(0);
-    const row = await getDriver().getFirstAsync<{ total: number }>('SELECT COUNT(*) AS total FROM tasks');
-    expect(Number(row?.total)).toBe(2);
+    const taskId = await createTask({ date: DATE, title: '导入后的新任务' });
+    const eventId = await createEvent({ date: DATE, type: 'shopping', title: '导入后的新事件' });
+    expect(taskId).toBeGreaterThan(0);
+    expect(eventId).toBeGreaterThan(0);
+    const taskRow = await getDriver().getFirstAsync<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM tasks'
+    );
+    expect(Number(taskRow?.total)).toBe(2);
+    expect(await listEventsByDate(DATE)).toHaveLength(2);
+  });
+
+  it('v1/v2 备份里的饮食记录会转成好饭事件，备忘被忽略', async () => {
+    await createTestContext();
+    await importBackup(
+      parseBackupPayload({
+        app: BACKUP_APP_ID,
+        schemaVersion: 2,
+        exportedAt: '2026-11-06T00:00:00.000Z',
+        data: {
+          tasks: [],
+          exercises: [],
+          trainingItems: [],
+          setRecords: [],
+          wishlist: [],
+          playedGames: [],
+          dietRecords: [
+            {
+              id: 1,
+              date: DATE,
+              mealType: 'lunch',
+              content: '鸡胸肉饭',
+              calories: 520,
+              createdAt: '2026-11-06T12:00:00.000Z',
+            },
+          ],
+          memos: [{ id: 1, content: '旧备忘', tags: [], pinned: 0 }],
+          settings: {},
+        },
+      })
+    );
+
+    const events = await listEventsByDate(DATE);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'meal',
+      title: '鸡胸肉饭',
+      amount: null,
+      note: '午餐 · 520 千卡',
+    });
   });
 
   it('非法备份文件被拒绝且不影响现有数据', async () => {
@@ -198,17 +251,32 @@ describe('P1 备份与恢复', () => {
       schemaVersion: 1,
       exportedAt: '',
       data: {
-        memos: [],
         tasks: [],
         exercises: [],
         trainingItems: [],
         setRecords: [],
-        dietRecords: [],
         wishlist: [],
         playedGames: [],
       },
     };
     expect(() => parseBackupPayload(validShape)).toThrow('缺少 settings');
+
+    expect(() =>
+      parseBackupPayload({
+        app: BACKUP_APP_ID,
+        schemaVersion: 3,
+        exportedAt: '',
+        data: {
+          tasks: [],
+          exercises: [],
+          trainingItems: [],
+          setRecords: [],
+          wishlist: [],
+          playedGames: [],
+          settings: {},
+        },
+      })
+    ).toThrow('缺少 events');
 
     expect(await countRows('tasks')).toBe(1);
   });
@@ -219,12 +287,13 @@ describe('P1 备份与恢复', () => {
     const summary = summarizeBackup(await exportBackup());
     expect(summary).toMatchObject({
       tasks: 1,
-      memos: 1,
       trainingItems: 1,
       setRecords: 1,
-      dietRecords: 1,
+      events: 1,
       playedGames: 1,
     });
+    expect(summary).not.toHaveProperty('memos');
+    expect(summary).not.toHaveProperty('dietRecords');
     expect(typeof summary.exportedAt).toBe('string');
   });
 });

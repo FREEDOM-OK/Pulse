@@ -12,12 +12,10 @@ import {
 } from '@/db/repositories/tasks';
 import {
   isValidTime,
-  parseCaloriesInput,
   parseDurationInput,
   parseTimeInput,
   validateDurationMinutes,
   validateGameName,
-  validateMemoContent,
   validateRating,
   validateTaskTitle,
 } from '@/lib/validation';
@@ -42,22 +40,10 @@ describe('P2 任务表单校验', () => {
     expect(parseTimeInput('8:15').error).not.toBeNull();
   });
 
-  it('热量只接受整数，空值为不填', () => {
-    expect(parseCaloriesInput('')).toEqual({ value: null, error: null });
-    expect(parseCaloriesInput('320')).toEqual({ value: 320, error: null });
-    expect(parseCaloriesInput('12.5').error).not.toBeNull();
-    expect(parseCaloriesInput('-5').error).not.toBeNull();
-    expect(parseCaloriesInput('abc').error).not.toBeNull();
-    expect(parseCaloriesInput('10001').error).not.toBeNull();
-  });
-
   it('必填项与长度限制', () => {
     expect(validateTaskTitle('   ')).toBe('任务内容不能为空');
     expect(validateTaskTitle('写周报')).toBeNull();
     expect(validateTaskTitle('x'.repeat(121))).not.toBeNull();
-
-    expect(validateMemoContent('')).toBe('备忘内容不能为空');
-    expect(validateMemoContent('交房租')).toBeNull();
 
     expect(validateGameName('  ')).toBe('游戏名不能为空');
     expect(validateGameName('塞尔达')).toBeNull();

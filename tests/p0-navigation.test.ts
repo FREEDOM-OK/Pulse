@@ -7,26 +7,18 @@ const ROOT = path.resolve(__dirname, '..');
 const APP_DIR = path.join(ROOT, 'src', 'app');
 
 describe('P0 底部导航结构', () => {
-  it('恰好 6 个 Tab，顺序与 PRD 一致', () => {
+  it('恰好 5 个 Tab，顺序与 PRDv1.1 一致', () => {
     expect(TAB_ITEMS.map((t) => t.name)).toEqual([
       'index',
       'today',
       'fitness',
-      'diet',
       'games',
       'settings',
     ]);
   });
 
-  it('Tab 标题为中文且与 PRD 一致', () => {
-    expect(TAB_ITEMS.map((t) => t.title)).toEqual([
-      '首页',
-      '今日计划',
-      '健身',
-      '饮食',
-      '游戏',
-      '设置',
-    ]);
+  it('Tab 标题为中文且与 PRDv1.1 一致', () => {
+    expect(TAB_ITEMS.map((t) => t.title)).toEqual(['首页', '今日计划', '健身', '游戏', '设置']);
   });
 
   it('Tab 名称不重复', () => {

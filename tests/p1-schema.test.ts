@@ -6,17 +6,16 @@ import { configureDriver, getDriver, resetDriverForTests } from '@/db/connection
 import { migrate, getSchemaVersion } from '@/db/migrations';
 import { seedExercises } from '@/db/seed';
 import { PRESET_EXERCISES } from '@/db/seed-data';
-import { SCHEMA_VERSION } from '@/db/schema';
+import { MIGRATIONS, SCHEMA_VERSION } from '@/db/schema';
 import { EXERCISE_CATEGORIES } from '@/db/types';
 import { createNodeDriver, createTestContext } from './helpers/node-driver';
 
 const TABLES = [
-  'memos',
   'tasks',
   'exercises',
   'training_items',
   'set_records',
-  'diet_records',
+  'events',
   'wishlist',
   'played_games',
   'settings',
@@ -27,7 +26,7 @@ describe('P1 数据库结构与迁移', () => {
     resetDriverForTests();
   });
 
-  it('迁移后 9 张业务表都存在', async () => {
+  it('迁移后 8 张业务表都存在，饮食与备忘表已移除', async () => {
     await createTestContext();
     const rows = await getDriver().getAllAsync<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type = 'table'"
@@ -36,6 +35,48 @@ describe('P1 数据库结构与迁移', () => {
     for (const table of TABLES) {
       expect(names, `缺少表 ${table}`).toContain(table);
     }
+    expect(names).not.toContain('diet_records');
+    expect(names).not.toContain('memos');
+  });
+
+  it('v2 数据库升级到 v3 时把饮食记录迁移成好饭事件', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lifeapp-v2-'));
+    const file = path.join(dir, 'v2.db');
+
+    resetDriverForTests();
+    const driver = createNodeDriver(file);
+    configureDriver(driver);
+    await driver.execAsync(MIGRATIONS[0]);
+    await driver.execAsync(MIGRATIONS[1]);
+    await driver.execAsync('PRAGMA user_version = 2');
+    await driver.runAsync(
+      `INSERT INTO diet_records (date, meal_type, content, calories, created_at)
+       VALUES ('2026-11-07', 'lunch', '鸡胸肉饭', 520, '2026-11-07T12:00:00.000Z')`
+    );
+
+    await migrate();
+
+    const rows = await getDriver().getAllAsync<{
+      date: string;
+      type: string;
+      title: string;
+      amount: number | null;
+      note: string | null;
+    }>('SELECT date, type, title, amount, note FROM events');
+    expect(rows).toEqual([
+      {
+        date: '2026-11-07',
+        type: 'meal',
+        title: '鸡胸肉饭',
+        amount: null,
+        note: '午餐 · 520 千卡',
+      },
+    ]);
+    expect(await getSchemaVersion()).toBe(3);
+
+    driver.close();
+    resetDriverForTests();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 
   it('user_version 等于当前 schema 版本', async () => {

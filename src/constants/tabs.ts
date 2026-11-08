@@ -1,7 +1,7 @@
 /**
- * 底部导航的 6 个 Tab 配置。
+ * 底部导航的 5 个 Tab 配置。
  *
- * 顺序必须与 PRD 第 2 章一致：首页 · 今日计划 · 健身 · 饮食 · 游戏 · 设置。
+ * 顺序必须与 PRDv1.1 第 2 章一致：首页 · 今日计划 · 健身 · 游戏 · 设置。
  * 图标同时给出 iOS（SF Symbols）、Android（Material Symbols）和 Web（Material Symbols）名称。
  */
 export const TAB_ITEMS = [
@@ -20,11 +20,7 @@ export const TAB_ITEMS = [
       web: 'fitness_center',
     },
   },
-  {
-    name: 'diet',
-    title: '饮食',
-    icon: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' },
-  },
+  
   {
     name: 'games',
     title: '游戏',

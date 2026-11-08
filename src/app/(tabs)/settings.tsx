@@ -367,10 +367,9 @@ export default function SettingsScreen() {
               导出时间：{summary.exportedAt || '未知'}
             </ThemedText>
             <ThemedText type="small">任务 {summary.tasks} 条</ThemedText>
-            <ThemedText type="small">备忘 {summary.memos} 条</ThemedText>
             <ThemedText type="small">训练项目 {summary.trainingItems} 个</ThemedText>
             <ThemedText type="small">完成组 {summary.setRecords} 组</ThemedText>
-            <ThemedText type="small">饮食 {summary.dietRecords} 条</ThemedText>
+            <ThemedText type="small">事件 {summary.events} 条</ThemedText>
             <ThemedText type="small">想玩 {summary.wishlist} 条</ThemedText>
             <ThemedText type="small">已玩 {summary.playedGames} 条</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.warning}>
@@ -383,7 +382,7 @@ export default function SettingsScreen() {
       <ConfirmDialog
         visible={clearOpen}
         title="清空所有数据？"
-        message="所有任务、备忘、训练、饮食、游戏记录都会被删除，清空前会自动备份一份。"
+        message="所有任务、训练、事件、游戏记录都会被删除，清空前会自动备份一份。"
         confirmLabel="确认清空"
         danger
         onCancel={() => setClearOpen(false)}

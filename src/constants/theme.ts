@@ -26,11 +26,11 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
-/** 日历回顾的模块颜色（PRD 第 2.3 节）：计划蓝 / 健身橙 / 饮食绿 / 游戏紫。 */
+/** 日历回顾的模块颜色（PRDv1.1 第 2.3 节）：计划蓝 / 健身橙 / 事件绿 / 游戏紫。 */
 export const ModuleColors = {
   tasks: '#4C8DF6',
   fitness: '#F2994A',
-  diet: '#4CAF7D',
+  events: '#4CAF7D',
   games: '#9B6DF3',
 } as const;
 

@@ -4,7 +4,7 @@ import { createTestContext } from './helpers/node-driver';
 import { getDayDetail, getMonthActivity } from '@/db/repositories/calendar';
 import { createTask } from '@/db/repositories/tasks';
 import { addTrainingItem, completeSet } from '@/db/repositories/training';
-import { addDietRecord } from '@/db/repositories/diet';
+import { createEvent } from '@/db/repositories/events';
 import { addWish, markPlayed } from '@/db/repositories/games';
 
 afterEach(() => {
@@ -24,7 +24,7 @@ describe('P6 日历聚合查询', () => {
       weight: 60,
     });
     await completeSet(itemId);
-    await addDietRecord({ date: '2026-11-07', mealType: 'lunch', content: '鸡胸肉饭', calories: 520 });
+    await createEvent({ date: '2026-11-07', type: 'meal', title: '鸡胸肉饭', amount: 32.5 });
     const wishId = await addWish('塞尔达');
     await markPlayed(wishId, {
       durationMinutes: 60,
@@ -37,19 +37,19 @@ describe('P6 日历聚合查询', () => {
     expect(activity['2026-11-06']).toEqual({
       tasks: true,
       fitness: true,
-      diet: false,
+      events: false,
       games: false,
     });
     expect(activity['2026-11-07']).toEqual({
       tasks: false,
       fitness: false,
-      diet: true,
+      events: true,
       games: false,
     });
     expect(activity['2026-11-08']).toEqual({
       tasks: false,
       fitness: false,
-      diet: false,
+      events: false,
       games: true,
     });
     expect(activity['2026-11-09']).toBeUndefined();
@@ -70,20 +70,19 @@ describe('P6 日历聚合查询', () => {
     });
     await completeSet(itemId);
     await completeSet(itemId);
-    await addDietRecord({ date: '2026-11-06', mealType: 'breakfast', content: '燕麦牛奶', calories: 320 });
+    await createEvent({ date: '2026-11-06', type: 'expense', title: '买键盘', amount: 399 });
 
     const detail = await getDayDetail('2026-11-06');
     expect(detail.tasks.map((task) => task.title)).toEqual(['写周报']);
     expect(detail.fitness).toEqual([{ exerciseName: '卧推', sets: 2 }]);
-    expect(detail.diet.totalCalories).toBe(320);
-    expect(detail.diet.records).toHaveLength(1);
+    expect(detail.events).toHaveLength(1);
+    expect(detail.events[0]).toMatchObject({ type: 'expense', title: '买键盘', amount: 399 });
     expect(detail.games).toHaveLength(0);
 
     const empty = await getDayDetail('2026-11-10');
     expect(empty.tasks).toHaveLength(0);
     expect(empty.fitness).toHaveLength(0);
-    expect(empty.diet.records).toHaveLength(0);
-    expect(empty.diet.totalCalories).toBe(0);
+    expect(empty.events).toHaveLength(0);
     expect(empty.games).toHaveLength(0);
   });
 });

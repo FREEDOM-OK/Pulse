@@ -1,20 +1,50 @@
 /** 数据库行类型与领域常量。 */
 
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type EventType = 'expense' | 'shopping' | 'meal';
 
-export const MEAL_TYPES: { value: MealType; label: string }[] = [
-  { value: 'breakfast', label: '早餐' },
-  { value: 'lunch', label: '午餐' },
-  { value: 'dinner', label: '晚餐' },
-  { value: 'snack', label: '加餐' },
-];
+export const EVENT_TYPES: EventType[] = ['expense', 'shopping', 'meal'];
 
-export const MEAL_LABEL: Record<MealType, string> = {
-  breakfast: '早餐',
-  lunch: '午餐',
-  dinner: '晚餐',
-  snack: '加餐',
+export const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  expense: '重大消费',
+  shopping: '重大购物',
+  meal: '今日好饭',
 };
+
+/** 三种事件表单里标题字段的名字。 */
+export const EVENT_TITLE_LABELS: Record<EventType, string> = {
+  expense: '事件名称',
+  shopping: '物品',
+  meal: '吃了什么',
+};
+
+export interface EventRow {
+  id: number;
+  date: string;
+  type: EventType;
+  title: string;
+  amount: number | null;
+  note: string | null;
+  created_at: string;
+}
+
+export type ProfileGender = 'male' | 'female' | 'secret';
+
+export const PROFILE_GENDERS: ProfileGender[] = ['male', 'female', 'secret'];
+
+export const PROFILE_GENDER_LABELS: Record<ProfileGender, string> = {
+  male: '男',
+  female: '女',
+  secret: '保密',
+};
+
+export interface ProfileRow {
+  name: string;
+  gender: ProfileGender;
+  /** YYYY-MM-DD，可空。 */
+  birthday: string | null;
+  /** 头像在 App 私有目录里的绝对路径，可空。 */
+  avatarUri: string | null;
+}
 
 export const EXERCISE_CATEGORIES = ['胸', '背', '腿', '肩', '手臂', '核心', '有氧'] as const;
 
@@ -57,14 +87,7 @@ export interface TaskRow {
   created_at: string;
 }
 
-export interface MemoRow {
-  id: number;
-  content: string;
-  tags: string;
-  pinned: number;
-  created_at: string;
-  updated_at: string;
-}
+
 
 export interface ExerciseRow {
   id: number;
@@ -102,14 +125,7 @@ export interface SetRecordRow {
   sort_order: number;
 }
 
-export interface DietRecordRow {
-  id: number;
-  date: string;
-  meal_type: MealType;
-  content: string;
-  calories: number | null;
-  created_at: string;
-}
+
 
 export interface WishlistRow {
   id: number;
