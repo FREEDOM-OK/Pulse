@@ -2,44 +2,64 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { EventForm } from '@/components/home/event-form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MiniCalendar } from '@/components/home/mini-calendar';
-import { Spacing } from '@/constants/theme';
-import { getMonthActivity, type DayFlags } from '@/db/repositories/calendar';
+import { ActionMenu } from '@/components/ui/action-menu';
+import { ModuleColors, Spacing } from '@/constants/theme';
+import { countEventsByDate } from '@/db/repositories/events';
 import { getLatestPlayed } from '@/db/repositories/games';
-import { getTaskStats, listTasksByDate } from '@/db/repositories/tasks';
+import { getProfile } from '@/db/repositories/profile';
+import { getTaskStats, listTasksByDate, toggleTask } from '@/db/repositories/tasks';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
-import type { PlayedGameRow, TaskRow } from '@/db/types';
-import { formatMonthDay, monthRange, parseDate, todayStr, weekdayLabel } from '@/lib/date';
+import {
+  EVENT_TYPES,
+  type EventType,
+  type PlayedGameRow,
+  type TaskRow,
+} from '@/db/types';
+import { formatMonthDay, parseDate, todayStr, weekdayLabel } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
-const PREVIEW_TASKS = 3;
+const EVENT_MENU_LABELS: Record<EventType, string> = {
+  expense: '添加重大消费',
+  shopping: '添加重大购物',
+  meal: '添加今日好饭',
+};
 
 export default function HomeScreen() {
   const theme = useTheme();
   const router = useRouter();
   const today = todayStr();
-  const parsed = parseDate(today);
 
+  const [name, setName] = useState('用户');
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [stats, setStats] = useState({ total: 0, completed: 0 });
-  const [training, setTraining] = useState<TrainingSummary>({ sets: 0, items: 0, firstExercise: null });
+  const [training, setTraining] = useState<TrainingSummary>({
+    sets: 0,
+    items: 0,
+    firstExercise: null,
+  });
   const [latestPlayed, setLatestPlayed] = useState<PlayedGameRow | null>(null);
-  const [cursor, setCursor] = useState({ year: parsed.getFullYear(), month: parsed.getMonth() });
-  const [activity, setActivity] = useState<Record<string, DayFlags>>({});
+  const [eventCount, setEventCount] = useState(0);
+  const [eventMenuOpen, setEventMenuOpen] = useState(false);
+  const [eventType, setEventType] = useState<EventType | null>(null);
 
   const load = useCallback(async () => {
-    const [taskList, taskStats, trainingSummary, played] = await Promise.all([
+    const [profile, taskList, taskStats, trainingSummary, played, events] = await Promise.all([
+      getProfile(),
       listTasksByDate(today),
       getTaskStats(today),
       getTrainingSummary(today),
       getLatestPlayed(),
+      countEventsByDate(today),
     ]);
+    setName(profile.name);
     setTasks(taskList);
     setStats(taskStats);
     setTraining(trainingSummary);
     setLatestPlayed(played);
+    setEventCount(events);
   }, [today]);
 
   useFocusEffect(
@@ -48,46 +68,62 @@ export default function HomeScreen() {
     }, [load])
   );
 
-  const loadMonth = useCallback(async () => {
-    const { from, to } = monthRange(cursor.year, cursor.month);
-    setActivity(await getMonthActivity(from, to));
-  }, [cursor]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadMonth().catch(() => undefined);
-    }, [loadMonth])
-  );
+  const handleToggleTask = (task: TaskRow) => {
+    toggleTask(task.id)
+      .then(() => load())
+      .catch(() => undefined);
+  };
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.page}>
           <View style={styles.header}>
-            <ThemedText type="subtitle" style={styles.title}>
-              {formatMonthDay(today)}
+            <ThemedText type="subtitle" style={styles.greeting} numberOfLines={1}>
+              Hi，{name}
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.weekday}>
-              {weekdayLabel(parseDate(today))}
-            </ThemedText>
+            <View style={styles.dateRow}>
+              <ThemedText type="small" style={styles.dateText}>
+                今日是 {formatMonthDay(today)}
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.weekday}>
+                {weekdayLabel(parseDate(today))}
+              </ThemedText>
+            </View>
           </View>
 
-          {/* 今日计划 */}
-          <Pressable onPress={() => router.navigate('/today')} style={styles.cardPressable}>
-            <ThemedView type="backgroundElement" style={styles.card}>
-              <View style={styles.cardHeader}>
-                <ThemedText type="smallBold">今日计划</ThemedText>
+          {/* 框 1：今日计划（内部滚动，占两格高度） */}
+          <ThemedView type="backgroundElement" style={[styles.card, styles.planCard]}>
+            <View style={styles.cardHeader}>
+              <ThemedText type="smallBold">今日计划</ThemedText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="打开今日计划"
+                onPress={() => router.navigate('/today')}
+                style={({ pressed }) => [styles.headerLink, pressed && styles.pressed]}>
                 <ThemedText type="small" themeColor="textSecondary">
                   完成 {stats.completed}/{stats.total} ›
                 </ThemedText>
-              </View>
-              {tasks.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  今天还没有计划
-                </ThemedText>
-              ) : (
-                tasks.slice(0, PREVIEW_TASKS).map((task) => (
-                  <View key={task.id} style={styles.taskRow}>
+              </Pressable>
+            </View>
+            {tasks.length === 0 ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                今天还没有计划
+              </ThemedText>
+            ) : (
+              <ScrollView
+                style={styles.taskScroll}
+                contentContainerStyle={styles.taskList}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}>
+                {tasks.map((task) => (
+                  <Pressable
+                    key={task.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`任务 ${task.title}`}
+                    accessibilityState={{ checked: task.done === 1 }}
+                    onPress={() => handleToggleTask(task)}
+                    style={({ pressed }) => [styles.taskRow, pressed && styles.pressed]}>
                     <ThemedText type="small" style={{ color: theme.textSecondary }}>
                       {task.done === 1 ? '☑' : '☐'}
                     </ThemedText>
@@ -103,41 +139,59 @@ export default function HomeScreen() {
                       style={[styles.taskTitle, task.done === 1 && styles.doneText]}>
                       {task.title}
                     </ThemedText>
-                  </View>
-                ))
-              )}
-              {tasks.length > PREVIEW_TASKS ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  还有 {tasks.length - PREVIEW_TASKS} 条…
-                </ThemedText>
-              ) : null}
-            </ThemedView>
-          </Pressable>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
+          </ThemedView>
 
-          {/* 模块摘要 */}
-          <View style={styles.summaryList}>
-            <Pressable onPress={() => router.navigate('/fitness')} style={styles.cardPressable}>
-              <ThemedView type="backgroundElement" style={styles.summaryRow}>
-                <ThemedText type="smallBold" style={styles.summaryLabel}>
-                  健身
+          {/* 框 2、3：添加事件 / 去健身 */}
+          <View style={styles.middleRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="添加事件"
+              onPress={() => setEventMenuOpen(true)}
+              style={({ pressed }) => [styles.halfBox, pressed && styles.pressed]}>
+              <ThemedView type="backgroundElement" style={styles.fill}>
+                <ThemedText type="subtitle" style={[styles.plus, { color: ModuleColors.events }]}>
+                  ＋
                 </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.summaryValue}>
-                  {training.sets > 0
-                    ? `今日 ${training.sets} 组${training.firstExercise ? ` · ${training.firstExercise}` : ''}`
-                    : '今天还没练'}
-                </ThemedText>
+                <ThemedText type="smallBold">添加事件</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  ›
+                  {eventCount > 0 ? `今日 ${eventCount} 条` : '消费 / 购物 / 好饭'}
                 </ThemedText>
               </ThemedView>
             </Pressable>
 
-            <Pressable onPress={() => router.navigate('/games')} style={styles.cardPressable}>
-              <ThemedView type="backgroundElement" style={styles.summaryRow}>
-                <ThemedText type="smallBold" style={styles.summaryLabel}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="去健身"
+              onPress={() => router.navigate('/fitness')}
+              style={({ pressed }) => [styles.halfBox, pressed && styles.pressed]}>
+              <ThemedView type="backgroundElement" style={styles.fill}>
+                <ThemedText type="subtitle" style={[styles.boxIcon, { color: ModuleColors.fitness }]}>
+                  练
+                </ThemedText>
+                <ThemedText type="smallBold">去健身</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {training.sets > 0 ? `今日 ${training.sets} 组` : '今天还没练'}
+                </ThemedText>
+              </ThemedView>
+            </Pressable>
+          </View>
+
+          {/* 框 4：游戏（通栏） */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="游戏"
+            onPress={() => router.navigate('/games')}
+            style={({ pressed }) => [styles.gamesBox, pressed && styles.pressed]}>
+            <ThemedView type="backgroundElement" style={styles.fill}>
+              <View style={styles.gamesRow}>
+                <ThemedText type="smallBold" style={styles.gamesLabel}>
                   游戏
                 </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.summaryValue}>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.gamesValue}>
                   {latestPlayed
                     ? `${latestPlayed.game_name} · ${'★'.repeat(latestPlayed.rating)}`
                     : '还没有游玩记录'}
@@ -145,36 +199,33 @@ export default function HomeScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   ›
                 </ThemedText>
-              </ThemedView>
-            </Pressable>
-          </View>
-
-          {/* 日历回顾入口 */}
-          <ThemedView type="backgroundElement" style={styles.card}>
-            <MiniCalendar
-              year={cursor.year}
-              month={cursor.month}
-              activity={activity}
-              onChangeMonth={(delta) => {
-                const next = new Date(cursor.year, cursor.month + delta, 1);
-                setCursor({ year: next.getFullYear(), month: next.getMonth() });
-              }}
-              onSelectDate={(date) => router.push({ pathname: '/calendar', params: { date } })}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="查看日历回顾"
-              onPress={() => router.push({ pathname: '/calendar', params: { date: today } })}
-              style={({ pressed }) => [styles.calendarLink, pressed && styles.pressed]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                查看完整日历回顾 ›
-              </ThemedText>
-            </Pressable>
-          </ThemedView>
-        </ScrollView>
+              </View>
+            </ThemedView>
+          </Pressable>
+        </View>
       </SafeAreaView>
 
-      </ThemedView>
+      <ActionMenu
+        visible={eventMenuOpen}
+        title="添加事件"
+        items={EVENT_TYPES.map((type) => ({
+          key: type,
+          label: EVENT_MENU_LABELS[type],
+          onPress: () => setEventType(type),
+        }))}
+        onClose={() => setEventMenuOpen(false)}
+      />
+
+      <EventForm
+        visible={eventType !== null}
+        type={eventType}
+        onClose={() => setEventType(null)}
+        onSaved={() => {
+          setEventType(null);
+          load().catch(() => undefined);
+        }}
+      />
+    </ThemedView>
   );
 }
 
@@ -185,29 +236,36 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  content: {
+  page: {
+    flex: 1,
     paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.six,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.two,
     gap: Spacing.three,
   },
   header: {
+    gap: 2,
+    paddingHorizontal: Spacing.one,
+  },
+  greeting: {
+    fontSize: 26,
+    lineHeight: 32,
+  },
+  dateRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.one,
   },
-  title: {
-    fontSize: 30,
-    lineHeight: 36,
+  dateText: {
+    fontSize: 16,
   },
   weekday: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 3,
+    fontSize: 13,
+    marginBottom: 1,
   },
-  cardPressable: {
-    borderRadius: Spacing.three,
+  planCard: {
+    flex: 2,
+    minHeight: 96,
   },
   card: {
     borderRadius: Spacing.three,
@@ -219,10 +277,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  headerLink: {
+    paddingVertical: Spacing.one,
+    paddingLeft: Spacing.one,
+  },
+  taskScroll: {
+    flex: 1,
+  },
+  taskList: {
+    gap: Spacing.one,
+  },
   taskRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
+    paddingVertical: 2,
   },
   taskTitle: {
     flex: 1,
@@ -231,76 +300,47 @@ const styles = StyleSheet.create({
   doneText: {
     textDecorationLine: 'line-through',
   },
-  memoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.two,
-  },
-  memoBody: {
+  middleRow: {
     flex: 1,
-    gap: Spacing.half,
-  },
-  memoTitleRow: {
+    minHeight: 88,
     flexDirection: 'row',
-    gap: Spacing.one,
-    alignItems: 'flex-start',
+    gap: Spacing.three,
   },
-  memoContent: {
+  halfBox: {
     flex: 1,
-    fontSize: 14,
+    borderRadius: Spacing.three,
   },
-  pin: {
-    fontSize: 12,
+  fill: {
+    flex: 1,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    justifyContent: 'center',
+    gap: 2,
   },
-  tagRow: {
-    flexDirection: 'row',
-    gap: Spacing.one,
-    flexWrap: 'wrap',
+  plus: {
+    fontSize: 22,
+    lineHeight: 26,
   },
-  tag: {
-    backgroundColor: 'rgba(127,127,127,0.16)',
-    borderRadius: Spacing.one,
-    paddingHorizontal: Spacing.one,
-    paddingVertical: 1,
+  boxIcon: {
+    fontSize: 20,
+    lineHeight: 24,
   },
-  tagText: {
-    fontSize: 11,
+  gamesBox: {
+    flex: 1,
+    minHeight: 72,
+    borderRadius: Spacing.three,
   },
-  moreButton: {
-    paddingHorizontal: Spacing.one,
-  },
-  summaryList: {
-    gap: Spacing.two,
-  },
-  summaryRow: {
+  gamesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
   },
-  summaryLabel: {
+  gamesLabel: {
     width: 44,
   },
-  summaryValue: {
+  gamesValue: {
     flex: 1,
     textAlign: 'right',
-  },
-  calendarLink: {
-    alignItems: 'center',
-    paddingTop: Spacing.one,
-  },
-  actionList: {
-    gap: Spacing.two,
-    paddingBottom: Spacing.two,
-  },
-  actionButton: {
-    paddingVertical: Spacing.two,
-    alignItems: 'center',
-  },
-  deleteText: {
-    color: '#D64545',
   },
   pressed: {
     opacity: 0.7,

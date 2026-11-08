@@ -1,74 +1,88 @@
 import { sleep } from './browser.mjs';
 
-function todayStr() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
-/** P6 首页：摘要、备忘增删改置顶、迷你月历跳转 */
+/**
+ * P6 首页第 1 页：问候语 + 日期、四个框铺满一屏、添加事件、今日计划勾选。
+ * 从空数据开始，避免前面场景留下的任务/事件干扰断言。
+ */
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
-  // 顶部大标题是「几月几日」，后面跟星期几，不再有「今天」大字
+  await page.evaluate('localStorage.clear()');
+  await page.reload();
+
   const now = new Date();
   const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
-  await page.waitForText(`${now.getMonth() + 1}月${now.getDate()}日`);
+  await page.waitForText('Hi，用户');
+  await page.waitForText(`今日是 ${now.getMonth() + 1}月${now.getDate()}日`);
   await page.waitForText(weekday);
-  await page.waitForText('快速备忘');
+
+  // 四个框都在，空态正确
   await page.waitForText('今日计划');
-  await page.waitForText('kcal');
+  await page.waitForText('今天还没有计划');
+  await page.waitForText('添加事件');
+  await page.waitForText('去健身');
+  await page.waitForText('今天还没练');
+  await page.waitForText('游戏');
+  await page.waitForText('还没有游玩记录');
 
-  // 添加两条备忘
-  await page.clickLabel('添加备忘');
-  await page.waitForText('添加备忘');
-  await page.fill('例如：交房租', '交房租');
-  await page.fill('例如：财务，生活', '财务，生活');
+  // 添加一条重大消费（带小数金额）
+  await page.clickLabel('添加事件');
+  await page.waitForText('添加重大消费');
+  await page.clickText('添加重大消费');
+  await page.waitForLabel('事件名称');
+  await page.fillByLabel('事件名称', '买键盘');
+  await page.fillByLabel('金额', '199.5');
+  await page.fillByLabel('备注', '办公用');
+  await page.clickLabel('保存事件');
+  await page.waitForText('今日 1 条');
+
+  // 再添加一条不带金额的购物
+  await page.clickLabel('添加事件');
+  await page.clickText('添加重大购物');
+  await page.waitForLabel('物品');
+  await page.fillByLabel('物品', '洗衣液');
+  await page.clickLabel('保存事件');
+  await page.waitForText('今日 2 条');
+
+  // 金额写错时给出提示且不保存
+  await page.clickLabel('添加事件');
+  await page.clickText('添加今日好饭');
+  await page.waitForLabel('吃了什么');
+  await page.fillByLabel('吃了什么', '牛肉面');
+  await page.fillByLabel('金额', '1.2.3');
+  await page.clickLabel('保存事件');
+  await page.waitForText('金额只能填数字，可以用小数点');
+  await page.clickLabel('取消');
+  await sleep(300);
+  await page.waitForText('今日 2 条');
+
+  // 在今日计划里加一条任务，回到首页勾选，进度必须立即变化
+  await page.clickLabel('打开今日计划');
+  await page.waitForText('完成 0/0');
+  await page.clickLabel('添加任务');
+  await page.waitForText('添加任务');
+  await page.fill('例如：写周报', '写周报');
   await page.clickText('保存');
-  await page.waitForText('交房租');
-  await page.waitForText('#财务');
-  await page.waitForText('#生活');
+  await page.waitForText('写周报');
 
-  await page.clickLabel('添加备忘');
-  await page.waitForText('添加备忘');
-  await page.fill('例如：交房租', '给车做保养');
-  await page.fill('例如：财务，生活', '生活');
-  await page.clickText('保存');
-  await page.waitForText('给车做保养');
+  await page.clickText('首页');
+  await page.waitForText('完成 0/1');
+  await page.clickLabel('任务 写周报');
+  await page.waitForText('完成 1/1');
+  await page.clickLabel('任务 写周报');
+  await page.waitForText('完成 0/1');
 
-  // 置顶第一条，应排到最前
-  await page.clickLabel('备忘操作 交房租');
-  await page.waitForText('备忘操作');
-  await page.clickText('置顶');
-  await sleep(400);
-  let text = await page.text();
-  if (text.indexOf('交房租') > text.indexOf('给车做保养')) {
-    throw new Error('置顶后备忘没有排到最前');
-  }
-  await page.waitForText('📌');
-
-  // 刷新后备忘与置顶状态仍在
+  // 刷新后事件条数仍在
   await page.reload();
-  await page.waitForText('交房租');
-  text = await page.text();
-  if (text.indexOf('交房租') > text.indexOf('给车做保养')) {
-    throw new Error('刷新后置顶状态丢失');
-  }
+  await page.waitForText('今日 2 条');
 
-  // 点击迷你月历上的今天，进入日历回顾
-  await page.clickLabel(`首页日历 ${todayStr()}`);
-  await page.waitForText('日历回顾');
-
-  // 返回首页（整页重新进入，避免遗留未卸载的页面实例）
-  await page.goto(baseUrl);
-  await page.waitForText('快速备忘');
-
-  // 删除备忘
-  await page.clickLabel('备忘操作 交房租');
-  await page.waitForText('备忘操作');
-  await page.clickText('删除');
-  await page.waitForText('删除这条备忘？');
-  await page.clickText('确认删除');
-  await sleep(400);
-  await page.waitForNoText('交房租');
+  // 问候语使用个人资料里的名字
+  await page.clickText('设置');
+  await page.waitForText('数据与偏好');
+  await page.longPressLabel('账号 用户');
+  await page.waitForText('个人资料');
+  await page.fillByLabel('用户名', '小明');
+  await page.clickLabel('保存个人资料');
+  await page.waitForText('数据与偏好');
+  await page.clickText('首页');
+  await page.waitForText('Hi，小明');
 }
