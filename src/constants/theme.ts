@@ -73,3 +73,39 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/** v1.2.2 起的新间距刻度：一律 8 的倍数。 */
+export const Space = {
+  one: 8,
+  two: 16,
+  three: 24,
+  four: 32,
+  five: 48,
+} as const;
+
+/** 字号与行高，行高统一取 1.5 倍（PRDv1.2.2 第 5 节）。 */
+export const Type = {
+  display: { fontSize: 28, lineHeight: 42, fontWeight: '800' },
+  section: { fontSize: 22, lineHeight: 33, fontWeight: '700' },
+  row: { fontSize: 16, lineHeight: 24, fontWeight: '600' },
+  body: { fontSize: 14, lineHeight: 21, fontWeight: '400' },
+  caption: { fontSize: 12, lineHeight: 18, fontWeight: '400' },
+  micro: { fontSize: 11, lineHeight: 17, fontWeight: '500' },
+} as const;
+
+export type TypeToken = keyof typeof Type;
+
+/** 动效时长（毫秒）。减弱动效时统一归零，由 hook 处理。 */
+export const Motion = {
+  enter: 250,
+  move: 300,
+  check: 200,
+  ripple: 200,
+} as const;
+
+/** Dash 卡片尺寸（PRDv1.2.2 第 3.4 节）。 */
+export const DashCardSize = {
+  width: 264,
+  height: 163,
+  gap: 16,
+} as const;
