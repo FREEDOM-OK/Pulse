@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ExercisePicker } from '@/components/fitness/exercise-picker';
@@ -42,6 +43,8 @@ export default function FitnessScreen() {
   const [menuRecord, setMenuRecord] = useState<SetRecordRow | null>(null);
   const [markedDays, setMarkedDays] = useState<Record<string, boolean>>({});
   const [categoryById, setCategoryById] = useState<Record<number, string>>({});
+  /** 刚完成一组的动作，按钮上短暂显示对勾 2.5 秒。 */
+  const [flashId, setFlashId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const [nextItems, nextRecords, activity, exerciseList] = await Promise.all([
@@ -127,23 +130,37 @@ export default function FitnessScreen() {
               {formatDay(date)} · {isToday(date) ? `今日 ${totalSets} 组` : `${totalSets} 组`}
             </ThemedText>
           </View>
-          <Pressable
-            onPress={() => setPickerOpen(true)}
-            style={({ pressed }) => [
-              styles.headerButton,
-              { backgroundColor: theme.backgroundElement },
-              pressed && styles.pressed,
-            ]}>
-            <ThemedText type="small">添加</ThemedText>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="打开日历"
+              onPress={() => setCalendarOpen(true)}
+              style={({ pressed }) => [
+                styles.headerButton,
+                { backgroundColor: theme.backgroundElement },
+                pressed && styles.pressed,
+              ]}>
+              <SymbolView
+                name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
+                tintColor={theme.text}
+                size={20}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => setPickerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="添加训练"
+              style={({ pressed }) => [
+                styles.headerButton,
+                { backgroundColor: theme.backgroundElement },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="small">添加</ThemedText>
+            </Pressable>
+          </View>
         </View>
 
-        <DateStrip
-          value={date}
-          onChange={setDate}
-          onOpenCalendar={() => setCalendarOpen(true)}
-          marked={markedDays}
-        />
+        <DateStrip value={date} onChange={setDate} marked={markedDays} />
 
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.sectionHeader}>
@@ -163,7 +180,10 @@ export default function FitnessScreen() {
                   item={item}
                   category={item.exercise_id != null ? categoryById[item.exercise_id] : undefined}
                   doneSets={setsByItem.get(item.id) ?? 0}
+                  flash={flashId === item.id}
                   onComplete={(values) => {
+                    setFlashId(item.id);
+                    setTimeout(() => setFlashId((current) => (current === item.id ? null : current)), 2500);
                     completeSet(item.id, values, date)
                       .then(load)
                       .catch(() => undefined);
@@ -308,9 +328,17 @@ const styles = StyleSheet.create({
     lineHeight: 32,
   },
   headerButton: {
+    height: 48,
+    minWidth: 48,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
     borderRadius: Spacing.five,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   content: {
     paddingHorizontal: Spacing.three,

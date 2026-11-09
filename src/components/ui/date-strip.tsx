@@ -60,6 +60,7 @@ export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStrip
         contentContainerStyle={styles.scrollContent}>
         {days.map((date) => {
           const selected = date === value;
+          const isToday = date === todayStr();
           const weekday = WEEKDAY_SHORT[parseDate(date).getDay()];
           const hasRecord = Boolean(marked?.[date]);
           return (
@@ -72,6 +73,8 @@ export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStrip
               style={({ pressed }) => [
                 styles.item,
                 selected && { backgroundColor: theme.text },
+                // 今天用 1.5pt 描边标出（选中时不描边，避免双重边框）。
+                isToday && !selected && { borderWidth: 1.5, borderColor: theme.text },
                 pressed && styles.pressed,
               ]}>
               <ThemedText

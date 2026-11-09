@@ -21,6 +21,8 @@ interface TrainingCardProps {
   /** 长按卡片时打开「删除」菜单。 */
   onMenu: () => void;
   onUpdate: (patch: { reps?: number; weight?: number; durationMinutes?: number }) => void;
+  /** 刚完成一组时短暂显示对勾（2.5 秒后自动消失）。 */
+  flash?: boolean;
 }
 
 /** 待训练卡片：按组动作填写次数与重量，按时间动作填写运动分钟数。 */
@@ -31,6 +33,7 @@ export function TrainingCard({
   onComplete,
   onMenu,
   onUpdate,
+  flash = false,
 }: TrainingCardProps) {
   const theme = useTheme();
   const isDuration = item.tracking_type === 'duration';
@@ -131,7 +134,7 @@ export function TrainingCard({
               pressed && styles.pressed,
             ]}>
             <ThemedText type="smallBold" style={{ color: theme.background }}>
-              完成
+              {flash ? '✓' : '完成'}
             </ThemedText>
           </Pressable>
         </View>

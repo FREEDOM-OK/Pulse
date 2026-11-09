@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +11,8 @@ import {
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { WheelPicker } from '@/components/ui/wheel-picker';
 import { ModuleColors, Spacing } from '@/constants/theme';
 import { getProfile, saveProfile } from '@/db/repositories/profile';
 import {
@@ -35,6 +37,58 @@ export default function ProfileScreen() {
   const [month, setMonth] = useState('');
   const [day, setDay] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+
+  // 生日改成三列滚轮（PRDv1.2.2 第 6.2 节）。
+  const [birthdayOpen, setBirthdayOpen] = useState(false);
+  const [draftBirthday, setDraftBirthday] = useState({ year: '', month: '', day: '' });
+
+  const nowYear = new Date().getFullYear();
+  const yearOptions = useMemo(
+    () =>
+      Array.from({ length: nowYear - 1939 }, (_, index) => nowYear - index).map((value) => ({
+        value: String(value),
+        label: `${value} 年`,
+      })),
+    [nowYear]
+  );
+  const monthOptions = useMemo(
+    () => Array.from({ length: 12 }, (_, index) => index + 1).map((value) => ({
+      value: String(value).padStart(2, '0'),
+      label: `${value} 月`,
+    })),
+    []
+  );
+  const draftDayCount = useMemo(() => {
+    const y = Number(draftBirthday.year);
+    const m = Number(draftBirthday.month);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || y < 1900 || m < 1) return 31;
+    return new Date(y, m, 0).getDate();
+  }, [draftBirthday.year, draftBirthday.month]);
+  const dayOptions = useMemo(
+    () =>
+      Array.from({ length: draftDayCount }, (_, index) => index + 1).map((value) => ({
+        value: String(value).padStart(2, '0'),
+        label: `${value} 日`,
+      })),
+    [draftDayCount]
+  );
+
+  const openBirthday = () => {
+    const fallbackYear = year || String(nowYear - 20);
+    const fallbackMonth = month || '01';
+    const fallbackDay = day || '01';
+    setDraftBirthday({ year: fallbackYear, month: fallbackMonth, day: fallbackDay });
+    setBirthdayOpen(true);
+  };
+
+  const confirmBirthday = () => {
+    setYear(draftBirthday.year);
+    setMonth(draftBirthday.month);
+    setDay(draftBirthday.day);
+    setBirthdayOpen(false);
+  };
+
+  const birthdayLabel = year && month && day ? `${year} 年 ${month} 月 ${day} 日` : '选填';
 
   useEffect(() => {
     getProfile()
@@ -175,38 +229,18 @@ export default function ProfileScreen() {
           生日
         </ThemedText>
         <ThemedView type="backgroundElement" style={styles.group}>
-          <View style={styles.birthdayRow}>
-            <TextInput
-              value={year}
-              onChangeText={setYear}
-              keyboardType="number-pad"
-              maxLength={4}
-              accessibilityLabel="生日年份"
-              placeholder="年"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.birthdayInput, { backgroundColor: theme.background, color: theme.text }]}
-            />
-            <TextInput
-              value={month}
-              onChangeText={setMonth}
-              keyboardType="number-pad"
-              maxLength={2}
-              accessibilityLabel="生日月份"
-              placeholder="月"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.birthdayInput, { backgroundColor: theme.background, color: theme.text }]}
-            />
-            <TextInput
-              value={day}
-              onChangeText={setDay}
-              keyboardType="number-pad"
-              maxLength={2}
-              accessibilityLabel="生日日期"
-              placeholder="日"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.birthdayInput, { backgroundColor: theme.background, color: theme.text }]}
-            />
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`生日 ${birthdayLabel}`}
+            onPress={openBirthday}
+            style={({ pressed }) => [styles.birthdayButton, pressed && styles.pressed]}>
+            <ThemedText type="small" themeColor={year && month && day ? 'text' : 'textSecondary'}>
+              {birthdayLabel}
+            </ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              ›
+            </ThemedText>
+          </Pressable>
         </ThemedView>
 
         <Pressable
@@ -226,6 +260,55 @@ export default function ProfileScreen() {
           </ThemedText>
         </Pressable>
       </ScrollView>
+
+      <BottomSheet visible={birthdayOpen} onClose={() => setBirthdayOpen(false)} heightRatio={0.5}>
+        <ThemedText type="smallBold" style={styles.sheetTitle}>
+          生日
+        </ThemedText>
+        <WheelPicker
+          columns={[
+            { key: 'year', options: yearOptions },
+            { key: 'month', options: monthOptions },
+            { key: 'day', options: dayOptions },
+          ]}
+          value={draftBirthday}
+          onChange={(next) =>
+            setDraftBirthday((current) => {
+              const day = next.day ?? current.day;
+              const limit = (() => {
+                const y = Number(next.year ?? current.year);
+                const m = Number(next.month ?? current.month);
+                return Number.isFinite(y) && Number.isFinite(m) ? new Date(y, m, 0).getDate() : 31;
+              })();
+              return {
+                year: next.year ?? current.year,
+                month: next.month ?? current.month,
+                day: Number(day) > limit ? String(limit).padStart(2, '0') : day,
+              };
+            })
+          }
+        />
+        <View style={styles.sheetActions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setBirthdayOpen(false)}
+            style={({ pressed }) => [styles.sheetButton, pressed && styles.pressed]}>
+            <ThemedText type="small">取消</ThemedText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={confirmBirthday}
+            style={({ pressed }) => [
+              styles.sheetButton,
+              { backgroundColor: theme.text },
+              pressed && styles.pressed,
+            ]}>
+            <ThemedText type="small" style={{ color: theme.background }}>
+              确定
+            </ThemedText>
+          </Pressable>
+        </View>
+      </BottomSheet>
     </ThemedView>
   );
 }
@@ -269,6 +352,29 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  birthdayButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  sheetTitle: {
+    paddingHorizontal: Spacing.one,
+    paddingBottom: Spacing.two,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingTop: Spacing.two,
+  },
+  sheetButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   input: {
     fontSize: 16,

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,8 +11,10 @@ import { Space, Type } from '@/constants/theme';
 import {
   getCardStyle,
   getDashMode,
+  getHideCompleted,
   setCardStyle,
   setDashMode,
+  setHideCompleted,
 } from '@/db/repositories/settings';
 import {
   CARD_STYLES,
@@ -32,6 +34,7 @@ export default function PersonalizeScreen() {
   const { preference, setPreference } = useThemePreference();
   const [dashMode, setDashModeState] = useState<DashMode>('carousel');
   const [cardStyle, setCardStyleState] = useState<CardStyle>('default');
+  const [hideCompleted, setHideCompletedState] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -40,6 +43,9 @@ export default function PersonalizeScreen() {
         .catch(() => undefined);
       getCardStyle()
         .then(setCardStyleState)
+        .catch(() => undefined);
+      getHideCompleted()
+        .then(setHideCompletedState)
         .catch(() => undefined);
     }, [])
   );
@@ -165,6 +171,31 @@ export default function PersonalizeScreen() {
           <ThemedText type="small" themeColor="textSecondary" style={styles.footnote}>
             当前主题：{themeLabel}
           </ThemedText>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            列表
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            <View style={styles.switchRow}>
+              <View style={styles.switchText}>
+                <ThemedText type="small">隐藏已完成</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  勾选后不再显示在任务列表里
+                </ThemedText>
+              </View>
+              <Switch
+                accessibilityLabel="隐藏已完成"
+                value={hideCompleted}
+                onValueChange={(next) => {
+                  setHideCompletedState(next);
+                  setHideCompleted(next)
+                    .then(() => bumpDataVersion())
+                    .catch(() => undefined);
+                }}
+                trackColor={{ true: theme.text, false: theme.background }}
+              />
+            </View>
+          </ThemedView>
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -204,6 +235,17 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Space.two,
+    paddingVertical: Space.two,
+  },
+  switchText: {
+    flex: 1,
+    gap: 2,
   },
   pressed: {
     opacity: 0.7,
