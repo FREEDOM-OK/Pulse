@@ -2,6 +2,7 @@ import { getDriver } from '../connection';
 import { ALL_TABLES, SCHEMA_VERSION } from '../schema';
 import { seedExercises } from '../seed';
 import { resetProfile } from './profile';
+import type { CourseExceptionRow } from '../types';
 import type { SqlParam } from '../driver';
 
 export const BACKUP_APP_ID = 'my-life-app';
@@ -20,6 +21,7 @@ export interface BackupData {
   memos: Record<string, unknown>[];
   courses: Record<string, unknown>[];
   courseSlots: Record<string, unknown>[];
+  courseExceptions: Record<string, unknown>[];
   settings: Record<string, string>;
 }
 
@@ -184,6 +186,7 @@ export async function exportBackup(): Promise<BackupPayload> {
     memos,
     courses,
     courseSlots,
+    courseExceptions,
   ] = await Promise.all([
       driver.getAllAsync<TaskRow>('SELECT * FROM tasks ORDER BY id ASC'),
       driver.getAllAsync<ExerciseRow>('SELECT * FROM exercises WHERE is_preset = 0 ORDER BY id ASC'),
@@ -195,6 +198,7 @@ export async function exportBackup(): Promise<BackupPayload> {
       driver.getAllAsync<MemoRow>('SELECT * FROM memos ORDER BY id ASC'),
       driver.getAllAsync<CourseRow>('SELECT * FROM courses ORDER BY id ASC'),
       driver.getAllAsync<CourseSlotRow>('SELECT * FROM course_slots ORDER BY id ASC'),
+      driver.getAllAsync<CourseExceptionRow>('SELECT * FROM course_exceptions ORDER BY id ASC'),
     ]);
 
   const settingsRows = await driver.getAllAsync<{ key: string; value: string }>(
@@ -306,6 +310,12 @@ export async function exportBackup(): Promise<BackupPayload> {
         weeks: row.weeks,
         createdAt: row.created_at,
       })),
+      courseExceptions: courseExceptions.map((row) => ({
+        id: row.id,
+        courseId: row.course_id,
+        week: row.week,
+        createdAt: row.created_at,
+      })),
       settings: Object.fromEntries(
         settingsRows
           .filter((row) => row.key !== PROFILE_AVATAR_KEY)
@@ -383,6 +393,10 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
   const courseSlots = isV4 && Array.isArray(dataObject.courseSlots)
     ? (dataObject.courseSlots as Record<string, unknown>[])
     : [];
+  // v5 起才有「按周跳过」；更早版本视为空。
+  const courseExceptions = version >= 5 && Array.isArray(dataObject.courseExceptions)
+    ? (dataObject.courseExceptions as Record<string, unknown>[])
+    : [];
 
   return {
     app: BACKUP_APP_ID,
@@ -399,6 +413,7 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
       memos,
       courses,
       courseSlots,
+      courseExceptions,
       settings: normalizedSettings,
     },
   };
@@ -416,6 +431,7 @@ export function summarizeBackup(payload: BackupPayload) {
     memos: payload.data.memos.length,
     courses: payload.data.courses.length,
     courseSlots: payload.data.courseSlots.length,
+    courseExceptions: payload.data.courseExceptions.length,
     exercises: payload.data.exercises.length,
   };
 }
@@ -629,6 +645,17 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
           value<number>(row, 'endPeriod') ?? 1,
           normalizeWeeksField(row.weeks),
           value<string>(row, 'createdAt'),
+        ]
+      );
+    }
+
+    for (const row of data.courseExceptions) {
+      await driver.runAsync(
+        'INSERT OR IGNORE INTO course_exceptions (course_id, week, created_at) VALUES (?, ?, ?)',
+        [
+          remap(courseIds, row, 'courseId'),
+          value<number>(row, 'week') ?? 1,
+          value<string>(row, 'createdAt') || new Date().toISOString(),
         ]
       );
     }

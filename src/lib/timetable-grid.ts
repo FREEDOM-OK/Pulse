@@ -2,11 +2,13 @@
 
 import {
   isSlotActive,
-  slotStartTime,
+  type CourseExceptionLike,
   type CourseLike,
   type CourseOnDate,
   DEFAULT_COURSE_COLOR,
 } from './timetable';
+import { periodRange } from './timetable-periods';
+import type { PeriodTime } from '@/db/types';
 
 export const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 export const WEEKDAY_FULL_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -119,13 +121,19 @@ export function coursesForWeekday(
   weekday: number,
   courses: CourseLike[],
   week: number,
-  periodTimes: string[]
+  periodTimes: PeriodTime[],
+  exceptions: CourseExceptionLike[] = []
 ): CourseOnDate[] {
+  const skipped = new Set(
+    exceptions.filter((item) => item.week === week).map((item) => item.courseId)
+  );
   const result: CourseOnDate[] = [];
   for (const course of courses) {
+    if (skipped.has(course.id)) continue;
     for (const slot of course.slots) {
       if (slot.weekday !== weekday) continue;
       if (!isSlotActive(slot.weeks, week)) continue;
+      const range = periodRange(periodTimes, slot.startPeriod, slot.endPeriod);
       result.push({
         courseId: course.id,
         slotId: slot.id,
@@ -134,7 +142,7 @@ export function coursesForWeekday(
         weekday,
         startPeriod: slot.startPeriod,
         endPeriod: slot.endPeriod,
-        time: slotStartTime(periodTimes, slot.startPeriod),
+        time: range.start && range.end ? `${range.start} – ${range.end}` : '',
       });
     }
   }

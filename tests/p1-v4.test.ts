@@ -200,11 +200,11 @@ describe('P0 设置扩展', () => {
     expect(await getTermConfig()).toEqual({ startDate: '2026-09-07', totalWeeks: 20 });
   });
 
-  it('节次时间默认 8 节', async () => {
+  it('节次时间默认 11 节且带起止时间', async () => {
     await createTestContext();
     const times = await getPeriodTimes();
-    expect(times).toHaveLength(8);
-    expect(times[0]).toBe('08:00');
+    expect(times).toHaveLength(11);
+    expect(times[0]).toEqual({ start: '08:00', end: '08:45' });
   });
 });
 
@@ -276,10 +276,14 @@ describe('P0 课表推演（纯函数）', () => {
         ],
       },
     ];
-    const rows = coursesOnDate('2026-11-09', courses, '2026-11-09', ['08:00', '08:55', '10:00']);
+    const rows = coursesOnDate('2026-11-09', courses, '2026-11-09', [
+      { start: '08:00', end: '08:45' },
+      { start: '08:55', end: '09:40' },
+      { start: '10:00', end: '10:45' },
+    ]);
 
     expect(rows.map((row) => row.slotId)).toEqual([12, 11]);
-    expect(rows[0].time).toBe('08:00');
+    expect(rows[0].time).toBe('08:00 – 09:40');
     expect(rows[1].courseId).toBe(1);
   });
 });
@@ -296,7 +300,7 @@ describe('P0 备份 v4', () => {
     await createTask({ date: DATE, title: '带置顶的任务', pinned: true });
 
     const before = await exportBackup();
-    expect(before.schemaVersion).toBe(4);
+    expect(before.schemaVersion).toBe(5);
     expect(before.data.memos).toHaveLength(1);
     expect(before.data.courses).toHaveLength(1);
     expect(before.data.courseSlots).toHaveLength(1);

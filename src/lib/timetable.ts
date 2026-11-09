@@ -1,6 +1,8 @@
 /** 课表相关的纯函数：周次、单双周、节次重叠。 */
 
 import { parseDate } from './date';
+import { periodRange } from './timetable-periods';
+import type { PeriodTime } from '@/db/types';
 
 /** 周一 = 1 … 周日 = 7。 */
 export function weekdayOf(dateStr: string): number {
@@ -47,8 +49,40 @@ export function periodsOverlap(
 }
 
 /** 第 startPeriod 节的开始时间；没有配置时返回空串。 */
-export function slotStartTime(periodTimes: string[], startPeriod: number): string {
-  return periodTimes[startPeriod - 1] ?? '';
+export function slotStartTime(periodTimes: PeriodTime[], startPeriod: number): string {
+  return periodTimes[startPeriod - 1]?.start ?? '';
+}
+
+/**
+ * 周次文案：
+ * - 空数组（= 每周）或覆盖全部周次 →「第 1 – 18 周」
+ * - 全奇数 →「单周 第 1 – 18 周」；全偶数 →「双周 第 1 – 18 周」
+ * - 其它 → 合并连续区间，如「第 1 – 3、5、9 – 10 周」
+ */
+export function formatWeeksRange(weeks: number[], totalWeeks: number): string {
+  const total = Math.max(1, totalWeeks);
+  const sorted = normalizeWeeks(weeks);
+  if (sorted.length === 0 || sorted.length >= total) return `第 1 – ${total} 周`;
+
+  const allOdd = sorted.every((week) => week % 2 === 1);
+  const allEven = sorted.every((week) => week % 2 === 0);
+  if (allOdd && sorted.length > 1) return `单周 第 ${sorted[0]} – ${sorted[sorted.length - 1]} 周`;
+  if (allEven) return `双周 第 ${sorted[0]} – ${sorted[sorted.length - 1]} 周`;
+
+  const parts: string[] = [];
+  let start = sorted[0];
+  let prev = sorted[0];
+  for (const week of sorted.slice(1)) {
+    if (week === prev + 1) {
+      prev = week;
+      continue;
+    }
+    parts.push(start === prev ? `${start}` : `${start} – ${prev}`);
+    start = week;
+    prev = week;
+  }
+  parts.push(start === prev ? `${start}` : `${start} – ${prev}`);
+  return `第 ${parts.join('、')} 周`;
 }
 
 export const DEFAULT_COURSE_COLOR = '#4C8DF6';
@@ -74,25 +108,37 @@ export interface CourseOnDate {
   weekday: number;
   startPeriod: number;
   endPeriod: number;
-  /** 开始时间 HH:mm，取不到时为空串。 */
+  /** 起止时间 "HH:mm – HH:mm"，取不到时为空串。 */
   time: string;
 }
 
-/** 某一天实际要上的课（已过滤单双周与周次），按开始节次升序。 */
+/** 某门课在某一周被跳过。 */
+export interface CourseExceptionLike {
+  courseId: number;
+  week: number;
+}
+
+/** 某一天实际要上的课（已过滤单双周、周次与「本周删除」），按开始节次升序。 */
 export function coursesOnDate(
   date: string,
   courses: CourseLike[],
   termStart: string | null,
-  periodTimes: string[]
+  periodTimes: PeriodTime[],
+  exceptions: CourseExceptionLike[] = []
 ): CourseOnDate[] {
   const weekday = weekdayOf(date);
   const week = weekOfTerm(date, termStart);
+  const skipped = new Set(
+    exceptions.filter((item) => item.week === week).map((item) => item.courseId)
+  );
   const result: CourseOnDate[] = [];
 
   for (const course of courses) {
+    if (skipped.has(course.id)) continue;
     for (const slot of course.slots) {
       if (slot.weekday !== weekday) continue;
       if (!isSlotActive(slot.weeks, week)) continue;
+      const range = periodRange(periodTimes, slot.startPeriod, slot.endPeriod);
       result.push({
         courseId: course.id,
         slotId: slot.id,
@@ -101,7 +147,7 @@ export function coursesOnDate(
         weekday: slot.weekday,
         startPeriod: slot.startPeriod,
         endPeriod: slot.endPeriod,
-        time: slotStartTime(periodTimes, slot.startPeriod),
+        time: range.start && range.end ? `${range.start} – ${range.end}` : '',
       });
     }
   }

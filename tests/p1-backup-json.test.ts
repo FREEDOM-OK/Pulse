@@ -23,6 +23,7 @@ const SAMPLE: BackupPayload = {
     memos: [],
     courses: [],
     courseSlots: [],
+    courseExceptions: [],
     settings: { theme: 'dark', 'fitness.defaultReps': '12', 'profile.name': '小明' },
   },
 };

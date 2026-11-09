@@ -79,10 +79,13 @@ describe('万事卡设置（PRDv1.2 P6）', () => {
     expect(next.totalWeeks).toBe(20);
 
     const times = await getPeriodTimes();
-    expect(times.length).toBe(8);
-    expect(times[0]).toBe('08:00');
-    await setPeriodTimes(['08:10', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']);
-    expect((await getPeriodTimes())[0]).toBe('08:10');
+    expect(times.length).toBe(11);
+    expect(times[0]).toEqual({ start: '08:00', end: '08:45' });
+    await setPeriodTimes([
+      { start: '08:10', end: '08:55' },
+      { start: '09:00', end: '09:45' },
+    ]);
+    expect((await getPeriodTimes())[0]).toEqual({ start: '08:10', end: '08:55' });
   });
 });
 

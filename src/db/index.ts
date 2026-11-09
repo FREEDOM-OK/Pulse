@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { configureDriver } from './connection';
 import { migrate } from './migrations';
 import { migrateLegacyQuickMemo } from './migrations-v4';
+import { migratePeriodTimesV5 } from './migrations-v5';
 import { seedExercises } from './seed';
 
 let initPromise: Promise<void> | null = null;
@@ -39,5 +40,6 @@ async function doInit(): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL');
   await migrate();
   await migrateLegacyQuickMemo();
+  await migratePeriodTimesV5();
   await seedExercises();
 }

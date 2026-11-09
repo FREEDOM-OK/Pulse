@@ -21,9 +21,9 @@ import { useTheme } from '@/hooks/use-theme';
 import { parseDate, todayStr, weekdayLabel } from '@/lib/date';
 import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
 import { weekdayOf, weekOfTerm } from '@/lib/timetable';
+import { DEFAULT_PERIOD_TIMES, findPeriodOverlap } from '@/lib/timetable-periods';
+import type { PeriodTime } from '@/db/types';
 import { WEEKDAY_LABELS } from '@/lib/timetable-grid';
-
-const PERIOD_COUNT = 8;
 
 type CourseFormState = {
   visible: boolean;
@@ -42,7 +42,7 @@ export default function TimetableScreen() {
 
   const [courses, setCourses] = useState<CourseWithSlots[]>([]);
   const [term, setTerm] = useState<TermConfig>({ startDate: null, totalWeeks: 18 });
-  const [periodTimes, setPeriods] = useState<string[]>([]);
+  const [periodTimes, setPeriods] = useState<PeriodTime[]>([]);
   const [week, setWeek] = useState(1);
   const [includeWeekend, setIncludeWeekend] = useState(false);
 
@@ -406,23 +406,21 @@ function PeriodSheet({
   onSaved,
 }: {
   visible: boolean;
-  initial: string[];
+  initial: PeriodTime[];
   onClose: () => void;
-  onSaved: (next: string[]) => void;
+  onSaved: (next: PeriodTime[]) => void;
 }) {
-  const [times, setTimes] = useState<string[]>([]);
+  const [times, setTimes] = useState<PeriodTime[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
-    const padded = [...initial];
-    while (padded.length < PERIOD_COUNT) padded.push('');
-    setTimes(padded.slice(0, PERIOD_COUNT));
+    setTimes(initial.length > 0 ? initial.map((time) => ({ ...time })) : [...DEFAULT_PERIOD_TIMES]);
     setError(null);
   }, [visible, initial]);
 
-  const update = (index: number, value: string) => {
-    setTimes((current) => current.map((item, i) => (i === index ? value : item)));
+  const update = (index: number, patch: Partial<PeriodTime>) => {
+    setTimes((current) => current.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   };
 
   return (
@@ -436,25 +434,42 @@ function PeriodSheet({
           <AppButton
             label="保存"
             onPress={() => {
-              if (times.some((time) => !/^\d{1,2}:\d{2}$/.test(time.trim()))) {
-                setError('每节都要填 HH:MM');
+              const conflict = findPeriodOverlap(times);
+              if (conflict !== null) {
+                setError(`第 ${conflict} 节与第 ${conflict - 1} 节时间重叠`);
                 return;
               }
-              onSaved(times.map((time) => time.trim()));
+              onSaved(times);
             }}
           />
         </View>
       }>
       {times.map((time, index) => (
         <View key={index} style={modalStyles.field}>
-          <TextField
-            label={`第 ${index + 1} 节`}
-            placeholder="08:00"
-            value={time}
-            onChangeText={(value) => update(index, value)}
-            autoCapitalize="none"
-            keyboardType="numbers-and-punctuation"
-          />
+          <ThemedText type="small" themeColor="textSecondary">
+            第 {index + 1} 节
+          </ThemedText>
+          <View style={styles.timeInputRow}>
+            <View style={styles.timeInput}>
+              <TextField
+                placeholder="08:00"
+                value={time.start}
+                onChangeText={(value) => update(index, { start: value })}
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+            <ThemedText themeColor="textSecondary">–</ThemedText>
+            <View style={styles.timeInput}>
+              <TextField
+                placeholder="08:45"
+                value={time.end}
+                onChangeText={(value) => update(index, { end: value })}
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+          </View>
         </View>
       ))}
       {error ? (
@@ -469,7 +484,7 @@ function PeriodSheet({
 interface OnboardingProps {
   step: number | null;
   term: TermConfig;
-  periodTimes: string[];
+  periodTimes: PeriodTime[];
   onStep: (step: number | null) => void;
   onClose: () => void;
   onFinish: () => void;
@@ -554,7 +569,7 @@ function OnboardingSheet({ step, term, periodTimes, onStep, onClose, onFinish }:
       {top === 1 ? (
         <View style={modalStyles.field}>
           <ThemedText type="small" themeColor="textSecondary">
-            默认 8 节：{periodTimes.slice(0, 4).join(' / ')} … 可以在「节次」里改。
+            默认 8 节：{periodTimes.slice(0, 4).map((time) => `${time.start}–${time.end}`).join(' / ')} … 可以在「节次」里改。
           </ThemedText>
         </View>
       ) : null}
@@ -663,6 +678,14 @@ const styles = StyleSheet.create({
   weeksValue: {
     minWidth: 32,
     textAlign: 'center',
+  },
+  timeInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  timeInput: {
+    flex: 1,
   },
   error: {
     color: '#D64545',

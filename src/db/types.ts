@@ -121,6 +121,21 @@ export interface CourseSlotRow {
   created_at: string;
 }
 
+/** 一节课的起止时间（HH:MM）。 */
+export interface PeriodTime {
+  start: string;
+  end: string;
+}
+
+/** 某门课在某一周被跳过（仅本周删除）。 */
+export interface CourseExceptionRow {
+  id: number;
+  course_id: number;
+  /** 学期第几周，1 起。 */
+  week: number;
+  created_at: string;
+}
+
 /** 今日列表排序模式。 */
 export type SortMode = 'memo-first' | 'task-first' | 'mixed';
 

@@ -193,7 +193,21 @@ CREATE INDEX IF NOT EXISTS idx_course_slots_course ON course_slots(course_id);
 CREATE INDEX IF NOT EXISTS idx_course_slots_weekday ON course_slots(weekday);
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4];
+/**
+ * v1.2.1：按周跳过课程（「仅本周删除」）。
+ */
+export const MIGRATION_V5 = `
+CREATE TABLE IF NOT EXISTS course_exceptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  week INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_course_exceptions_course_week ON course_exceptions(course_id, week);
+`;
+
+export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
@@ -205,6 +219,7 @@ export const ALL_TABLES = [
   'wishlist',
   'tasks',
   'memos',
+  'course_exceptions',
   'course_slots',
   'courses',
   'events',

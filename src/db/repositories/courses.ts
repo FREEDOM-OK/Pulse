@@ -1,5 +1,5 @@
 import { getDriver } from '../connection';
-import type { CourseRow, CourseSlotRow } from '../types';
+import type { CourseExceptionRow, CourseRow, CourseSlotRow } from '../types';
 import { nowIso } from '@/lib/date';
 import { normalizeWeeks, periodsOverlap, weeksOverlap } from '@/lib/timetable';
 
@@ -154,9 +154,50 @@ export async function updateCourse(id: number, input: CreateCourseInput): Promis
 export async function deleteCourse(id: number): Promise<void> {
   const driver = getDriver();
   await driver.withTransactionAsync(async () => {
+    await driver.runAsync('DELETE FROM course_exceptions WHERE course_id = ?', [id]);
     await driver.runAsync('DELETE FROM course_slots WHERE course_id = ?', [id]);
     await driver.runAsync('DELETE FROM courses WHERE id = ?', [id]);
   });
+}
+
+// —— v1.2.1：按周跳过课程 ——
+
+export interface CourseException {
+  id: number;
+  courseId: number;
+  week: number;
+}
+
+export async function listCourseExceptions(): Promise<CourseException[]> {
+  const rows = await getDriver().getAllAsync<CourseExceptionRow>(
+    'SELECT * FROM course_exceptions ORDER BY course_id ASC, week ASC'
+  );
+  return rows.map((row) => ({ id: row.id, courseId: row.course_id, week: row.week }));
+}
+
+/** 某门课被跳过的周次列表。 */
+export async function listExceptionsOfCourse(courseId: number): Promise<number[]> {
+  const rows = await getDriver().getAllAsync<{ week: number }>(
+    'SELECT week FROM course_exceptions WHERE course_id = ? ORDER BY week ASC',
+    [courseId]
+  );
+  return rows.map((row) => row.week);
+}
+
+/** 记录「这门课第 week 周不上课」；重复写入不会报错。 */
+export async function addCourseException(courseId: number, week: number): Promise<void> {
+  const safeWeek = Math.max(1, Math.round(week));
+  await getDriver().runAsync(
+    'INSERT OR IGNORE INTO course_exceptions (course_id, week, created_at) VALUES (?, ?, ?)',
+    [courseId, safeWeek, nowIso()]
+  );
+}
+
+export async function removeCourseException(courseId: number, week: number): Promise<void> {
+  await getDriver().runAsync('DELETE FROM course_exceptions WHERE course_id = ? AND week = ?', [
+    courseId,
+    Math.max(1, Math.round(week)),
+  ]);
 }
 
 export interface SlotConflictInput {

@@ -83,16 +83,25 @@ describe('课表网格纯函数', () => {
   ];
 
   it('按星期取课并过滤单双周，默认颜色补齐', () => {
-    const times = ['08:00', '08:55', '10:00', '10:55', '14:00', '14:55', '16:00', '16:55'];
+    const times = [
+      { start: '08:00', end: '08:45' },
+      { start: '08:55', end: '09:40' },
+      { start: '10:00', end: '10:45' },
+      { start: '10:55', end: '11:40' },
+      { start: '14:00', end: '14:45' },
+      { start: '14:55', end: '15:40' },
+      { start: '16:00', end: '16:45' },
+      { start: '16:55', end: '17:40' },
+    ];
 
     const oddWeek = coursesForWeekday(1, courses, 1, times);
     expect(oddWeek.map((item) => item.slotId)).toEqual([1, 4]);
     expect(oddWeek[1].color).toBe('#4C8DF6');
-    expect(oddWeek[0].time).toBe('08:00');
+    expect(oddWeek[0].time).toBe('08:00 – 09:40');
 
     const evenWeek = coursesForWeekday(1, courses, 2, times);
     expect(evenWeek.map((item) => item.slotId)).toEqual([1, 2]);
-    expect(evenWeek[1].time).toBe('10:00');
+    expect(evenWeek[1].time).toBe('10:00 – 11:40');
 
     expect(coursesForWeekday(6, courses, 1, times)).toHaveLength(1);
     expect(coursesForWeekday(7, courses, 1, times)).toHaveLength(0);

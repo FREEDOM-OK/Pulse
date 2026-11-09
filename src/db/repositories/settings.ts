@@ -4,8 +4,15 @@ import {
   HOME_CARD_IDS,
   SORT_MODES,
   type HomeCardId,
+  type PeriodTime,
   type SortMode,
 } from '../types';
+import {
+  DEFAULT_PERIOD_COUNT,
+  clampPeriodCount,
+  clampRowHeight,
+  normalizePeriodTimes,
+} from '@/lib/timetable-periods';
 
 export type ThemeSetting = 'system' | 'light' | 'dark';
 
@@ -86,17 +93,9 @@ const TODAY_SORT_KEY = 'today.sortMode';
 const TERM_START_KEY = 'term.startDate';
 const TERM_WEEKS_KEY = 'term.totalWeeks';
 const PERIOD_TIMES_KEY = 'period.times';
-
-export const DEFAULT_PERIOD_TIMES: string[] = [
-  '08:00',
-  '08:55',
-  '10:00',
-  '10:55',
-  '14:00',
-  '14:55',
-  '16:00',
-  '16:55',
-];
+const PERIOD_COUNT_KEY = 'timetable.periodCount';
+const SHOW_WEEKEND_KEY = 'timetable.showWeekend';
+const ROW_HEIGHT_KEY = 'timetable.rowHeight';
 
 export const DEFAULT_TOTAL_WEEKS = 18;
 
@@ -156,16 +155,65 @@ export async function setTermConfig(config: TermConfig): Promise<void> {
   ]);
 }
 
-/** 每天各节的开始时间（HH:mm 数组）。未设置时回默认作息。 */
-export async function getPeriodTimes(): Promise<string[]> {
-  const raw = await getSetting(PERIOD_TIMES_KEY);
-  const parsed = parseStringArray(raw);
-  if (!parsed || parsed.length === 0) return [...DEFAULT_PERIOD_TIMES];
-  return parsed.map((time) => (/^\d{2}:\d{2}$/.test(time) ? time : ''));
+/** 每天各节的起止时间（旧数据是纯开始时间数组，读时自动补齐结束时间）。 */
+export async function getPeriodTimes(): Promise<PeriodTime[]> {
+  const [raw, count] = await Promise.all([getSetting(PERIOD_TIMES_KEY), getPeriodCount()]);
+  return normalizePeriodTimes(parseJsonValue(raw), count);
 }
 
-export async function setPeriodTimes(times: string[]): Promise<void> {
-  await setSetting(PERIOD_TIMES_KEY, JSON.stringify(times));
+export async function setPeriodTimes(times: unknown): Promise<void> {
+  const count = await getPeriodCount();
+  const normalized = normalizePeriodTimes(times, count);
+  await setSetting(PERIOD_TIMES_KEY, JSON.stringify(normalized));
+}
+
+/** 课表节数（1–16，默认 11）。 */
+export async function getPeriodCount(): Promise<number> {
+  const raw = await getSetting(PERIOD_COUNT_KEY);
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || raw === null) return DEFAULT_PERIOD_COUNT;
+  return clampPeriodCount(parsed);
+}
+
+export async function setPeriodCount(value: number): Promise<void> {
+  const next = clampPeriodCount(value);
+  await setSetting(PERIOD_COUNT_KEY, String(next));
+  // 节数变化后把节次时间补齐/截断到新长度，避免网格与时间表长度不一致。
+  const raw = await getSetting(PERIOD_TIMES_KEY);
+  await setSetting(PERIOD_TIMES_KEY, JSON.stringify(normalizePeriodTimes(parseJsonValue(raw), next)));
+}
+
+/** 是否显示周六周日（默认显示）。 */
+export async function getShowWeekend(): Promise<boolean> {
+  const raw = await getSetting(SHOW_WEEKEND_KEY);
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return true;
+}
+
+export async function setShowWeekend(value: boolean): Promise<void> {
+  await setSetting(SHOW_WEEKEND_KEY, value ? 'true' : 'false');
+}
+
+/** 课程格子高度（dp，32–128，默认 64）。 */
+export async function getRowHeight(): Promise<number> {
+  const raw = await getSetting(ROW_HEIGHT_KEY);
+  const parsed = Number(raw);
+  if (raw === null || !Number.isFinite(parsed)) return 64;
+  return clampRowHeight(parsed);
+}
+
+export async function setRowHeight(value: number): Promise<void> {
+  await setSetting(ROW_HEIGHT_KEY, String(clampRowHeight(value)));
+}
+
+function parseJsonValue(raw: string | null): unknown {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function parseStringArray(raw: string | null): string[] | null {

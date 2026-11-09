@@ -1,8 +1,9 @@
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import type { PeriodTime } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
-import type { CourseLike } from '@/lib/timetable';
+import type { CourseExceptionLike, CourseLike } from '@/lib/timetable';
 import {
   blockRect,
   coursesForWeekday,
@@ -18,8 +19,10 @@ const MIN_DAY_WIDTH = 56;
 interface WeekGridProps {
   courses: CourseLike[];
   week: number;
-  periodTimes: string[];
+  periodTimes: PeriodTime[];
   includeWeekend: boolean;
+  /** 「仅本周删除」的课程。 */
+  exceptions?: CourseExceptionLike[];
   /** 从今日计划点进来的课程：块加描边高亮。 */
   highlightCourseId?: number | null;
   /** 周日 = 7，用来给今天的列加淡底色。 */
@@ -35,6 +38,7 @@ export function WeekGrid({
   week,
   periodTimes,
   includeWeekend,
+  exceptions = [],
   highlightCourseId,
   todayWeekday,
   onPressCourse,
@@ -69,19 +73,20 @@ export function WeekGrid({
       <View style={styles.bodyRow}>
         <View style={{ width: TIME_COLUMN }}>
           {periodTimes.map((time, index) => (
-            <View key={`${time}-${index}`} style={[styles.timeCell, { height: PERIOD_HEIGHT }]}>
+            <View key={`${time.start}-${index}`} style={[styles.timeCell, { height: PERIOD_HEIGHT }]}>
+              <ThemedText style={[styles.periodNo, { color: theme.text }]}>{index + 1}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.timeText}>
-                {time}
+                {time.start}
               </ThemedText>
-              <ThemedText style={[styles.periodNo, { color: theme.textSecondary }]}>
-                {index + 1}
+              <ThemedText type="small" themeColor="textSecondary" style={styles.timeText}>
+                {time.end}
               </ThemedText>
             </View>
           ))}
         </View>
 
         {days.map((day) => {
-          const blocks = coursesForWeekday(day, courses, week, periodTimes);
+          const blocks = coursesForWeekday(day, courses, week, periodTimes, exceptions);
           return (
             <View
               key={day}
