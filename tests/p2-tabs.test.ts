@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TAB_ITEMS, TAB_LEFT, TAB_RIGHT, tabItemByName } from '@/constants/tabs';
+import { buildTabItems, TAB_ITEMS, TAB_LEFT, TAB_RIGHT, tabItemByName } from '@/constants/tabs';
 
 describe('底部导航配置', () => {
   it('固定 4 个 Tab，顺序为首页/计划/健身/我的', () => {
@@ -29,5 +29,20 @@ describe('底部导航配置', () => {
     expect(tabItemByName('today')?.title).toBe('计划');
     expect(tabItemByName('settings')?.title).toBe('我的');
     expect(tabItemByName('games')).toBeUndefined();
+  });
+
+  it('第三个标签可切换为课表，且带跳转路由', () => {
+    const withFitness = buildTabItems('fitness');
+    const withTimetable = buildTabItems('timetable');
+    expect(withFitness.map((tab) => tab.name)).toEqual(['index', 'today', 'fitness', 'settings']);
+    expect(withTimetable.map((tab) => tab.name)).toEqual([
+      'index',
+      'today',
+      'timetable',
+      'settings',
+    ]);
+    expect(withTimetable[2].title).toBe('课表');
+    expect(withTimetable[2].route).toBe('/timetable');
+    expect(withFitness[2].route).toBeUndefined();
   });
 });

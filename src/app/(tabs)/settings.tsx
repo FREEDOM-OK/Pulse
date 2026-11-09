@@ -5,6 +5,7 @@ import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ActionMenu } from '@/components/ui/action-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ModalSheet } from '@/components/ui/modal-sheet';
 import { Spacing } from '@/constants/theme';
@@ -18,14 +19,19 @@ import {
 } from '@/db/repositories/backup';
 import {
   getFitnessDefaults,
+  getMiddleTab,
   getSortMode,
   setFitnessDefaults,
+  setMiddleTab,
   setSortMode,
   type ThemeSetting,
 } from '@/db/repositories/settings';
 import {
+  MIDDLE_TABS,
+  MIDDLE_TAB_LABELS,
   SORT_MODES,
   SORT_MODE_LABELS,
+  type MiddleTab,
   type ProfileRow,
   type SortMode,
 } from '@/db/types';
@@ -65,6 +71,8 @@ export default function SettingsScreen() {
   const [defaultWeightText, setDefaultWeightText] = useState('0');
   const [sortMode, setSortModeState] = useState<SortMode>('memo-first');
   const [sortOpen, setSortOpen] = useState(false);
+  const [middle, setMiddleState] = useState<MiddleTab>('fitness');
+  const [middleOpen, setMiddleOpen] = useState(false);
 
   useEffect(() => {
     getFitnessDefaults()
@@ -82,6 +90,9 @@ export default function SettingsScreen() {
         .catch(() => undefined);
       getSortMode()
         .then(setSortModeState)
+        .catch(() => undefined);
+      getMiddleTab()
+        .then(setMiddleState)
         .catch(() => undefined);
     }, [])
   );
@@ -220,7 +231,7 @@ export default function SettingsScreen() {
               <View style={styles.rowText}>
                 <ThemedText type="small">首页卡片</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  调整万事卡的顺序与显示开关
+                  调整 Dash 卡片的顺序与显示开关
                 </ThemedText>
               </View>
               <ThemedText type="small" themeColor="textSecondary">
@@ -243,6 +254,87 @@ export default function SettingsScreen() {
               </View>
               <ThemedText type="small" themeColor="textSecondary">
                 {SORT_MODE_LABELS[sortMode]} ›
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            快捷入口
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="快捷入口 健身"
+              onPress={() => router.push('/fitness')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <ThemedText type="small">健身</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="快捷入口 课表"
+              onPress={() => router.push('/timetable')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <ThemedText type="small">课表</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="快捷入口 日历回顾"
+              onPress={() => router.push('/calendar')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <ThemedText type="small">日历回顾</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            外观
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`第三个标签 ${MIDDLE_TAB_LABELS[middle]}`}
+              onPress={() => setMiddleOpen(true)}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">第三个标签</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  底栏中间放健身还是课表
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {MIDDLE_TAB_LABELS[middle]} ›
+              </ThemedText>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="个性化"
+              onPress={() => router.push('/personalize')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">个性化</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  主题、Dash 卡片模式与样式
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
               </ThemedText>
             </Pressable>
           </ThemedView>
@@ -512,6 +604,23 @@ export default function SettingsScreen() {
           })}
         </View>
       </ModalSheet>
+
+      <ActionMenu
+        visible={middleOpen}
+        title="第三个标签"
+        items={MIDDLE_TABS.map((tab) => ({
+          key: tab,
+          label: MIDDLE_TAB_LABELS[tab],
+          onPress: () => {
+            setMiddleOpen(false);
+            setMiddleState(tab);
+            setMiddleTab(tab)
+              .then(() => bumpDataVersion())
+              .catch(() => undefined);
+          },
+        }))}
+        onClose={() => setMiddleOpen(false)}
+      />
 
       <ConfirmDialog
         visible={clearOpen}

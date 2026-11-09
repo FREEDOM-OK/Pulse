@@ -59,6 +59,8 @@ function AppStack() {
           options={{ headerShown: true, title: '游戏', headerBackTitle: '返回' }}
         />
         <Stack.Screen name="timetable" options={{ headerShown: false }} />
+        <Stack.Screen name="personalize" options={{ headerShown: false }} />
+        <Stack.Screen name="personalize/cards" options={{ headerShown: false }} />
         <Stack.Screen
           name="cards"
           options={{ headerShown: true, title: '首页卡片', headerBackTitle: '返回' }}
