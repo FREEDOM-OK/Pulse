@@ -93,6 +93,8 @@ export interface CourseLike {
   color: string | null;
   teacher?: string | null;
   room?: string | null;
+  /** 课程块底色样式，缺省按纯色处理。 */
+  background?: string | null;
   slots: {
     id: number;
     weekday: number;
@@ -114,6 +116,8 @@ export interface CourseOnDate {
   time: string;
   teacher?: string | null;
   room?: string | null;
+  /** 课程块底色样式：plain / grid / stripe。 */
+  background?: string;
 }
 
 /** 某门课在某一周被跳过。 */
@@ -154,6 +158,7 @@ export function coursesOnDate(
         time: range.start && range.end ? `${range.start} – ${range.end}` : '',
         teacher: course.teacher ?? null,
         room: course.room ?? null,
+        background: course.background ?? 'plain',
       });
     }
   }

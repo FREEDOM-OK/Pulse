@@ -9,10 +9,22 @@ import { WheelPicker } from '@/components/ui/wheel-picker';
 import { WeekGrid } from '@/components/timetable/week-grid';
 import { WeekHeader } from '@/components/timetable/week-header';
 import { OverflowSheet } from '@/components/timetable/overflow-sheet';
+import { CourseDetailSheet, type DeleteScope } from '@/components/timetable/course-detail-sheet';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import type { PeriodTime } from '@/db/types';
-import { type CourseException, listCourseExceptions, listCourses } from '@/db/repositories/courses';
+import {
+  type CourseException,
+  addCourseException,
+  createCourse,
+  deleteCourse,
+  getCourse,
+  listCourseExceptions,
+  listCourses,
+  removeCourseException,
+  updateCourse,
+} from '@/db/repositories/courses';
 import {
   getPeriodCount,
   getPeriodTimes,
@@ -21,8 +33,9 @@ import {
   getTermConfig,
   type TermConfig,
 } from '@/db/repositories/settings';
-import { useDataVersion } from '@/lib/data-version';
+import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
 import { todayStr } from '@/lib/date';
+import { copyCourseName } from '@/lib/course-copy';
 import { weekOfTerm } from '@/lib/timetable';
 import { compactDate, weekStartDate, weekDates } from '@/lib/timetable-week';
 
@@ -42,6 +55,8 @@ export default function TimetableScreen() {
   const [weekDraft, setWeekDraft] = useState('1');
   const [weekSheet, setWeekSheet] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const load = useCallback(async () => {
     const [list, termConfig, times, count, weekend, height, exceptionList] = await Promise.all([
@@ -80,6 +95,73 @@ export default function TimetableScreen() {
   const dates = weekDates(term.startDate, week, showWeekend);
   const times = periods.slice(0, periodCount);
   const hasTerm = Boolean(term.startDate);
+  const detailCourse = detailId === null ? null : (courses.find((item) => item.id === detailId) ?? null);
+  const skippedThisWeek =
+    detailId !== null && exceptions.some((item) => item.courseId === detailId && item.week === week);
+
+  async function refresh() {
+    await load();
+    bumpDataVersion();
+  }
+
+  async function handleNoteSave(note: string) {
+    if (!detailCourse) return;
+    await updateCourse(detailCourse.id, {
+      name: detailCourse.name,
+      teacher: detailCourse.teacher ?? undefined,
+      room: detailCourse.room ?? undefined,
+      color: detailCourse.color ?? undefined,
+      background: detailCourse.background as 'plain' | 'grid' | 'stripe',
+      note,
+      slots: detailCourse.slots.map((slot) => ({
+        weekday: slot.weekday,
+        startPeriod: slot.startPeriod,
+        endPeriod: slot.endPeriod,
+        weeks: slot.weeks,
+      })),
+    });
+    await refresh();
+  }
+
+  async function handleCopy() {
+    if (!detailCourse) return;
+    const source = await getCourse(detailCourse.id);
+    if (!source) return;
+    const copyId = await createCourse({
+      name: copyCourseName(source.name),
+      teacher: source.teacher ?? undefined,
+      room: source.room ?? undefined,
+      color: source.color ?? undefined,
+      background: source.background as 'plain' | 'grid' | 'stripe',
+      note: source.note ?? undefined,
+      slots: source.slots.map((slot) => ({
+        weekday: slot.weekday,
+        startPeriod: slot.startPeriod,
+        endPeriod: slot.endPeriod,
+        weeks: slot.weeks,
+      })),
+    });
+    setDetailId(null);
+    await refresh();
+    router.push({ pathname: '/timetable/course', params: { id: String(copyId) } });
+  }
+
+  async function handleDelete(scope: DeleteScope) {
+    if (!detailCourse) return;
+    if (scope === 'week') {
+      await addCourseException(detailCourse.id, week);
+      setDetailId(null);
+      await refresh();
+      return;
+    }
+    setConfirmDeleteAll(true);
+  }
+
+  async function handleRestoreWeek() {
+    if (!detailCourse) return;
+    await removeCourseException(detailCourse.id, week);
+    await refresh();
+  }
 
   const openWeekPicker = () => {
     setWeekDraft(String(week));
@@ -118,9 +200,7 @@ export default function TimetableScreen() {
             week={week}
             courses={courses}
             exceptions={exceptions}
-            onPressCourse={(courseId) =>
-              router.push({ pathname: '/timetable/course', params: { id: String(courseId) } })
-            }
+            onPressCourse={(courseId) => setDetailId(courseId)}
             onPressEmpty={(weekday, period) =>
               router.push({
                 pathname: '/timetable/course',
@@ -198,6 +278,51 @@ export default function TimetableScreen() {
         onCourses={() => {
           setOverflowOpen(false);
           router.push('/timetable/courses');
+        }}
+      />
+
+      <CourseDetailSheet
+        visible={detailCourse !== null}
+        course={detailCourse}
+        totalWeeks={term.totalWeeks}
+        week={week}
+        skippedThisWeek={skippedThisWeek}
+        onClose={() => setDetailId(null)}
+        onEdit={() => {
+          if (!detailCourse) return;
+          const id = String(detailCourse.id);
+          setDetailId(null);
+          router.push({ pathname: '/timetable/course', params: { id } });
+        }}
+        onCopy={() => {
+          handleCopy().catch(() => undefined);
+        }}
+        onNoteSave={(note) => {
+          handleNoteSave(note).catch(() => undefined);
+        }}
+        onDelete={(scope) => {
+          handleDelete(scope).catch(() => undefined);
+        }}
+        onRestoreWeek={() => {
+          handleRestoreWeek().catch(() => undefined);
+        }}
+      />
+
+      <ConfirmDialog
+        visible={confirmDeleteAll}
+        title="删除课程"
+        message={detailCourse ? `会删除「${detailCourse.name}」及其所有时段，无法恢复。` : ''}
+        confirmLabel="删除"
+        danger
+        onCancel={() => setConfirmDeleteAll(false)}
+        onConfirm={() => {
+          const id = detailCourse?.id;
+          setConfirmDeleteAll(false);
+          setDetailId(null);
+          if (id === undefined) return;
+          deleteCourse(id)
+            .then(refresh)
+            .catch(() => undefined);
         }}
       />
     </SafeAreaView>

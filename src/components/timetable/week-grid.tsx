@@ -173,6 +173,7 @@ export function WeekGrid({
                       highlighted && { borderWidth: 1.5, borderColor: block.color },
                       pressed && styles.pressed,
                     ]}>
+                    <CourseBlockPattern background={block.background} color={block.color} />
                     <ThemedText style={[styles.blockTitle, { color: theme.text }]} numberOfLines={2}>
                       {block.name}
                     </ThemedText>
@@ -191,6 +192,49 @@ export function WeekGrid({
         })}
       </View>
     </ScrollView>
+  );
+}
+
+/** 课程块底色：纯色 / 网格 / 斑马纹，全用 View 绘制，无图片依赖。 */
+function CourseBlockPattern({ background, color }: { background?: string; color: string }) {
+  if (!background || background === 'plain') return null;
+
+  if (background === 'grid') {
+    return (
+      <View style={styles.patternLayer} pointerEvents="none">
+        {[0, 1, 2, 3].map((row) => (
+          <View
+            key={`h-${row}`}
+            style={[
+              styles.gridLineH,
+              { top: `${(row + 1) * 20}%`, backgroundColor: withAlpha(color, 0.18) },
+            ]}
+          />
+        ))}
+        {[0, 1].map((column) => (
+          <View
+            key={`v-${column}`}
+            style={[
+              styles.gridLineV,
+              { left: `${(column + 1) * 33.33}%`, backgroundColor: withAlpha(color, 0.18) },
+            ]}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.patternLayer} pointerEvents="none">
+      {[0, 1, 2, 3, 4, 5].map((index) =>
+        index % 2 === 0 ? (
+          <View
+            key={`stripe-${index}`}
+            style={[styles.stripe, { top: `${index * 16.66}%`, backgroundColor: withAlpha(color, 0.1) }]}
+          />
+        ) : null
+      )}
+    </View>
   );
 }
 
@@ -278,5 +322,30 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
+  },
+  patternLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  gridLineH: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth,
+  },
+  gridLineV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: StyleSheet.hairlineWidth,
+  },
+  stripe: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: '16.66%',
   },
 });
