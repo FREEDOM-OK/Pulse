@@ -91,6 +91,8 @@ export interface CourseLike {
   id: number;
   name: string;
   color: string | null;
+  teacher?: string | null;
+  room?: string | null;
   slots: {
     id: number;
     weekday: number;
@@ -110,6 +112,8 @@ export interface CourseOnDate {
   endPeriod: number;
   /** 起止时间 "HH:mm – HH:mm"，取不到时为空串。 */
   time: string;
+  teacher?: string | null;
+  room?: string | null;
 }
 
 /** 某门课在某一周被跳过。 */
@@ -148,6 +152,8 @@ export function coursesOnDate(
         startPeriod: slot.startPeriod,
         endPeriod: slot.endPeriod,
         time: range.start && range.end ? `${range.start} – ${range.end}` : '',
+        teacher: course.teacher ?? null,
+        room: course.room ?? null,
       });
     }
   }

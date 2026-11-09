@@ -1,79 +1,96 @@
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
-import type { PeriodTime } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
+import type { PeriodTime } from '@/db/types';
 import type { CourseExceptionLike, CourseLike } from '@/lib/timetable';
-import {
-  blockRect,
-  coursesForWeekday,
-  visibleWeekdays,
-  WEEKDAY_LABELS,
-  withAlpha,
-} from '@/lib/timetable-grid';
+import { blockRect, coursesForWeekday, WEEKDAY_LABELS, withAlpha } from '@/lib/timetable-grid';
 
-const PERIOD_HEIGHT = 68;
-const TIME_COLUMN = 44;
-const MIN_DAY_WIDTH = 56;
+const TIME_COLUMN = 48;
+const H_PADDING = 12;
+const GAP = 4;
 
 interface WeekGridProps {
-  courses: CourseLike[];
-  week: number;
+  /** 该周要显示的日期，从周一开始；长度即列数（5 或 7）。 */
+  dates: string[];
   periodTimes: PeriodTime[];
-  includeWeekend: boolean;
-  /** 「仅本周删除」的课程。 */
+  rowHeight: number;
+  today: string;
+  week: number;
+  courses: CourseLike[];
   exceptions?: CourseExceptionLike[];
-  /** 从今日计划点进来的课程：块加描边高亮。 */
   highlightCourseId?: number | null;
-  /** 周日 = 7，用来给今天的列加淡底色。 */
-  todayWeekday?: number | null;
   onPressCourse: (courseId: number) => void;
-  /** 点空白格子：带着星期与节次打开新建课程。 */
   onPressEmpty: (weekday: number, period: number) => void;
 }
 
-/** 周网格：左侧节次时间，右侧按星期分列，课程用绝对定位的色块呈现。 */
+/** 周网格：吸顶日期行 + 左侧节次时间 + 按星期分列，可上下滚动。 */
 export function WeekGrid({
-  courses,
-  week,
+  dates,
   periodTimes,
-  includeWeekend,
+  rowHeight,
+  today,
+  week,
+  courses,
   exceptions = [],
   highlightCourseId,
-  todayWeekday,
   onPressCourse,
   onPressEmpty,
 }: WeekGridProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const days = visibleWeekdays(includeWeekend);
   const periodCount = Math.max(1, periodTimes.length);
+  const dayCount = Math.max(1, dates.length);
+  const dayWidth = Math.max(30, (width - H_PADDING * 2 - TIME_COLUMN) / dayCount);
+  const gridWidth = TIME_COLUMN + dayWidth * dayCount;
 
-  const dayWidth = includeWeekend
-    ? MIN_DAY_WIDTH
-    : Math.max(MIN_DAY_WIDTH, (width - Spacing.four - TIME_COLUMN) / days.length);
-  const gridWidth = TIME_COLUMN + dayWidth * days.length;
-
-  const body = (
-    <View style={{ width: gridWidth }}>
-      <View style={styles.headerRow}>
-        <View style={{ width: TIME_COLUMN }} />
-        {days.map((day) => (
-          <View key={day} style={[styles.dayHeader, { width: dayWidth }]}>
+  const header = (
+    <View
+      style={[
+        styles.headerRow,
+        { width: gridWidth, backgroundColor: theme.background },
+      ]}>
+      <View style={{ width: TIME_COLUMN }} />
+      {dates.map((date, index) => {
+        const isToday = date === today;
+        return (
+          <View key={date} style={[styles.dayHeader, { width: dayWidth }]}>
             <ThemedText
               type="small"
-              themeColor={day === todayWeekday ? 'text' : 'textSecondary'}
-              style={day === todayWeekday ? styles.todayLabel : undefined}>
-              {WEEKDAY_LABELS[day - 1]}
+              themeColor={isToday ? 'text' : 'textSecondary'}
+              style={[styles.weekday, isToday && styles.weekdayToday]}>
+              {WEEKDAY_LABELS[index]}
             </ThemedText>
+            <View
+              style={[
+                styles.dayNumber,
+                isToday && { backgroundColor: theme.text },
+              ]}>
+              <ThemedText
+                type="small"
+                style={[
+                  styles.dayNumberText,
+                  { color: isToday ? theme.background : theme.text },
+                ]}>
+                {Number(date.slice(8))}
+              </ThemedText>
+            </View>
           </View>
-        ))}
-      </View>
+        );
+      })}
+    </View>
+  );
 
-      <View style={styles.bodyRow}>
+  return (
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      stickyHeaderIndices={[0]}
+      contentContainerStyle={{ paddingHorizontal: H_PADDING, paddingBottom: 24 }}>
+      {header}
+
+      <View style={[styles.bodyRow, { width: gridWidth }]}>
         <View style={{ width: TIME_COLUMN }}>
           {periodTimes.map((time, index) => (
-            <View key={`${time.start}-${index}`} style={[styles.timeCell, { height: PERIOD_HEIGHT }]}>
+            <View key={`${time.start}-${index}`} style={[styles.timeCell, { height: rowHeight }]}>
               <ThemedText style={[styles.periodNo, { color: theme.text }]}>{index + 1}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.timeText}>
                 {time.start}
@@ -85,41 +102,60 @@ export function WeekGrid({
           ))}
         </View>
 
-        {days.map((day) => {
-          const blocks = coursesForWeekday(day, courses, week, periodTimes, exceptions);
+        {dates.map((date, index) => {
+          const weekday = index + 1;
+          const blocks = coursesForWeekday(weekday, courses, week, periodTimes, exceptions);
+          const covered = new Set<number>();
+          for (const block of blocks) {
+            for (let period = block.startPeriod; period <= block.endPeriod; period += 1) {
+              covered.add(period);
+            }
+          }
+          const isToday = date === today;
+
           return (
             <View
-              key={day}
+              key={date}
               style={[
                 styles.dayColumn,
                 {
                   width: dayWidth,
-                  height: periodCount * PERIOD_HEIGHT,
+                  height: periodCount * rowHeight,
                   borderLeftColor: theme.backgroundElement,
-                  backgroundColor:
-                    day === todayWeekday ? theme.backgroundElement : 'transparent',
+                  backgroundColor: isToday ? theme.backgroundElement : 'transparent',
                 },
               ]}>
-              {Array.from({ length: periodCount }, (_, index) => (
-                <Pressable
-                  key={index}
-                  accessibilityLabel={`周${WEEKDAY_LABELS[day - 1]}第 ${index + 1} 节 添加课程`}
-                  onPress={() => onPressEmpty(day, index + 1)}
-                  style={({ pressed }) => [
-                    styles.cell,
-                    {
-                      top: index * PERIOD_HEIGHT,
-                      height: PERIOD_HEIGHT,
-                      borderTopColor: theme.backgroundElement,
-                    },
-                    pressed && styles.pressed,
-                  ]}
-                />
-              ))}
+              {Array.from({ length: periodCount }, (_, cellIndex) => {
+                const period = cellIndex + 1;
+                return (
+                  <Pressable
+                    key={period}
+                    accessibilityLabel={`周${WEEKDAY_LABELS[index]}第 ${period} 节 添加课程`}
+                    onPress={() => onPressEmpty(weekday, period)}
+                    style={({ pressed }) => [
+                      styles.cell,
+                      {
+                        top: cellIndex * rowHeight,
+                        height: rowHeight,
+                        borderTopColor: theme.backgroundElement,
+                      },
+                      pressed && styles.pressed,
+                    ]}>
+                    {isToday && !covered.has(period) ? (
+                      <ThemedText
+                        accessibilityElementsHidden
+                        style={[styles.cellPlus, { color: theme.textSecondary }]}>
+                        ＋
+                      </ThemedText>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
 
               {blocks.map((block) => {
-                const rect = blockRect(block.startPeriod, block.endPeriod, PERIOD_HEIGHT);
+                const rect = blockRect(block.startPeriod, block.endPeriod, rowHeight, GAP);
                 const highlighted = highlightCourseId === block.courseId;
+                const meta = block.room ? `@${block.room}` : block.teacher ? block.teacher : '';
                 return (
                   <Pressable
                     key={block.slotId}
@@ -137,12 +173,16 @@ export function WeekGrid({
                       highlighted && { borderWidth: 1.5, borderColor: block.color },
                       pressed && styles.pressed,
                     ]}>
-                    <ThemedText style={styles.blockTitle} numberOfLines={2}>
+                    <ThemedText style={[styles.blockTitle, { color: theme.text }]} numberOfLines={2}>
                       {block.name}
                     </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                      {block.startPeriod}-{block.endPeriod} 节
-                    </ThemedText>
+                    {meta ? (
+                      <ThemedText
+                        style={[styles.blockMeta, { color: theme.textSecondary }]}
+                        numberOfLines={1}>
+                        {meta}
+                      </ThemedText>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -150,54 +190,54 @@ export function WeekGrid({
           );
         })}
       </View>
-    </View>
+    </ScrollView>
   );
-
-  if (includeWeekend) {
-    return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {body}
-      </ScrollView>
-    );
-  }
-
-  return <View style={styles.container}>{body}</View>;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: Spacing.two,
-  },
-  scroll: {
-    paddingHorizontal: Spacing.two,
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingBottom: Spacing.one,
+    paddingBottom: 4,
+    zIndex: 2,
   },
   dayHeader: {
     alignItems: 'center',
-    paddingVertical: Spacing.one,
+    paddingVertical: 4,
+    gap: 4,
   },
-  todayLabel: {
-    fontWeight: '800',
+  weekday: {
+    fontSize: 11,
+  },
+  weekdayToday: {
+    fontWeight: '700',
+  },
+  dayNumber: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNumberText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   bodyRow: {
     flexDirection: 'row',
   },
   timeCell: {
-    justifyContent: 'flex-start',
     paddingTop: 2,
     alignItems: 'center',
-  },
-  timeText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
+    justifyContent: 'flex-start',
   },
   periodNo: {
-    fontSize: 10,
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+  timeText: {
+    fontSize: 9.5,
     lineHeight: 12,
   },
   dayColumn: {
@@ -208,25 +248,35 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  cellPlus: {
+    fontSize: 13,
+    opacity: 0.45,
   },
   block: {
     position: 'absolute',
     left: 2,
-    right: 3,
+    right: 2,
     borderRadius: 10,
     borderLeftWidth: 3,
-    paddingVertical: 5,
-    paddingHorizontal: 5,
-    gap: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    gap: 1,
     overflow: 'hidden',
   },
   blockTitle: {
-    fontSize: 12,
-    lineHeight: 15,
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '700',
   },
+  blockMeta: {
+    fontSize: 9,
+    lineHeight: 12,
+  },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
 });

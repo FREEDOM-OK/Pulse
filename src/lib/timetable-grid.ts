@@ -143,6 +143,8 @@ export function coursesForWeekday(
         startPeriod: slot.startPeriod,
         endPeriod: slot.endPeriod,
         time: range.start && range.end ? `${range.start} – ${range.end}` : '',
+        teacher: course.teacher ?? null,
+        room: course.room ?? null,
       });
     }
   }

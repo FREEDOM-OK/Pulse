@@ -44,7 +44,7 @@ function AppStack() {
 
   return (
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, headerShadowVisible: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
           name="calendar"
@@ -58,10 +58,7 @@ function AppStack() {
           name="games"
           options={{ headerShown: true, title: '游戏', headerBackTitle: '返回' }}
         />
-        <Stack.Screen
-          name="timetable"
-          options={{ headerShown: true, title: '课表', headerBackTitle: '返回' }}
-        />
+        <Stack.Screen name="timetable" options={{ headerShown: false }} />
         <Stack.Screen
           name="cards"
           options={{ headerShown: true, title: '首页卡片', headerBackTitle: '返回' }}
