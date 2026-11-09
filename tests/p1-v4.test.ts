@@ -28,6 +28,7 @@ import {
   setTermConfig,
 } from '@/db/repositories/settings';
 import {
+  BACKUP_VERSION,
   clearAllData,
   exportBackup,
   importBackup,
@@ -300,7 +301,7 @@ describe('P0 备份 v4', () => {
     await createTask({ date: DATE, title: '带置顶的任务', pinned: true });
 
     const before = await exportBackup();
-    expect(before.schemaVersion).toBe(5);
+    expect(before.schemaVersion).toBe(BACKUP_VERSION);
     expect(before.data.memos).toHaveLength(1);
     expect(before.data.courses).toHaveLength(1);
     expect(before.data.courseSlots).toHaveLength(1);

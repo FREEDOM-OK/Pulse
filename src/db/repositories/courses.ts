@@ -1,5 +1,5 @@
 import { getDriver } from '../connection';
-import type { CourseExceptionRow, CourseRow, CourseSlotRow } from '../types';
+import type { CourseBackground, CourseExceptionRow, CourseRow, CourseSlotRow } from '../types';
 import { nowIso } from '@/lib/date';
 import { normalizeWeeks, periodsOverlap, weeksOverlap } from '@/lib/timetable';
 
@@ -29,6 +29,8 @@ export interface CreateCourseInput {
   room?: string | null;
   color?: string | null;
   note?: string | null;
+  /** 课桌底色样式，缺省为纯色。 */
+  background?: CourseBackground;
   slots: CreateSlotInput[];
 }
 
@@ -115,14 +117,15 @@ export async function createCourse(input: CreateCourseInput): Promise<number> {
   let courseId = 0;
   await driver.withTransactionAsync(async () => {
     const result = await driver.runAsync(
-      `INSERT INTO courses (name, teacher, room, color, note, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO courses (name, teacher, room, color, note, background, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         input.name,
         input.teacher ?? null,
         input.room ?? null,
         input.color ?? null,
         input.note ?? null,
+        input.background ?? 'plain',
         createdAt,
       ]
     );
@@ -136,13 +139,14 @@ export async function updateCourse(id: number, input: CreateCourseInput): Promis
   const driver = getDriver();
   await driver.withTransactionAsync(async () => {
     await driver.runAsync(
-      'UPDATE courses SET name = ?, teacher = ?, room = ?, color = ?, note = ? WHERE id = ?',
+      'UPDATE courses SET name = ?, teacher = ?, room = ?, color = ?, note = ?, background = ? WHERE id = ?',
       [
         input.name,
         input.teacher ?? null,
         input.room ?? null,
         input.color ?? null,
         input.note ?? null,
+        input.background ?? 'plain',
         id,
       ]
     );

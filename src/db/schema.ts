@@ -207,7 +207,21 @@ CREATE TABLE IF NOT EXISTS course_exceptions (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_course_exceptions_course_week ON course_exceptions(course_id, week);
 `;
 
-export const MIGRATIONS: string[] = [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5];
+/**
+ * v1.2.2：课程块底色样式（纯色 / 网格 / 斑马纹）。
+ */
+export const MIGRATION_V6 = `
+ALTER TABLE courses ADD COLUMN background TEXT NOT NULL DEFAULT 'plain';
+`;
+
+export const MIGRATIONS: string[] = [
+  MIGRATION_V1,
+  MIGRATION_V2,
+  MIGRATION_V3,
+  MIGRATION_V4,
+  MIGRATION_V5,
+  MIGRATION_V6,
+];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 

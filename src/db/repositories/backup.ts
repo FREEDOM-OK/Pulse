@@ -133,6 +133,7 @@ interface CourseRow {
   room: string | null;
   color: string | null;
   note: string | null;
+  background: string;
   created_at: string;
 }
 interface CourseSlotRow {
@@ -299,6 +300,7 @@ export async function exportBackup(): Promise<BackupPayload> {
         room: row.room,
         color: row.color,
         note: row.note,
+        background: row.background,
         createdAt: row.created_at,
       })),
       courseSlots: courseSlots.map((row) => ({
@@ -619,14 +621,15 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
     const courseIds = new Map<number, number>();
     for (const row of data.courses) {
       const result = await driver.runAsync(
-        `INSERT INTO courses (name, teacher, room, color, note, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO courses (name, teacher, room, color, note, background, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           value<string>(row, 'name'),
           value<string | null>(row, 'teacher') ?? null,
           value<string | null>(row, 'room') ?? null,
           value<string | null>(row, 'color') ?? null,
           value<string | null>(row, 'note') ?? null,
+          value<string | null>(row, 'background') ?? 'plain',
           value<string>(row, 'createdAt'),
         ]
       );

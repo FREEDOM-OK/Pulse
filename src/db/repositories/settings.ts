@@ -1,9 +1,16 @@
 import { getDriver } from '../connection';
 import {
+  CARD_STYLES,
+  DASH_MODES,
+  DEFAULT_CARD_COLOR,
   DEFAULT_ENABLED_CARDS,
   HOME_CARD_IDS,
+  MIDDLE_TABS,
   SORT_MODES,
+  type CardStyle,
+  type DashMode,
   type HomeCardId,
+  type MiddleTab,
   type PeriodTime,
   type SortMode,
 } from '../types';
@@ -99,7 +106,7 @@ const ROW_HEIGHT_KEY = 'timetable.rowHeight';
 
 export const DEFAULT_TOTAL_WEEKS = 18;
 
-/** 首页万事卡的顺序（只含开启的卡）。未设置或数据损坏时回默认。 */
+/** 首页 Dash 卡片的顺序（只含开启的卡）。未设置或数据损坏时回默认。 */
 export async function getHomeCards(): Promise<HomeCardId[]> {
   const raw = await getSetting(HOME_CARDS_KEY);
   const parsed = parseStringArray(raw);
@@ -205,6 +212,67 @@ export async function getRowHeight(): Promise<number> {
 
 export async function setRowHeight(value: number): Promise<void> {
   await setSetting(ROW_HEIGHT_KEY, String(clampRowHeight(value)));
+}
+
+// —— v1.2.2 新增设置：底栏第三格、Dash 卡片模式与样式、完成后隐藏 ——
+
+const MIDDLE_TAB_KEY = 'tab.middle';
+const DASH_MODE_KEY = 'home.dashMode';
+const CARD_STYLE_KEY = 'home.cardStyle';
+const CARD_COLOR_KEY = 'home.cardColor';
+const HIDE_COMPLETED_KEY = 'today.hideCompleted';
+
+/** 底栏第三个标签放健身还是课表；非法值回落健身。 */
+export async function getMiddleTab(): Promise<MiddleTab> {
+  const raw = await getSetting(MIDDLE_TAB_KEY);
+  return (MIDDLE_TABS as string[]).includes(raw ?? '') ? (raw as MiddleTab) : 'fitness';
+}
+
+export async function setMiddleTab(value: MiddleTab): Promise<void> {
+  const safe = MIDDLE_TABS.includes(value) ? value : 'fitness';
+  await setSetting(MIDDLE_TAB_KEY, safe);
+}
+
+/** Dash 卡片模式；非法值回落滑动。 */
+export async function getDashMode(): Promise<DashMode> {
+  const raw = await getSetting(DASH_MODE_KEY);
+  return (DASH_MODES as string[]).includes(raw ?? '') ? (raw as DashMode) : 'carousel';
+}
+
+export async function setDashMode(value: DashMode): Promise<void> {
+  const safe = DASH_MODES.includes(value) ? value : 'carousel';
+  await setSetting(DASH_MODE_KEY, safe);
+}
+
+/** Dash 卡片样式；非法值回落默认。 */
+export async function getCardStyle(): Promise<CardStyle> {
+  const raw = await getSetting(CARD_STYLE_KEY);
+  return (CARD_STYLES as string[]).includes(raw ?? '') ? (raw as CardStyle) : 'default';
+}
+
+export async function setCardStyle(value: CardStyle): Promise<void> {
+  const safe = CARD_STYLES.includes(value) ? value : 'default';
+  await setSetting(CARD_STYLE_KEY, safe);
+}
+
+/** 自定义卡片颜色（#RRGGBB）；非法值回落深色主卡色。 */
+export async function getCardColor(): Promise<string> {
+  const raw = await getSetting(CARD_COLOR_KEY);
+  return raw && /^#[0-9a-fA-F]{6}$/.test(raw) ? raw.toLowerCase() : DEFAULT_CARD_COLOR;
+}
+
+export async function setCardColor(value: string): Promise<void> {
+  const safe = /^#[0-9a-fA-F]{6}$/.test(value) ? value : DEFAULT_CARD_COLOR;
+  await setSetting(CARD_COLOR_KEY, safe.toLowerCase());
+}
+
+/** 完成后是否自动隐藏已完成项（默认关闭）。 */
+export async function getHideCompleted(): Promise<boolean> {
+  return (await getSetting(HIDE_COMPLETED_KEY)) === 'true';
+}
+
+export async function setHideCompleted(value: boolean): Promise<void> {
+  await setSetting(HIDE_COMPLETED_KEY, value ? 'true' : 'false');
 }
 
 function parseJsonValue(raw: string | null): unknown {

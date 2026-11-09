@@ -106,6 +106,8 @@ export interface CourseRow {
   room: string | null;
   color: string | null;
   note: string | null;
+  /** 课程块底色样式，v6 起有值。 */
+  background: string;
   created_at: string;
 }
 
@@ -147,7 +149,7 @@ export const SORT_MODE_LABELS: Record<SortMode, string> = {
   mixed: '按时间混排',
 };
 
-/** 首页万事卡。 */
+/** 首页 Dash 卡片。 */
 export type HomeCardId = 'fitness' | 'games' | 'calendar' | 'timetable';
 
 export const HOME_CARD_IDS: HomeCardId[] = ['fitness', 'games', 'calendar', 'timetable'];
@@ -156,6 +158,51 @@ export const DEFAULT_HOME_CARDS: HomeCardId[] = ['fitness', 'games', 'calendar',
 
 /** 首页卡片默认开关：课表默认关闭。 */
 export const DEFAULT_ENABLED_CARDS: HomeCardId[] = ['fitness', 'games', 'calendar'];
+
+/** 底栏第三个标签放哪个模块。 */
+export type MiddleTab = 'fitness' | 'timetable';
+
+export const MIDDLE_TABS: MiddleTab[] = ['fitness', 'timetable'];
+
+export const MIDDLE_TAB_LABELS: Record<MiddleTab, string> = {
+  fitness: '健身',
+  timetable: '课表',
+};
+
+/** Dash 卡片的展示模式。 */
+export type DashMode = 'carousel' | 'stack';
+
+export const DASH_MODES: DashMode[] = ['carousel', 'stack'];
+
+export const DASH_MODE_LABELS: Record<DashMode, string> = {
+  carousel: '滑动',
+  stack: '卡片堆叠',
+};
+
+/** Dash 卡片的视觉样式。 */
+export type CardStyle = 'default' | 'custom' | 'cartoon';
+
+export const CARD_STYLES: CardStyle[] = ['default', 'custom', 'cartoon'];
+
+export const CARD_STYLE_LABELS: Record<CardStyle, string> = {
+  default: '默认',
+  custom: '自定义颜色',
+  cartoon: '卡通样式',
+};
+
+/** 课程块底色样式。 */
+export type CourseBackground = 'plain' | 'grid' | 'stripe';
+
+export const COURSE_BACKGROUNDS: CourseBackground[] = ['plain', 'grid', 'stripe'];
+
+export const COURSE_BACKGROUND_LABELS: Record<CourseBackground, string> = {
+  plain: '纯色',
+  grid: '网格',
+  stripe: '斑马纹',
+};
+
+/** 卡片自定义颜色默认值，与深色主卡一致。 */
+export const DEFAULT_CARD_COLOR = '#26262A';
 
 
 

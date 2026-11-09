@@ -36,10 +36,10 @@ async function seedCourse() {
 }
 
 describe('T0 schema v5', () => {
-  it('版本升到 5，并建出 course_exceptions 表', async () => {
+  it('schema 含 v5 迁移，并建出 course_exceptions 表', async () => {
     await createTestContext();
-    expect(SCHEMA_VERSION).toBe(5);
-    expect(BACKUP_VERSION).toBe(5);
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(5);
+    expect(BACKUP_VERSION).toBe(SCHEMA_VERSION);
 
     const tables = await (await import('@/db/connection')).getDriver().getAllAsync<{
       name: string;
@@ -73,7 +73,7 @@ describe('T0 备份 v5', () => {
     await setRowHeight(96);
 
     const payload = await exportBackup();
-    expect(payload.schemaVersion).toBe(5);
+    expect(payload.schemaVersion).toBe(BACKUP_VERSION);
     expect(payload.data.courseExceptions).toHaveLength(1);
     expect(payload.data.courseExceptions[0]).toMatchObject({ week: 2 });
     expect(summarizeBackup(payload)).toMatchObject({ courses: 1, courseSlots: 1, courseExceptions: 1 });
