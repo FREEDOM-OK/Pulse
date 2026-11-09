@@ -1,7 +1,7 @@
 /** P6 首页卡片管理：入口、开关数量、恢复默认 */
 export async function run(page, baseUrl) {
   await page.goto(baseUrl);
-  await page.waitForText('万事卡');
+  await page.waitForText('Dash');
   await page.clickLabel('我的');
   await page.waitForText('数据与偏好');
   await page.clickLabel('首页卡片');

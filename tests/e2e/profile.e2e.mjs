@@ -13,9 +13,13 @@ export async function run(page, baseUrl) {
 
   await page.fillByLabel('用户名', '小明');
   await page.clickLabel('女');
-  await page.fillByLabel('生日年份', '2000');
-  await page.fillByLabel('生日月份', '2');
-  await page.fillByLabel('生日日期', '29');
+  await page.clickLabelContaining('生日');
+  await page.waitForText('生日');
+  await page.clickLabel('选择 2004 年');
+  await page.clickLabel('选择 2 月');
+  await page.clickLabel('选择 29 日');
+  await page.clickText('确定');
+  await page.waitForLabel('生日 2004 年 02 月 29 日');
   await page.clickLabel('保存个人资料');
 
   await page.waitForText('数据与偏好');
@@ -30,14 +34,7 @@ export async function run(page, baseUrl) {
   await page.waitForLabel('账号 小明');
   await page.clickLabel('账号 小明');
   await page.waitForText('个人资料');
-  const birthday = await page.evaluate(`(() => ({
-    year: document.querySelector('[aria-label="生日年份"]')?.value ?? null,
-    month: document.querySelector('[aria-label="生日月份"]')?.value ?? null,
-    day: document.querySelector('[aria-label="生日日期"]')?.value ?? null,
-  }))()`);
-  if (birthday.year !== '2000' || Number(birthday.month) !== 2 || Number(birthday.day) !== 29) {
-    throw new Error(`生日没有持久化：${JSON.stringify(birthday)}`);
-  }
+  await page.waitForLabel('生日 2004 年 02 月 29 日');
 
   // 回到首页再进设置，清空数据后资料回到默认值
   await page.goto(baseUrl);

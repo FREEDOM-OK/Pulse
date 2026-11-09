@@ -15,8 +15,8 @@ export async function run(page, baseUrl) {
   await page.waitForText(`今天是 ${now.getMonth() + 1}月${now.getDate()}日`);
   await page.waitForText(`星期${weekday}`);
 
-  // 万事卡与今日任务区
-  await page.waitForText('万事卡');
+  // Dash 卡片与今日任务区
+  await page.waitForText('Dash');
   await page.waitForText('去健身');
   await page.waitForText('今天还没练');
   await page.waitForText('去游戏');

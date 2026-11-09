@@ -25,12 +25,12 @@ export async function run(page, baseUrl) {
   await page.waitForText('已练 0 组');
 
   // 连续完成 3 组
-  await page.clickText('完成');
+  await page.clickLabelContaining('完成一组 杠铃卧推');
   await page.waitForText('第1组');
   await page.waitForText('已练 1 组');
-  await page.clickText('完成');
+  await page.clickLabelContaining('完成一组 杠铃卧推');
   await page.waitForText('第2组');
-  await page.clickText('完成');
+  await page.clickLabelContaining('完成一组 杠铃卧推');
   await page.waitForText('第3组');
   await page.waitForText('共 3 组');
 
@@ -46,7 +46,7 @@ export async function run(page, baseUrl) {
   await page.fillByLabel('杠铃卧推 每组次数', '5');
   await page.blur();
   await sleep(300);
-  await page.clickText('完成');
+  await page.clickLabelContaining('完成一组 杠铃卧推');
   await page.waitForText('共 4 组');
   const textWithFifth = await page.text();
   if (!textWithFifth.includes('5次')) {
@@ -99,7 +99,7 @@ export async function run(page, baseUrl) {
   await page.fillByLabel('壶铃摇摆 运动时间', '20');
   await page.blur();
   await sleep(300);
-  await page.clickText('完成');
+  await page.clickLabelContaining('完成一次 壶铃摇摆');
   await page.waitForText('20分钟');
 
   // 回到今天：已完成仍是 3 组；壶铃摇摆的待训练卡片还在，但今天的记录里没有它
