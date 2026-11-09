@@ -1,19 +1,21 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WonderCarousel, type WonderCardModel } from '@/components/home/wonder-carousel';
+import { DashCarousel, type DashCardModel } from '@/components/home/dash-carousel';
+import { DashStack } from '@/components/home/dash-stack';
+import { TAB_BAR_HEIGHT } from '@/components/nav/app-tab-bar';
 import { TodayList } from '@/components/today/today-list';
-import { Spacing } from '@/constants/theme';
+import { DashCardSize, Spacing } from '@/constants/theme';
 import { countRecordsInRange } from '@/db/repositories/calendar';
 import { listCourses } from '@/db/repositories/courses';
 import { getLatestPlayed, listWishlist } from '@/db/repositories/games';
 import { getProfile } from '@/db/repositories/profile';
-import { getHomeCards, getPeriodTimes, getTermConfig } from '@/db/repositories/settings';
+import { getCardColor, getCardStyle, getDashMode, getHomeCards, getPeriodTimes, getTermConfig } from '@/db/repositories/settings';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
-import type { HomeCardId, ProfileRow, WishlistRow, PlayedGameRow } from '@/db/types';
+import type { CardStyle, DashMode, HomeCardId, ProfileRow, WishlistRow, PlayedGameRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { useDataVersion } from '@/lib/data-version';
 import { formatMonthDay, parseDate, todayStr } from '@/lib/date';
@@ -26,9 +28,15 @@ export default function HomeScreen() {
   const router = useRouter();
   const today = todayStr();
   const dataVersion = useDataVersion();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [cards, setCards] = useState<HomeCardId[]>([]);
+  const [dashMode, setDashMode] = useState<DashMode>('carousel');
+  const [cardStyle, setCardStyle] = useState<CardStyle>('default');
+  const [cardColor, setCardColor] = useState('#26262A');
   const [stats, setStats] = useState({ total: 0, done: 0 });
   const [training, setTraining] = useState<TrainingSummary>({
     sets: 0,
@@ -46,21 +54,40 @@ export default function HomeScreen() {
     const [year, month] = today.split('-').map(Number);
     const daysInMonth = new Date(year, month, 0).getDate();
     const monthEnd = `${today.slice(0, 7)}-${String(daysInMonth).padStart(2, '0')}`;
-    const [profileRow, cardIds, summary, wishList, latest, monthTotal, todayTotal, courseList, term, periodTimes] =
-      await Promise.all([
-        getProfile(),
-        getHomeCards(),
-        getTrainingSummary(today),
-        listWishlist(),
-        getLatestPlayed(),
-        countRecordsInRange(monthStart, monthEnd),
-        countRecordsInRange(today, today),
-        listCourses(),
-        getTermConfig(),
-        getPeriodTimes(),
-      ]);
+    const [
+      profileRow,
+      cardIds,
+      mode,
+      style,
+      color,
+      summary,
+      wishList,
+      latest,
+      monthTotal,
+      todayTotal,
+      courseList,
+      term,
+      periodTimes,
+    ] = await Promise.all([
+      getProfile(),
+      getHomeCards(),
+      getDashMode(),
+      getCardStyle(),
+      getCardColor(),
+      getTrainingSummary(today),
+      listWishlist(),
+      getLatestPlayed(),
+      countRecordsInRange(monthStart, monthEnd),
+      countRecordsInRange(today, today),
+      listCourses(),
+      getTermConfig(),
+      getPeriodTimes(),
+    ]);
     setProfile(profileRow);
     setCards(cardIds);
+    setDashMode(mode);
+    setCardStyle(style);
+    setCardColor(color);
     setTraining(summary);
     setWishes(wishList);
     setLatestPlayed(latest);
@@ -87,7 +114,7 @@ export default function HomeScreen() {
   const nowTime = new Date().toTimeString().slice(0, 5);
   const nextCourse = todayCourses.find((course) => course.time >= nowTime) ?? null;
 
-  const cardDescriptions: Record<HomeCardId, { title: string; subtitle: string; icon: WonderCardModel['icon'] }> = {
+  const cardDescriptions: Record<HomeCardId, { title: string; subtitle: string; icon: DashCardModel['icon'] }> = {
     fitness: {
       title: '去健身',
       subtitle:
@@ -130,7 +157,7 @@ export default function HomeScreen() {
     timetable: () => router.push('/timetable'),
   };
 
-  const cardModels: WonderCardModel[] = cards.map((id) => ({
+  const cardModels: DashCardModel[] = cards.map((id) => ({
     id,
     title: cardDescriptions[id].title,
     subtitle: cardDescriptions[id].subtitle,
@@ -141,46 +168,104 @@ export default function HomeScreen() {
   const name = profile?.name || '用户';
   const weekday = WEEKDAY_CHARS[parseDate(today).getDay()];
 
+  // 标题区占可用高度的 30%，Dash 区块占 70%（PRDv1.2.2 第 3.1 节）。
+  const availableHeight = Math.max(
+    320,
+    windowHeight - insets.top - insets.bottom - TAB_BAR_HEIGHT
+  );
+  const titleZoneHeight = Math.round(availableHeight * 0.3);
+
+  const titleScale = scrollY.interpolate({
+    inputRange: [-240, 0],
+    outputRange: [1.18, 1],
+    extrapolate: 'clamp',
+  });
+
+  const stackWidth = Math.min(DashCardSize.width, Math.max(200, windowWidth - 96));
+  const stackHeight = Math.round(stackWidth / 1.618);
+
+  const dashBlock = useMemo(() => {
+    if (dashMode === 'stack') {
+      return (
+        <DashStack
+          cards={cardModels}
+          style={cardStyle}
+          color={cardColor}
+          width={stackWidth}
+          height={stackHeight}
+        />
+      );
+    }
+    return (
+      <DashCarousel
+        cards={cardModels}
+        style={cardStyle}
+        color={cardColor}
+        onManage={() => router.push('/cards')}
+      />
+    );
+  }, [dashMode, cardModels, cardStyle, cardColor, stackWidth, stackHeight, router]);
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView
+        <Animated.ScrollView
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled">
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <ThemedText style={[styles.hello, { color: theme.textSecondary }]}>
-                Hey，{name}！
-              </ThemedText>
-              <View style={styles.dateRow}>
-                <ThemedText style={styles.date}>今天是 {formatMonthDay(today)}</ThemedText>
-                <ThemedText style={[styles.weekday, { color: theme.textSecondary }]}>
-                  星期{weekday}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+          })}>
+          <Animated.View style={[styles.titleZone, { minHeight: titleZoneHeight, transform: [{ scale: titleScale }] }]}>
+            <View style={styles.headerRow}>
+              <View style={styles.headerText}>
+                <ThemedText style={[styles.hello, { color: theme.textSecondary }]}>
+                  Hey，{name}！
                 </ThemedText>
+                <View style={styles.dateRow}>
+                  <ThemedText style={styles.date}>今天是 {formatMonthDay(today)}</ThemedText>
+                  <ThemedText style={[styles.weekday, { color: theme.textSecondary }]}>
+                    星期{weekday}
+                  </ThemedText>
+                </View>
               </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="打开个人资料"
+                onPress={() => router.push('/profile')}
+                style={({ pressed }) => [pressed && styles.pressed]}>
+                <View style={[styles.avatar, { backgroundColor: theme.backgroundElement }]}>
+                  {profile?.avatarUri ? (
+                    <Image
+                      key={profile.avatarUri}
+                      source={{ uri: profile.avatarUri }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <ThemedText style={styles.avatarText}>{name.slice(0, 1)}</ThemedText>
+                  )}
+                </View>
+              </Pressable>
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="打开个人资料"
-              onPress={() => router.push('/profile')}
-              style={({ pressed }) => [pressed && styles.pressed]}>
-              <View style={[styles.avatar, { backgroundColor: theme.backgroundElement }]}>
-                {profile?.avatarUri ? (
-                  <Image
-                    key={profile.avatarUri}
-                    source={{ uri: profile.avatarUri }}
-                    style={styles.avatarImage}
-                  />
-                ) : (
-                  <ThemedText style={styles.avatarText}>{name.slice(0, 1)}</ThemedText>
-                )}
-              </View>
-            </Pressable>
-          </View>
+            <View style={styles.dashTitleRow}>
+              <ThemedText style={styles.dashTitle}>Dash</ThemedText>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="管理首页卡片"
+                onPress={() => router.push('/cards')}
+                hitSlop={8}
+                style={({ pressed }) => [pressed && styles.pressed]}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  管理 ›
+                </ThemedText>
+              </Pressable>
+            </View>
+          </Animated.View>
 
-          <WonderCarousel cards={cardModels} onManage={() => router.push('/cards')} />
+          <View style={styles.dashBlock}>{dashBlock}</View>
 
           <View style={styles.tasks}>
             <View style={styles.tasksHeader}>
@@ -198,7 +283,7 @@ export default function HomeScreen() {
             </View>
             <TodayList date={today} onStats={setStats} emptyText="今天还没有安排" />
           </View>
-        </ScrollView>
+        </Animated.ScrollView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -213,14 +298,17 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: Spacing.six,
-    gap: Spacing.five,
   },
-  header: {
+  titleZone: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
     gap: Spacing.three,
   },
   headerText: {
@@ -239,8 +327,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   date: {
-    fontSize: 28,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 32,
     fontWeight: '700',
     letterSpacing: -0.4,
   },
@@ -265,8 +353,24 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
   },
+  dashTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingTop: Spacing.two,
+  },
+  dashTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  dashBlock: {
+    paddingTop: Spacing.two,
+  },
   tasks: {
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.four,
     gap: Spacing.two,
   },
   tasksHeader: {

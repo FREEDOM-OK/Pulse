@@ -8,7 +8,7 @@ import { SymbolView } from 'expo-symbols';
 import { usePathname, useRouter } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EventForm } from '@/components/home/event-form';
@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/themed-text';
 import { MemoForm } from '@/components/today/memo-form';
 import { TaskForm } from '@/components/today/task-form';
 import { ActionMenu } from '@/components/ui/action-menu';
+import { RipplePressable } from '@/components/ui/ripple-pressable';
 import { buildTabItems, type TabItem } from '@/constants/tabs';
 import { Motion, Spacing } from '@/constants/theme';
 import type { EventType, MiddleTab } from '@/db/types';
@@ -102,13 +103,15 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
     const active = isActive(tab);
     const color = active ? theme.text : theme.textSecondary;
     return (
-      <Pressable
+      <RipplePressable
         key={`${tab.name}-${middle}`}
         accessibilityRole="tab"
         accessibilityLabel={tab.title}
         accessibilityState={{ selected: active }}
         onPress={() => handleTabPress(tab)}
-        style={({ pressed }) => [styles.tab, pressed && styles.pressed]}>
+        rippleColor="rgba(0,0,0,0.08)"
+        rippleRadius={26}
+        style={styles.tab}>
         <SymbolView name={tab.icon} tintColor={color} size={22} />
         <ThemedText
           type="small"
@@ -116,7 +119,7 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
           numberOfLines={1}>
           {tab.title}
         </ThemedText>
-      </Pressable>
+      </RipplePressable>
     );
   };
 
@@ -191,21 +194,19 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
         {renderTab(tabs[1])}
 
         <View style={styles.plusSlot}>
-          <Pressable
+          <RipplePressable
             accessibilityRole="button"
             accessibilityLabel="新建"
             onPress={() => setMenuOpen(true)}
-            style={({ pressed }) => [
-              styles.plus,
-              { backgroundColor: theme.text, borderColor: theme.background },
-              pressed && styles.pressed,
-            ]}>
+            rippleColor="rgba(255,255,255,0.32)"
+            rippleRadius={26}
+            style={[styles.plus, { backgroundColor: theme.text, borderColor: theme.background }]}>
             <SymbolView
               name={{ ios: 'plus', android: 'add', web: 'add' }}
               tintColor={theme.background}
               size={24}
             />
-          </Pressable>
+          </RipplePressable>
         </View>
 
         {renderTab(tabs[2])}

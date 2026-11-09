@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
+import { CheckMark } from '@/components/ui/check-mark';
 import { Spacing } from '@/constants/theme';
 import type { TaskRow } from '@/db/types';
-import { useTheme } from '@/hooks/use-theme';
 
 interface TaskRowItemProps {
   task: TaskRow;
@@ -16,29 +16,17 @@ interface TaskRowItemProps {
 
 /** 计划条：方形勾选框 + 标题 + 右侧时间，长按出菜单。 */
 export function TaskRowItem({ task, onToggle, onMenu }: TaskRowItemProps) {
-  const theme = useTheme();
   const done = task.done === 1;
 
   return (
     <View style={styles.row}>
-      <Pressable
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: done }}
-        accessibilityLabel={done ? '标记为未完成' : '标记为完成'}
-        onPress={onToggle}
-        hitSlop={10}
-        style={({ pressed }) => [
-          styles.checkbox,
-          {
-            borderColor: done ? theme.text : theme.textSecondary,
-            backgroundColor: done ? theme.text : 'transparent',
-          },
-          pressed && styles.pressed,
-        ]}>
-        {done ? (
-          <ThemedText style={[styles.check, { color: theme.background }]}>✓</ThemedText>
-        ) : null}
-      </Pressable>
+      <View style={styles.checkbox}>
+        <CheckMark
+          checked={done}
+          onPress={onToggle}
+          accessibilityLabel={done ? '标记为未完成' : '标记为完成'}
+        />
+      </View>
 
       <Pressable
         accessibilityRole="button"
@@ -79,16 +67,9 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 22,
     height: 22,
-    borderRadius: 7,
-    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
-  },
-  check: {
-    fontSize: 12,
-    lineHeight: 14,
-    fontWeight: '700',
   },
   body: {
     flex: 1,

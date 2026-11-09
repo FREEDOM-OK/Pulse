@@ -10,10 +10,11 @@ import { TaskRowItem } from '@/components/today/task-row';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StaggeredAppear } from '@/components/ui/staggered-appear';
 import { Spacing } from '@/constants/theme';
 import { deleteMemo, listMemosByDate, toggleMemoPin } from '@/db/repositories/memos';
 import { listCourses } from '@/db/repositories/courses';
-import { getPeriodTimes, getSortMode, getTermConfig } from '@/db/repositories/settings';
+import { getHideCompleted, getPeriodTimes, getSortMode, getTermConfig } from '@/db/repositories/settings';
 import { deleteTask, listTasksByDate, toggleTask } from '@/db/repositories/tasks';
 import type { MemoRow, SortMode, TaskRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -55,24 +56,29 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState<DeleteTarget>(null);
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(false);
+  /** 刚勾选的条目先留在原位，300ms 后再沉到「已完成」（PRDv1.2.2 第 5.2 节）。 */
+  const [justChecked, setJustChecked] = useState<Set<string>>(() => new Set());
 
   const dataVersion = useDataVersion();
   const statsRef = useRef(onStats);
   statsRef.current = onStats;
 
   const load = useCallback(async () => {
-    const [taskList, memoList, courseList, term, periodTimes, sortMode] = await Promise.all([
+    const [taskList, memoList, courseList, term, periodTimes, sortMode, hide] = await Promise.all([
       listTasksByDate(date),
       listMemosByDate(date),
       listCourses(),
       getTermConfig(),
       getPeriodTimes(),
       getSortMode(),
+      getHideCompleted(),
     ]);
     setTasks(taskList);
     setMemos(memoList);
     setCourses(coursesOnDate(date, courseList, term.startDate, periodTimes));
     setMode(sortMode);
+    setHideCompleted(hide);
     statsRef.current?.({ total: taskList.length, done: taskList.filter((t) => t.done === 1).length });
   }, [date]);
 
@@ -85,7 +91,16 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
     load().catch(() => undefined);
   }, [dataVersion, load]);
 
-  const items = useMemo(() => buildTodayItems(date, tasks, memos, courses), [date, tasks, memos, courses]);
+  // 刚勾选的任务暂时按未完成参与排序，避免列表在 300ms 内跳位。
+  const sortingTasks = useMemo(
+    () => tasks.map((task) => (justChecked.has(`task-${task.id}`) ? { ...task, done: 0 } : task)),
+    [tasks, justChecked]
+  );
+
+  const items = useMemo(
+    () => buildTodayItems(date, sortingTasks, memos, courses),
+    [date, sortingTasks, memos, courses]
+  );
   const sorted = useMemo(() => sortTodayItems(items, mode), [items, mode]);
 
   const taskByKey = useMemo(() => new Map(tasks.map((task) => [`task-${task.id}`, task])), [tasks]);
@@ -101,8 +116,20 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
   }, [load]);
 
   const handleToggleTask = async (task: TaskRow) => {
+    const nextDone = task.done === 1 ? 0 : 1;
+    const key = `task-${task.id}`;
+    // 先本地翻状态，勾选动画立刻可见；300ms 后再落库并重新排序。
+    setTasks((list) => list.map((item) => (item.id === task.id ? { ...item, done: nextDone } : item)));
+    setJustChecked((current) => {
+      const next = new Set(current);
+      next.add(key);
+      return next;
+    });
     await toggleTask(task.id);
-    await load();
+    setTimeout(() => {
+      setJustChecked(new Set());
+      load().catch(() => undefined);
+    }, 300);
   };
 
   const handleToggleMemoPin = async (memo: MemoRow) => {
@@ -151,7 +178,7 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
     );
   };
 
-  const isEmpty = sorted.active.length === 0 && sorted.completed.length === 0;
+  const isEmpty = sorted.active.length === 0 && (hideCompleted || sorted.completed.length === 0);
 
   return (
     <View>
@@ -162,14 +189,14 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
         />
       ) : null}
 
-      {sorted.active.map((item) => (
-        <View key={item.key}>
+      {sorted.active.map((item, index) => (
+        <StaggeredAppear key={item.key} index={index}>
           {renderRow(item)}
           <View style={[styles.separator, { backgroundColor: theme.backgroundElement }]} />
-        </View>
+        </StaggeredAppear>
       ))}
 
-      {sorted.completed.length > 0 ? (
+      {!hideCompleted && sorted.completed.length > 0 ? (
         <View>
           <Pressable
             accessibilityRole="button"

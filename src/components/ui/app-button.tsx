@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
+import { RipplePressable } from '@/components/ui/ripple-pressable';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -22,23 +23,24 @@ export function AppButton({
   const background =
     variant === 'primary' ? theme.text : variant === 'danger' ? '#D64545' : theme.backgroundElement;
   const color = variant === 'secondary' ? theme.text : theme.background;
+  const rippleColor = variant === 'secondary' ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.24)';
 
   return (
-    <Pressable
+    <RipplePressable
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      rippleColor={rippleColor}
+      style={[
         styles.button,
         { backgroundColor: background },
         fullWidth && styles.fullWidth,
         disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
       ]}>
       <ThemedText type="smallBold" style={{ color }}>
         {label}
       </ThemedText>
-    </Pressable>
+    </RipplePressable>
   );
 }
 
@@ -56,8 +58,5 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.4,
-  },
-  pressed: {
-    opacity: 0.75,
   },
 });

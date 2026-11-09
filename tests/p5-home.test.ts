@@ -20,11 +20,12 @@ afterEach(() => {
 });
 
 describe('首页结构（PRDv1.2 P5）', () => {
-  it('首页包含问候、日期、万事卡与 Tasks 四段', () => {
+  it('首页包含问候、日期、Dash 卡片与 Tasks 四段', () => {
     const page = readApp('(tabs)/index.tsx');
     expect(page).toContain('Hey，');
     expect(page).toContain('今天是');
-    expect(page).toContain('<WonderCarousel');
+    expect(page).toContain('<DashCarousel');
+    expect(page).toContain('Dash');
     expect(page).toContain('Tasks');
   });
 
