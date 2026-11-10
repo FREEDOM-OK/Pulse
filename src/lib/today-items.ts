@@ -4,7 +4,7 @@
  */
 
 import type { MemoRow, TaskRow } from '@/db/types';
-import type { CourseOnDate } from '@/lib/timetable';
+import type { CourseOnDate } from '@/features/timetable/bridge';
 import type { TodayItem } from '@/lib/today-sort';
 
 export function taskToTodayItem(task: TaskRow): TodayItem {

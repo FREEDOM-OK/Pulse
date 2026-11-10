@@ -1,172 +1,189 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { SubPageHeader } from '@/components/timetable/sub-header';
-import { TextField } from '@/components/ui/text-field';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import type { PeriodTime } from '@/db/types';
-import { getPeriodTimes, setPeriodTimes } from '@/db/repositories/settings';
-import { bumpDataVersion } from '@/lib/data-version';
-import { findPeriodOverlap, isValidTime } from '@/lib/timetable-periods';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTimetable } from '@/features/timetable/TimetableContext';
+import { PeriodTime, SAFE_TOP_DP, SAFE_BOTTOM_DP } from '@/lib/timetable-core';
 
-/** 上课时间：逐节改开始 / 结束时间，保存前校验格式与重叠。 */
-export default function TimetablePeriodsScreen() {
-  const theme = useTheme();
+export default function PeriodsSettingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { settings, updateSetting } = useTimetable();
+  const [list, setList] = useState<PeriodTime[]>(() =>
+    JSON.parse(JSON.stringify(settings.periodTimes))
+  );
 
-  const [times, setTimes] = useState<PeriodTime[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setTimes(await getPeriodTimes());
-  }, []);
-
-  useEffect(() => {
-    load().catch(() => undefined);
-  }, [load]);
-
-  const update = (index: number, key: keyof PeriodTime, value: string) => {
-    setTimes((current) =>
-      current.map((time, currentIndex) =>
-        currentIndex === index ? { ...time, [key]: value } : time
-      )
-    );
-    setError(null);
+  const handleAddPeriod = () => {
+    if (list.length >= 16) return;
+    const last = list[list.length - 1] || { start: '08:00', end: '08:45' };
+    let [h, m] = last.end.split(':').map(Number);
+    m += 10;
+    if (m >= 60) {
+      h = (h + Math.floor(m / 60)) % 24;
+      m %= 60;
+    }
+    const start = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    m += settings.periodDuration;
+    if (m >= 60) {
+      h = (h + Math.floor(m / 60)) % 24;
+      m %= 60;
+    }
+    const end = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    setList((prev) => [...prev, { start, end }]);
   };
 
-  const save = async () => {
-    for (let index = 0; index < times.length; index += 1) {
-      const time = times[index];
-      if (!isValidTime(time.start) || !isValidTime(time.end)) {
-        setError(`第 ${index + 1} 节的时间要写成 HH:MM，例如 08:00`);
+  const handleSave = async () => {
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    for (let i = 0; i < list.length; i++) {
+      const { start, end } = list[i];
+      if (!timeRegex.test(start) || !timeRegex.test(end)) {
+        Alert.alert('提示', '时间格式应为 HH:MM');
         return;
       }
-      if (time.end <= time.start) {
-        setError(`第 ${index + 1} 节的结束时间要晚于开始时间`);
+      if (start >= end && !(start >= '23:00' && end <= '02:00')) {
+        Alert.alert('提示', `第 ${i + 1} 节的结束时间需晚于开始时间`);
+        return;
+      }
+      if (i > 0 && start < list[i - 1].end) {
+        Alert.alert('提示', `第 ${i + 1} 节与第 ${i} 节时间重叠`);
         return;
       }
     }
-    const overlap = findPeriodOverlap(times);
-    if (overlap !== null) {
-      setError(`第 ${overlap} 节与第 ${overlap - 1} 节时间重叠`);
-      return;
-    }
-    await setPeriodTimes(times);
-    bumpDataVersion();
+    await updateSetting('periodTimes', list);
     router.back();
   };
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.background }}>
-      <SubPageHeader title="上课时间" onBack={() => router.back()} actionLabel="保存" onAction={save} />
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top || SAFE_TOP_DP,
+          paddingBottom: insets.bottom || SAFE_BOTTOM_DP,
+        },
+      ]}
+    >
+      <View style={styles.headerBar}>
+        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+          <Text style={styles.backArrow}>‹</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>节次设置</Text>
+        <TouchableOpacity onPress={handleSave}>
+          <Text style={styles.saveText}>保存</Text>
+        </TouchableOpacity>
+      </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-          共 {times.length} 节。改了时间后，课表左侧与课程详情里的时间会一起变。
-        </ThemedText>
-
-        {error ? (
-          <ThemedText type="small" style={[styles.error, { color: theme.text }]}>
-            {error}
-          </ThemedText>
-        ) : null}
-
-        <View style={[styles.table, { borderColor: theme.backgroundElement }]}>
-          <View style={[styles.headRow, { borderBottomColor: theme.backgroundElement }]}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.colNo}>
-              节次
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.colTime}>
-              开始
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.colTime}>
-              结束
-            </ThemedText>
-          </View>
-
-          {times.map((time, index) => (
-            <View
-              key={index}
-              style={[
-                styles.row,
-                index < times.length - 1 && {
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: theme.backgroundElement,
-                },
-              ]}>
-              <ThemedText style={[styles.colNo, styles.periodNo]}>第 {index + 1} 节</ThemedText>
-              <View style={styles.colTime}>
-                <TextField
-                  accessibilityLabel={`第 ${index + 1} 节开始时间`}
-                  value={time.start}
-                  onChangeText={(value) => update(index, 'start', value)}
-                  placeholder="08:00"
-                  autoCapitalize="none"
-                  style={styles.input}
+      <ScrollView contentContainerStyle={styles.scrollBody}>
+        {list.map((item, idx) => {
+          const canDelete = list.length > 1;
+          return (
+            <View key={idx} style={styles.periodCard}>
+              <Text style={styles.periodLabel}>第 {idx + 1} 节</Text>
+              <View style={styles.rightControls}>
+                <TextInput
+                  value={item.start}
+                  maxLength={5}
+                  onChangeText={(txt) => {
+                    const next = [...list];
+                    next[idx].start = txt;
+                    setList(next);
+                  }}
+                  style={styles.timeInput}
                 />
-              </View>
-              <View style={styles.colTime}>
-                <TextField
-                  accessibilityLabel={`第 ${index + 1} 节结束时间`}
-                  value={time.end}
-                  onChangeText={(value) => update(index, 'end', value)}
-                  placeholder="08:45"
-                  autoCapitalize="none"
-                  style={styles.input}
+                <Text style={styles.dash}>–</Text>
+                <TextInput
+                  value={item.end}
+                  maxLength={5}
+                  onChangeText={(txt) => {
+                    const next = [...list];
+                    next[idx].end = txt;
+                    setList(next);
+                  }}
+                  style={styles.timeInput}
                 />
+                <TouchableOpacity
+                  disabled={!canDelete}
+                  onPress={() => setList((prev) => prev.filter((_, i) => i !== idx))}
+                >
+                  <Text style={canDelete ? styles.delText : styles.delDisabled}>删除</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          ))}
-        </View>
+          );
+        })}
+
+        <TouchableOpacity style={styles.addBtn} onPress={handleAddPeriod}>
+          <Text style={styles.addBtnText}>＋ 添加一节</Text>
+        </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
+  container: { flex: 1, backgroundColor: '#F5F5F7' },
+  headerBar: {
+    height: 52,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  hint: {
-    lineHeight: 19,
-  },
-  error: {
-    fontWeight: '600',
-  },
-  table: {
-    borderWidth: StyleSheet.hairlineWidth,
+  backBtnCircle: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
-    overflow: 'hidden',
-    paddingHorizontal: Spacing.three,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headRow: {
+  backArrow: { fontSize: 22, color: '#111113', lineHeight: 24 },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: '#111113' },
+  saveText: { fontSize: 15, fontWeight: '600', color: '#3B82F6' },
+  scrollBody: { padding: 16, gap: 10 },
+  periodCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'space-between',
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    gap: 8,
-  },
-  colNo: {
-    width: 96,
+  periodLabel: { fontSize: 14, fontWeight: '600', color: '#111113' },
+  rightControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  timeInput: {
+    width: 62,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F7',
+    textAlign: 'center',
     fontSize: 13,
-  },
-  periodNo: {
     fontWeight: '600',
+    color: '#111113',
   },
-  colTime: {
-    flex: 1,
+  dash: { color: 'rgba(0,0,0,0.4)' },
+  delText: { fontSize: 13, color: '#EF4444', fontWeight: '500', marginLeft: 6 },
+  delDisabled: { fontSize: 13, color: 'rgba(0,0,0,0.2)', marginLeft: 6 },
+  addBtn: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
   },
-  input: {
-    fontSize: 13,
-  },
+  addBtnText: { fontSize: 13, fontWeight: '600', color: 'rgba(0,0,0,0.6)' },
 });

@@ -1,139 +1,167 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/themed-text';
-import { SubPageHeader } from '@/components/timetable/sub-header';
-import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { listCourses, type CourseWithSlots } from '@/db/repositories/courses';
-import { getTermConfig } from '@/db/repositories/settings';
-import { useDataVersion } from '@/lib/data-version';
-import { formatWeeksRange } from '@/lib/timetable';
-import { WEEKDAY_LABELS } from '@/lib/timetable-grid';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTimetable } from '@/features/timetable/TimetableContext';
+import {
+  SAFE_TOP_DP,
+  SAFE_BOTTOM_DP,
+  softenColor,
+} from '@/lib/timetable-core';
 
-/** 已填课程：列出所有课程与其时段，点进去查看 / 编辑。 */
-export default function TimetableCoursesScreen() {
-  const theme = useTheme();
+export default function AllCoursesScreen() {
   const router = useRouter();
-  const dataVersion = useDataVersion();
-  const [courses, setCourses] = useState<CourseWithSlots[]>([]);
-  const [totalWeeks, setTotalWeeks] = useState(18);
+  const insets = useSafeAreaInsets();
+  const { courses, settings, deleteCourse } = useTimetable();
 
-  const load = useCallback(async () => {
-    const [list, term] = await Promise.all([listCourses(), getTermConfig()]);
-    setCourses(list);
-    setTotalWeeks(term.totalWeeks);
-  }, []);
-
-  useEffect(() => {
-    load().catch(() => undefined);
-  }, [load, dataVersion]);
+  const sortedCourses = [...courses].sort((a, b) =>
+    a.name.localeCompare(b.name, 'zh-Hans-CN')
+  );
+  const totalPeriods = settings.periodTimes.length;
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: theme.background }}>
-      <SubPageHeader
-        title="已填课程"
-        onBack={() => router.back()}
-        actionLabel="添加"
-        onAction={() => router.push('/timetable/course')}
-      />
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top || SAFE_TOP_DP,
+          paddingBottom: insets.bottom || SAFE_BOTTOM_DP,
+        },
+      ]}
+    >
+      <View style={styles.headerBar}>
+        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+          <Text style={styles.backArrow}>‹</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>全部课程</Text>
+        <View style={{ width: 36 }} />
+      </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        {courses.length === 0 ? (
-          <View style={[styles.empty, { borderColor: theme.backgroundElement }]}>
-            <ThemedText type="subtitle" style={styles.emptyTitle}>
-              还没有课程
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              点右上角「添加」，或者直接在课表空格子里点 ＋。
-            </ThemedText>
-          </View>
-        ) : (
-          courses.map((course) => {
-            const weeks = course.slots.flatMap((slot) => slot.weeks);
-            const slotsText = course.slots
-              .map(
-                (slot) =>
-                  `周${WEEKDAY_LABELS[slot.weekday - 1]} 第 ${slot.startPeriod}-${slot.endPeriod} 节`
-              )
-              .join(' · ');
+      {sortedCourses.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>还没有课程</Text>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => router.push('/timetable/course')}
+          >
+            <Text style={styles.addBtnText}>添加课程</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollBody}>
+          {sortedCourses.map((c) => {
+            const dotColor = softenColor(c.color, settings.saturation);
+            const outOfRangeCount = c.sessions.filter(
+              (s) => s.startPeriod > totalPeriods || s.endPeriod > totalPeriods
+            ).length;
+
             return (
-              <Pressable
-                key={course.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${course.name} ${slotsText}`}
+              <TouchableOpacity
+                key={c.id}
+                style={styles.courseCard}
                 onPress={() =>
-                  router.push({ pathname: '/timetable/course', params: { id: String(course.id) } })
+                  router.push({ pathname: '/timetable/course', params: { id: c.id } })
                 }
-                style={({ pressed }) => [
-                  styles.card,
-                  { borderColor: theme.backgroundElement },
-                  pressed && styles.pressed,
-                ]}>
-                <View style={styles.titleRow}>
-                  <View style={[styles.dot, { backgroundColor: course.color ?? '#4C8DF6' }]} />
-                  <ThemedText style={styles.name} numberOfLines={1}>
-                    {course.name}
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    ›
-                  </ThemedText>
+                delayLongPress={400}
+                onLongPress={() => {
+                  Alert.alert(c.name, '选择操作', [
+                    {
+                      text: '编辑',
+                      onPress: () =>
+                        router.push({ pathname: '/timetable/course', params: { id: c.id } }),
+                    },
+                    {
+                      text: '删除',
+                      style: 'destructive',
+                      onPress: () => {
+                        Alert.alert('确认删除', `确定删除「${c.name}」吗？`, [
+                          { text: '取消', style: 'cancel' },
+                          {
+                            text: '删除',
+                            style: 'destructive',
+                            onPress: () => deleteCourse(c.id),
+                          },
+                        ]);
+                      },
+                    },
+                    { text: '取消', style: 'cancel' },
+                  ]);
+                }}
+              >
+                <View style={styles.rowLeft}>
+                  <View style={[styles.colorDot, { backgroundColor: dotColor }]} />
+                  <View>
+                    <Text style={styles.courseName}>{c.name}</Text>
+                    <Text style={styles.sessionCount}>{c.sessions.length} 个时段</Text>
+                    {outOfRangeCount > 0 && (
+                      <Text style={styles.outOfRangeText}>
+                        有 {outOfRangeCount} 个时段超出当前节次范围
+                      </Text>
+                    )}
+                  </View>
                 </View>
-                <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                  {slotsText || '还没有时段'}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatWeeksRange(weeks, totalWeeks)}
-                  {course.room ? ` · ${course.room}` : ''}
-                  {course.teacher ? ` · ${course.teacher}` : ''}
-                </ThemedText>
-              </Pressable>
+                <Text style={styles.chevron}>›</Text>
+              </TouchableOpacity>
             );
-          })
-        )}
-      </ScrollView>
-    </SafeAreaView>
+          })}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.three,
-  },
-  empty: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 20,
-    padding: Spacing.four,
-    gap: Spacing.two,
-  },
-  emptyTitle: {
-    fontSize: 18,
-  },
-  card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 18,
-    padding: Spacing.three,
-    gap: 6,
-  },
-  titleRow: {
+  container: { flex: 1, backgroundColor: '#F5F5F7' },
+  headerBar: {
+    height: 52,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  backBtnCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.12)',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  name: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
+  backArrow: { fontSize: 22, color: '#111113', lineHeight: 24 },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: '#111113' },
+  scrollBody: { padding: 16, gap: 10 },
+  courseCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  pressed: {
-    opacity: 0.6,
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  colorDot: { width: 12, height: 12, borderRadius: 6 },
+  courseName: { fontSize: 16, fontWeight: '600', color: '#111113' },
+  sessionCount: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginTop: 2 },
+  outOfRangeText: { fontSize: 11, color: '#D97706', marginTop: 2 },
+  chevron: { fontSize: 18, color: 'rgba(0,0,0,0.3)' },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: 'rgba(0,0,0,0.6)' },
+  addBtn: {
+    paddingHorizontal: 20,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  addBtnText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
 });

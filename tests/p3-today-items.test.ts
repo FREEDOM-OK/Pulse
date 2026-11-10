@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemoRow, TaskRow } from '@/db/types';
-import type { CourseOnDate } from '@/lib/timetable';
+import type { CourseOnDate } from '@/features/timetable/bridge';
 import { buildTodayItems, courseToTodayItem, memoToTodayItem, taskToTodayItem } from '@/lib/today-items';
 import { sortTodayItems } from '@/lib/today-sort';
 
@@ -39,8 +39,8 @@ function memo(over: Partial<MemoRow> = {}): MemoRow {
 
 function course(over: Partial<CourseOnDate> = {}): CourseOnDate {
   return {
-    courseId: 7,
-    slotId: 11,
+    courseId: 'c7',
+    slotId: 's11',
     name: '高等数学',
     color: '#4C8DF6',
     weekday: 7,
@@ -78,14 +78,14 @@ describe('buildTodayItems', () => {
   });
 
   it('课程派生行：sort_order 取开始节次，携带课程子对象', () => {
-    const item = courseToTodayItem(DATE, course({ slotId: 2, startPeriod: 3, endPeriod: 4 }));
+    const item = courseToTodayItem(DATE, course({ slotId: 's2', startPeriod: 3, endPeriod: 4 }));
     expect(item.kind).toBe('course');
-    expect(item.key).toBe('course-2');
+    expect(item.key).toBe('course-s2');
     expect(item.date).toBe(DATE);
     expect(item.sort_order).toBe(3);
     expect(item.course).toEqual({
-      slotId: 2,
-      courseId: 7,
+      slotId: 's2',
+      courseId: 'c7',
       name: '高等数学',
       color: '#4C8DF6',
       startPeriod: 3,
@@ -98,7 +98,7 @@ describe('buildTodayItems', () => {
       DATE,
       [task({ id: 1 }), task({ id: 2 })],
       [memo({ id: 1 }), memo({ id: 2 })],
-      [course({ slotId: 1 })]
+      [course({ slotId: 's1' })]
     );
     expect(items).toHaveLength(5);
     const keys = items.map((item) => item.key);

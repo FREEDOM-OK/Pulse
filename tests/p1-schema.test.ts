@@ -20,8 +20,9 @@ const TABLES = [
   'played_games',
   'settings',
   'memos',
-  'courses',
-  'course_slots',
+  'schedules',
+  'sched_courses',
+  'sched_sessions',
 ];
 
 describe('P1 数据库结构与迁移', () => {
@@ -29,7 +30,7 @@ describe('P1 数据库结构与迁移', () => {
     resetDriverForTests();
   });
 
-  it('迁移后 11 张业务表都存在，饮食表已移除、备忘与课表表存在', async () => {
+  it('迁移后所有业务表都存在，饮食表与旧课表三表已移除', async () => {
     await createTestContext();
     const rows = await getDriver().getAllAsync<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type = 'table'"
@@ -39,6 +40,8 @@ describe('P1 数据库结构与迁移', () => {
       expect(names, `缺少表 ${table}`).toContain(table);
     }
     expect(names).not.toContain('diet_records');
+    expect(names).not.toContain('courses');
+    expect(names).not.toContain('course_slots');
     expect(names).toContain('memos');
   });
 

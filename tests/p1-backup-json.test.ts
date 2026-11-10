@@ -21,9 +21,9 @@ const SAMPLE: BackupPayload = {
     wishlist: [],
     playedGames: [],
     memos: [],
-    courses: [],
-    courseSlots: [],
-    courseExceptions: [],
+    schedules: [],
+    schedCourses: [],
+    schedSessions: [],
     settings: { theme: 'dark', 'fitness.defaultReps': '12', 'profile.name': '小明' },
   },
 };

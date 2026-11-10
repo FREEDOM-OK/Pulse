@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import type { CourseOnDate } from '@/lib/timetable';
+import type { CourseOnDate } from '@/features/timetable/bridge';
 
 interface CourseRowItemProps {
   course: CourseOnDate;

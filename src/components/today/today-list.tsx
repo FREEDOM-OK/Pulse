@@ -13,13 +13,12 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StaggeredAppear } from '@/components/ui/staggered-appear';
 import { Spacing } from '@/constants/theme';
 import { deleteMemo, listMemosByDate, toggleMemoPin } from '@/db/repositories/memos';
-import { listCourses } from '@/db/repositories/courses';
-import { getHideCompleted, getPeriodTimes, getSortMode, getTermConfig } from '@/db/repositories/settings';
+import { getHideCompleted, getSortMode } from '@/db/repositories/settings';
 import { deleteTask, listTasksByDate, toggleTask } from '@/db/repositories/tasks';
 import type { MemoRow, SortMode, TaskRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
-import { coursesOnDate, type CourseOnDate } from '@/lib/timetable';
+import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
 import { buildTodayItems } from '@/lib/today-items';
 import { sortTodayItems, type TodayItem } from '@/lib/today-sort';
 
@@ -65,18 +64,16 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
   statsRef.current = onStats;
 
   const load = useCallback(async () => {
-    const [taskList, memoList, courseList, term, periodTimes, sortMode, hide] = await Promise.all([
+    const [taskList, memoList, courseList, sortMode, hide] = await Promise.all([
       listTasksByDate(date),
       listMemosByDate(date),
-      listCourses(),
-      getTermConfig(),
-      getPeriodTimes(),
+      listCoursesForDate(date),
       getSortMode(),
       getHideCompleted(),
     ]);
     setTasks(taskList);
     setMemos(memoList);
-    setCourses(coursesOnDate(date, courseList, term.startDate, periodTimes));
+    setCourses(courseList);
     setMode(sortMode);
     setHideCompleted(hide);
     statsRef.current?.({ total: taskList.length, done: taskList.filter((t) => t.done === 1).length });

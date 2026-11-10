@@ -10,8 +10,9 @@ import type { SortMode } from '@/db/types';
 export type TodayItemKind = 'task' | 'memo' | 'course';
 
 export interface TodayItemCourse {
-  slotId: number;
-  courseId: number;
+  /** 课表时段 id（课表主键是字符串）。 */
+  slotId: string | number;
+  courseId: string | number;
   name: string;
   color: string;
   startPeriod: number;

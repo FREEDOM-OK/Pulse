@@ -2,7 +2,6 @@ import { getDriver } from '../connection';
 import { ALL_TABLES, SCHEMA_VERSION } from '../schema';
 import { seedExercises } from '../seed';
 import { resetProfile } from './profile';
-import type { CourseExceptionRow } from '../types';
 import type { SqlParam } from '../driver';
 
 export const BACKUP_APP_ID = 'my-life-app';
@@ -19,9 +18,10 @@ export interface BackupData {
   playedGames: Record<string, unknown>[];
   events: Record<string, unknown>[];
   memos: Record<string, unknown>[];
-  courses: Record<string, unknown>[];
-  courseSlots: Record<string, unknown>[];
-  courseExceptions: Record<string, unknown>[];
+  /** v7 起：课表三表（行结构与数据库一致，snake_case）。 */
+  schedules: Record<string, unknown>[];
+  schedCourses: Record<string, unknown>[];
+  schedSessions: Record<string, unknown>[];
   settings: Record<string, string>;
 }
 
@@ -126,24 +126,8 @@ interface MemoRow {
   created_at: string;
   updated_at: string;
 }
-interface CourseRow {
-  id: number;
-  name: string;
-  teacher: string | null;
-  room: string | null;
-  color: string | null;
-  note: string | null;
-  background: string;
-  created_at: string;
-}
-interface CourseSlotRow {
-  id: number;
-  course_id: number;
-  weekday: number;
-  start_period: number;
-  end_period: number;
-  weeks: string;
-  created_at: string;
+interface TimetableRow {
+  [key: string]: unknown;
 }
 
 const LEGACY_MEAL_LABELS: Record<string, string> = {
@@ -185,9 +169,9 @@ export async function exportBackup(): Promise<BackupPayload> {
     playedGames,
     events,
     memos,
-    courses,
-    courseSlots,
-    courseExceptions,
+    schedules,
+    schedCourses,
+    schedSessions,
   ] = await Promise.all([
       driver.getAllAsync<TaskRow>('SELECT * FROM tasks ORDER BY id ASC'),
       driver.getAllAsync<ExerciseRow>('SELECT * FROM exercises WHERE is_preset = 0 ORDER BY id ASC'),
@@ -197,9 +181,9 @@ export async function exportBackup(): Promise<BackupPayload> {
       driver.getAllAsync<PlayedRow>('SELECT * FROM played_games ORDER BY id ASC'),
       driver.getAllAsync<EventRow>('SELECT * FROM events ORDER BY id ASC'),
       driver.getAllAsync<MemoRow>('SELECT * FROM memos ORDER BY id ASC'),
-      driver.getAllAsync<CourseRow>('SELECT * FROM courses ORDER BY id ASC'),
-      driver.getAllAsync<CourseSlotRow>('SELECT * FROM course_slots ORDER BY id ASC'),
-      driver.getAllAsync<CourseExceptionRow>('SELECT * FROM course_exceptions ORDER BY id ASC'),
+      driver.getAllAsync<TimetableRow>('SELECT * FROM schedules ORDER BY id ASC'),
+      driver.getAllAsync<TimetableRow>('SELECT * FROM sched_courses ORDER BY id ASC'),
+      driver.getAllAsync<TimetableRow>('SELECT * FROM sched_sessions ORDER BY id ASC'),
     ]);
 
   const settingsRows = await driver.getAllAsync<{ key: string; value: string }>(
@@ -293,31 +277,9 @@ export async function exportBackup(): Promise<BackupPayload> {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       })),
-      courses: courses.map((row) => ({
-        id: row.id,
-        name: row.name,
-        teacher: row.teacher,
-        room: row.room,
-        color: row.color,
-        note: row.note,
-        background: row.background,
-        createdAt: row.created_at,
-      })),
-      courseSlots: courseSlots.map((row) => ({
-        id: row.id,
-        courseId: row.course_id,
-        weekday: row.weekday,
-        startPeriod: row.start_period,
-        endPeriod: row.end_period,
-        weeks: row.weeks,
-        createdAt: row.created_at,
-      })),
-      courseExceptions: courseExceptions.map((row) => ({
-        id: row.id,
-        courseId: row.course_id,
-        week: row.week,
-        createdAt: row.created_at,
-      })),
+      schedules,
+      schedCourses,
+      schedSessions,
       settings: Object.fromEntries(
         settingsRows
           .filter((row) => row.key !== PROFILE_AVATAR_KEY)
@@ -384,21 +346,20 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
     if (typeof settingValue === 'string') normalizedSettings[key] = settingValue;
   }
 
-  // v4 起才有备忘与课表。更早版本里的 memos 是已废弃的旧结构（无 date 字段），直接忽略。
+  // v4 起才有备忘。更早版本里的 memos 是已废弃的旧结构（无 date 字段），直接忽略。
   const isV4 = version >= 4;
   const memos = isV4 && Array.isArray(dataObject.memos)
     ? (dataObject.memos as Record<string, unknown>[])
     : [];
-  const courses = isV4 && Array.isArray(dataObject.courses)
-    ? (dataObject.courses as Record<string, unknown>[])
-    : [];
-  const courseSlots = isV4 && Array.isArray(dataObject.courseSlots)
-    ? (dataObject.courseSlots as Record<string, unknown>[])
-    : [];
-  // v5 起才有「按周跳过」；更早版本视为空。
-  const courseExceptions = version >= 5 && Array.isArray(dataObject.courseExceptions)
-    ? (dataObject.courseExceptions as Record<string, unknown>[])
-    : [];
+  // v7 起课表换成 Schedule 三表；更早版本这三项视为空。
+  const isV7 = version >= 7;
+  const readRows = (key: string): Record<string, unknown>[] =>
+    isV7 && Array.isArray(dataObject[key])
+      ? (dataObject[key] as Record<string, unknown>[])
+      : [];
+  const schedules = readRows('schedules');
+  const schedCourses = readRows('schedCourses');
+  const schedSessions = readRows('schedSessions');
 
   return {
     app: BACKUP_APP_ID,
@@ -413,9 +374,9 @@ export function parseBackupPayload(raw: unknown): BackupPayload {
       playedGames: dataObject.playedGames as Record<string, unknown>[],
       events,
       memos,
-      courses,
-      courseSlots,
-      courseExceptions,
+      schedules,
+      schedCourses,
+      schedSessions,
       settings: normalizedSettings,
     },
   };
@@ -431,9 +392,9 @@ export function summarizeBackup(payload: BackupPayload) {
     playedGames: payload.data.playedGames.length,
     events: payload.data.events.length,
     memos: payload.data.memos.length,
-    courses: payload.data.courses.length,
-    courseSlots: payload.data.courseSlots.length,
-    courseExceptions: payload.data.courseExceptions.length,
+    schedules: payload.data.schedules.length,
+    schedCourses: payload.data.schedCourses.length,
+    schedSessions: payload.data.schedSessions.length,
     exercises: payload.data.exercises.length,
   };
 }
@@ -618,47 +579,54 @@ export async function importBackup(payload: BackupPayload): Promise<void> {
       );
     }
 
-    const courseIds = new Map<number, number>();
-    for (const row of data.courses) {
-      const result = await driver.runAsync(
-        `INSERT INTO courses (name, teacher, room, color, note, background, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          value<string>(row, 'name'),
-          value<string | null>(row, 'teacher') ?? null,
-          value<string | null>(row, 'room') ?? null,
-          value<string | null>(row, 'color') ?? null,
-          value<string | null>(row, 'note') ?? null,
-          value<string | null>(row, 'background') ?? 'plain',
-          value<string>(row, 'createdAt'),
-        ]
-      );
-      rememberId(courseIds, row, result);
-    }
-
-    for (const row of data.courseSlots) {
+    // 课表三表：主键是字符串，直接原样回写，不需要做 ID 重映射。
+    for (const row of data.schedules) {
       await driver.runAsync(
-        `INSERT INTO course_slots
-         (course_id, weekday, start_period, end_period, weeks, created_at)
+        `INSERT INTO schedules (id, name, start_date, total_weeks, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [
-          remap(courseIds, row, 'courseId'),
-          value<number>(row, 'weekday') ?? 1,
-          value<number>(row, 'startPeriod') ?? 1,
-          value<number>(row, 'endPeriod') ?? 1,
-          normalizeWeeksField(row.weeks),
-          value<string>(row, 'createdAt'),
+          value<string>(row, 'id'),
+          value<string>(row, 'name'),
+          value<string>(row, 'start_date'),
+          value<number>(row, 'total_weeks') ?? 20,
+          value<string>(row, 'created_at'),
+          value<string>(row, 'updated_at'),
         ]
       );
     }
 
-    for (const row of data.courseExceptions) {
+    for (const row of data.schedCourses) {
       await driver.runAsync(
-        'INSERT OR IGNORE INTO course_exceptions (course_id, week, created_at) VALUES (?, ?, ?)',
+        `INSERT INTO sched_courses (id, schedule_id, name, color, credits, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
-          remap(courseIds, row, 'courseId'),
-          value<number>(row, 'week') ?? 1,
-          value<string>(row, 'createdAt') || new Date().toISOString(),
+          value<string>(row, 'id'),
+          value<string>(row, 'schedule_id'),
+          value<string>(row, 'name'),
+          value<string>(row, 'color'),
+          value<string | null>(row, 'credits') ?? '选填',
+          value<string>(row, 'created_at'),
+          value<string>(row, 'updated_at'),
+        ]
+      );
+    }
+
+    for (const row of data.schedSessions) {
+      await driver.runAsync(
+        `INSERT INTO sched_sessions
+           (id, course_id, teacher, location, day_of_week, start_period, end_period, weeks, remark, custom_time)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          value<string>(row, 'id'),
+          value<string>(row, 'course_id'),
+          value<string>(row, 'teacher') ?? '',
+          value<string>(row, 'location') ?? '',
+          value<number>(row, 'day_of_week') ?? 1,
+          value<number>(row, 'start_period') ?? 1,
+          value<number>(row, 'end_period') ?? 1,
+          normalizeWeeksField(row.weeks),
+          value<string>(row, 'remark') ?? '',
+          value<string>(row, 'custom_time') ?? '',
         ]
       );
     }

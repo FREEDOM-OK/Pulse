@@ -293,7 +293,7 @@ describe('P1 备份与恢复', () => {
       playedGames: 1,
     });
     expect(summary).not.toHaveProperty('dietRecords');
-    expect(summary).toMatchObject({ memos: 0, courses: 0, courseSlots: 0 });
+    expect(summary).toMatchObject({ memos: 0, schedules: 0, schedCourses: 0, schedSessions: 0 });
     expect(typeof summary.exportedAt).toBe('string');
   });
 });

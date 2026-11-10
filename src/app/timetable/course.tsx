@@ -1,544 +1,932 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-
-import { ThemedText } from '@/components/themed-text';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { WheelPicker } from '@/components/ui/wheel-picker';
-import { SubPageHeader } from '@/components/timetable/sub-header';
-import type { CourseBackground } from '@/db/types';
-import { COURSE_BACKGROUNDS, COURSE_BACKGROUND_LABELS } from '@/db/types';
+import React, { useState, useMemo } from 'react';
 import {
-  createCourse,
-  findSlotConflict,
-  getCourse,
-  updateCourse,
-  type CreateSlotInput,
-} from '@/db/repositories/courses';
-import { getPeriodCount, getTermConfig } from '@/db/repositories/settings';
-import { bumpDataVersion } from '@/lib/data-version';
-import { Space, Type } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { validateCourseDraft, weeksFromRange, weeksToRange, type SlotDraft } from '@/lib/course-form';
-import { WEEKDAY_LABELS } from '@/lib/timetable-grid';
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Modal,
+  Switch,
+  Alert,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTimetable } from '@/features/timetable/TimetableContext';
+import { SessionEntity } from '@/features/timetable/repository';
+import {
+  COURSE_COLORS,
+  SAFE_TOP_DP,
+  SAFE_BOTTOM_DP,
+  formatWeeks,
+  weeksFromRange,
+} from '@/lib/timetable-core';
 
-const COURSE_COLORS = [
-  '#4C8DF6',
-  '#F2994A',
-  '#4CAF7D',
-  '#9B6DF3',
-  '#E5677E',
-  '#3BA6B8',
-  '#D1A33C',
-  '#6B7280',
-];
+const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
-const EMPTY_SLOT: SlotDraft = { weekday: 1, startPeriod: 1, endPeriod: 2, weeks: [] };
+/** 本地临时主键：课程/时段写库前先拿到稳定 id（放模块级，避免在渲染里调用 Date）。 */
+let localIdSeed = 0;
+function newLocalId(prefix: 'c' | 's'): string {
+  localIdSeed += 1;
+  return `${prefix}_${Date.now()}_${localIdSeed}`;
+}
+const PRESET_COLORS = Array.from(
+  new Set([
+    '#C8644A',
+    '#5B8FB9',
+    '#C27084',
+    '#9E9AA7',
+    ...COURSE_COLORS,
+  ])
+).slice(0, 20);
 
-export default function CoursePage() {
-  const theme = useTheme();
-  const params = useLocalSearchParams<{ id?: string; weekday?: string; period?: string }>();
-  const courseId = params.id ? Number(params.id) : null;
+export default function AddOrEditCourseScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ id?: string; day?: string; period?: string }>();
+  const { courses, activeSchedule, settings, saveCourse } = useTimetable();
 
-  const [name, setName] = useState('');
-  const [teacher, setTeacher] = useState('');
-  const [room, setRoom] = useState('');
-  const [color, setColor] = useState(COURSE_COLORS[0]);
-  const [background, setBackground] = useState<CourseBackground>('plain');
-  const [note, setNote] = useState('');
-  const [slots, setSlots] = useState<SlotDraft[]>([]);
-  const [periodCount, setPeriodCount] = useState(1);
-  const [totalWeeks, setTotalWeeks] = useState(18);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [conflict, setConflict] = useState<{ slots: SlotDraft[]; name: string } | null>(null);
+  const existingCourse = useMemo(
+    () => (params.id ? courses.find((c) => c.id === params.id) : undefined),
+    [params.id, courses]
+  );
 
-  const [slotSheet, setSlotSheet] = useState(false);
-  const [slotDraft, setSlotDraft] = useState<SlotDraft>(EMPTY_SLOT);
-  const [weeksText, setWeeksText] = useState('');
+  const totalWeeks = activeSchedule.totalWeeks || 20;
+  const totalPeriods = settings.periodTimes.length || 11;
+  const defaultSpan = settings.defaultSpan || 2;
 
-  const load = useCallback(async () => {
-    const [count, term] = await Promise.all([getPeriodCount(), getTermConfig()]);
-    setPeriodCount(count);
-    setTotalWeeks(term.totalWeeks);
+  const initStartPeriod = params.period ? parseInt(params.period, 10) : 1;
+  const initEndPeriod = Math.min(initStartPeriod + defaultSpan - 1, totalPeriods);
 
-    if (courseId) {
-      const course = await getCourse(courseId);
-      if (course) {
-        setName(course.name);
-        setTeacher(course.teacher ?? '');
-        setRoom(course.room ?? '');
-        setColor(course.color ?? COURSE_COLORS[0]);
-        setBackground((course.background as CourseBackground) ?? 'plain');
-        setNote(course.note ?? '');
-        setSlots(
-          course.slots.map((slot) => ({
-            weekday: slot.weekday,
-            startPeriod: slot.startPeriod,
-            endPeriod: slot.endPeriod,
-            weeks: slot.weeks,
-          }))
-        );
-      }
-    } else {
-      const weekday = params.weekday ? Number(params.weekday) : 1;
-      const period = params.period ? Number(params.period) : 1;
-      const end = Math.min(count, period + 1);
-      setSlots([{ weekday: clamp(weekday, 1, 7), startPeriod: period, endPeriod: end, weeks: [] }]);
+  const [courseId] = useState(existingCourse?.id || newLocalId('c'));
+  const [name, setName] = useState(existingCourse?.name || '');
+  const [color, setColor] = useState(
+    existingCourse?.color || COURSE_COLORS[courses.length % COURSE_COLORS.length]
+  );
+  const [credits, setCredits] = useState(existingCourse?.credits || '选填');
+
+  const [sessions, setSessions] = useState<SessionEntity[]>(() => {
+    if (existingCourse && existingCourse.sessions.length > 0) {
+      return JSON.parse(JSON.stringify(existingCourse.sessions));
     }
-  }, [courseId, params.weekday, params.period]);
+    return [
+      {
+        id: newLocalId('s'),
+        courseId,
+        dayOfWeek: params.day ? parseInt(params.day, 10) : 1,
+        startPeriod: initStartPeriod,
+        endPeriod: initEndPeriod,
+        weeks: weeksFromRange(1, totalWeeks, 'all'),
+        teacher: '',
+        location: '',
+        remark: '',
+        customTime: {
+          enabled: false,
+          startTime: settings.periodTimes[initStartPeriod - 1]?.start || '08:00',
+          endTime: settings.periodTimes[initEndPeriod - 1]?.end || '09:40',
+        },
+      },
+    ];
+  });
 
-  useEffect(() => {
-    load().catch(() => undefined);
-  }, [load]);
+  // 当前正在编辑哪个时段子模态
+  const [activeSessionIdx, setActiveSessionIdx] = useState<number>(0);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showWeekPicker, setShowWeekPicker] = useState(false);
+  const [showTimeWheel, setShowTimeWheel] = useState(false);
+  const [showCustomTimePage, setShowCustomTimePage] = useState(false);
 
-  const weekdayOptions = useMemo(
-    () => WEEKDAY_LABELS.map((label, index) => ({ value: String(index + 1), label: `周${label}` })),
-    []
-  );
-  const periodOptions = useMemo(
-    () =>
-      Array.from({ length: periodCount }, (_, index) => ({
-        value: String(index + 1),
-        label: `第 ${index + 1} 节`,
-      })),
-    [periodCount]
-  );
+  const activeSession = sessions[activeSessionIdx] || sessions[0];
 
-  function addSlot() {
-    setSlotDraft(EMPTY_SLOT);
-    setWeeksText('');
-    setSlotSheet(true);
-  }
+  const updateSessionField = <K extends keyof SessionEntity>(
+    idx: number,
+    key: K,
+    val: SessionEntity[K]
+  ) => {
+    setSessions((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [key]: val };
+      return next;
+    });
+  };
 
-  function confirmSlot() {
-    const next: SlotDraft = {
-      ...slotDraft,
-      weeks: weeksText ? weeksFromRange(weeksText, totalWeeks) : [],
+  // 复制时段到列表末尾
+  const handleCopySession = (idx: number) => {
+    const target = sessions[idx];
+    const cloned: SessionEntity = {
+      ...JSON.parse(JSON.stringify(target)),
+      id: newLocalId('s'),
     };
-    if (next.startPeriod > next.endPeriod) {
-      setSlotDraft((current) => ({ ...current, endPeriod: current.startPeriod }));
+    setSessions((prev) => [...prev, cloned]);
+  };
+
+  // 删除时段（只剩 1 个时置灰不删除）
+  const handleDeleteSession = (idx: number) => {
+    if (sessions.length <= 1) return;
+    setSessions((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // 保存校验（逐条，命中第一条停下并提示）
+  const handleSave = () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      Alert.alert('提示', '请填写课程名称');
       return;
     }
-    setSlots((current) => [...current, next]);
-    setSlotSheet(false);
-  }
-
-  async function persist() {
-    setSaving(true);
-    try {
-      const input = {
-        name: name.trim(),
-        teacher: teacher.trim() || undefined,
-        room: room.trim() || undefined,
-        color,
-        background,
-        note: note.trim() || undefined,
-        slots: slots.map<CreateSlotInput>((slot) => ({
-          weekday: slot.weekday,
-          startPeriod: slot.startPeriod,
-          endPeriod: slot.endPeriod,
-          weeks: slot.weeks,
-        })),
-      };
-      if (courseId) await updateCourse(courseId, input);
-      else await createCourse(input);
-      bumpDataVersion();
-      router.back();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleSave() {
-    const draft = { name, teacher, room, color, background, note, slots };
-    const message = validateCourseDraft(draft, periodCount);
-    if (message) {
-      setError(message);
+    if (trimmedName.length > 30) {
+      Alert.alert('提示', '课程名称最多 30 个字');
       return;
     }
-    setError(null);
+    if (sessions.length === 0) {
+      Alert.alert('提示', '至少添加一个时段');
+      return;
+    }
 
-    for (const slot of slots) {
-      const hit = await findSlotConflict(slot, courseId ?? undefined);
-      if (hit) {
-        setConflict({ slots, name: hit.name });
+    for (let i = 0; i < sessions.length; i++) {
+      const s = sessions[i];
+      if (!s.weeks || s.weeks.length === 0) {
+        Alert.alert('提示', `请为「时段${i + 1}」选择上课周数`);
+        return;
+      }
+      if (
+        s.startPeriod < 1 ||
+        s.startPeriod > totalPeriods ||
+        s.endPeriod < 1 ||
+        s.endPeriod > totalPeriods
+      ) {
+        Alert.alert('提示', `节次需在 1–${totalPeriods} 之间`);
+        return;
+      }
+      if (s.endPeriod < s.startPeriod) {
+        Alert.alert('提示', '结束节不能早于开始节');
         return;
       }
     }
-    await persist();
-  }
+
+    // 检查时段冲突（同一星期、节次重叠、周次有交集）
+    let conflictCourseName: string | null = null;
+    for (const other of courses) {
+      if (other.id === courseId || other.scheduleId !== activeSchedule.id) continue;
+      for (const sOther of other.sessions) {
+        for (const sNew of sessions) {
+          if (sOther.dayOfWeek === sNew.dayOfWeek) {
+            const overlap =
+              Math.max(sOther.startPeriod, sNew.startPeriod) <=
+              Math.min(sOther.endPeriod, sNew.endPeriod);
+            if (overlap) {
+              const common = sOther.weeks.filter((w) => sNew.weeks.includes(w));
+              if (common.length > 0) {
+                conflictCourseName = other.name;
+                break;
+              }
+            }
+          }
+        }
+        if (conflictCourseName) break;
+      }
+      if (conflictCourseName) break;
+    }
+
+    if (conflictCourseName) {
+      Alert.alert(
+        '冲突确认',
+        `与「${conflictCourseName}」时间冲突，仍要保存吗？`,
+        [
+          { text: '取消', style: 'cancel' },
+          { text: '仍然保存', onPress: () => commitSave(trimmedName) },
+        ]
+      );
+      return;
+    }
+
+    commitSave(trimmedName);
+  };
+
+  const commitSave = async (trimmedName: string) => {
+    await saveCourse({
+      id: courseId,
+      scheduleId: activeSchedule.id,
+      name: trimmedName,
+      color,
+      credits,
+      sessions,
+    });
+    router.back();
+  };
 
   return (
-    <View style={[styles.page, { backgroundColor: theme.background }]}>
-      <SubPageHeader
-        title={courseId ? '编辑课程' : '添加课程'}
-        onBack={() => router.back()}
-        actionLabel={saving ? '保存中' : '保存'}
-        onAction={handleSave}
-        actionDisabled={saving}
-      />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-          <InputRow label="课程名称" value={name} onChangeText={setName} placeholder="例如：高等数学" />
-          <Divider />
-          <InputRow label="老师" value={teacher} onChangeText={setTeacher} placeholder="选填" />
-          <Divider />
-          <InputRow label="地点" value={room} onChangeText={setRoom} placeholder="选填" />
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top || SAFE_TOP_DP,
+          paddingBottom: insets.bottom || SAFE_BOTTOM_DP,
+        },
+      ]}
+    >
+      {/* 1. 顶部操作栏 */}
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <Text style={styles.closeIcon}>✕</Text>
+        </TouchableOpacity>
+        <Text style={styles.barTitle}>{existingCourse ? '编辑课程' : '添加课程'}</Text>
+        <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
+          <Text style={styles.saveText}>保存</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* 卡片 1: 课程名称输入 */}
+        <View style={styles.nameCard}>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            maxLength={30}
+            placeholder="例如：高等数学"
+            placeholderTextColor="#94A3B8"
+            style={styles.nameInput}
+          />
         </View>
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-          颜色
-        </ThemedText>
-        <View style={[styles.card, styles.swatchCard, { backgroundColor: theme.backgroundElement }]}>
-          {COURSE_COLORS.map((item) => (
-            <Pressable
-              key={item}
-              accessibilityRole="button"
-              accessibilityLabel={`颜色 ${item}`}
-              onPress={() => setColor(item)}
-              style={[
-                styles.swatch,
-                { backgroundColor: item },
-                color === item && { borderWidth: 2, borderColor: theme.text },
-              ]}
-            />
-          ))}
+        {/* 卡片 2: 颜色与学分 */}
+        <View style={styles.groupCard}>
+          <TouchableOpacity
+            style={styles.rowItem}
+            onPress={() => setShowColorPicker(true)}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowEmoji}>🎨</Text>
+              <Text style={styles.rowLabel}>颜色</Text>
+            </View>
+            <View style={styles.colorRingBorder}>
+              <View style={[styles.colorCenterCircle, { backgroundColor: color }]} />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.rowItem, { borderBottomWidth: 0 }]}
+            onPress={() => {
+              const order = ['选填', '1.0', '2.0', '3.0', '4.0'];
+              const next = order[(order.indexOf(credits) + 1) % order.length];
+              setCredits(next);
+            }}
+          >
+            <View style={styles.rowLeft}>
+              <Text style={styles.rowEmoji}>⭐</Text>
+              <Text style={styles.rowLabel}>学分</Text>
+            </View>
+            <Text style={styles.rowRightHint}>{credits} ›</Text>
+          </TouchableOpacity>
         </View>
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-          底色样式
-        </ThemedText>
-        <View style={[styles.card, styles.segmentCard, { backgroundColor: theme.backgroundElement }]}>
-          {COURSE_BACKGROUNDS.map((item) => (
-            <Pressable
-              key={item}
-              accessibilityRole="button"
-              accessibilityLabel={`底色 ${COURSE_BACKGROUND_LABELS[item]}`}
-              onPress={() => setBackground(item)}
-              style={[
-                styles.segmentItem,
-                background === item && { backgroundColor: theme.background },
-              ]}>
-              <ThemedText type="small">{COURSE_BACKGROUND_LABELS[item]}</ThemedText>
-            </Pressable>
-          ))}
-        </View>
+        {/* 时段区：支持多时段卡片 */}
+        {sessions.map((sess, idx) => {
+          const canDelete = sessions.length > 1;
+          const customEnabled = sess.customTime?.enabled ?? false;
+          const customLabel = customEnabled
+            ? `${sess.customTime?.startTime} - ${sess.customTime?.endTime}`
+            : '关闭';
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-          上课时段
-        </ThemedText>
-        <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
-          {slots.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.emptySlots}>
-              还没有时段，点下面的「添加时段」
-            </ThemedText>
-          ) : (
-            slots.map((slot, index) => (
-              <View key={`${slot.weekday}-${slot.startPeriod}-${index}`}>
-                {index > 0 ? <Divider /> : null}
-                <View style={styles.slotRow}>
-                  <View style={styles.slotText}>
-                    <ThemedText type="small">
-                      周{WEEKDAY_LABELS[slot.weekday - 1]} 第 {slot.startPeriod}-{slot.endPeriod} 节
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {slot.weeks.length === 0 ? '每周' : weeksToRange(slot.weeks)}
-                    </ThemedText>
-                  </View>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`删除第 ${index + 1} 个时段`}
-                    onPress={() => setSlots((current) => current.filter((_, i) => i !== index))}
-                    style={styles.removeSlot}>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      移除
-                    </ThemedText>
-                  </Pressable>
+          return (
+            <View key={sess.id}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>时段{idx + 1}</Text>
+                <View style={styles.sectionActions}>
+                  <TouchableOpacity onPress={() => handleCopySession(idx)}>
+                    <Text style={styles.copyText}>复制</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    disabled={!canDelete}
+                    onPress={() => handleDeleteSession(idx)}
+                  >
+                    <Text style={canDelete ? styles.deleteActiveText : styles.deleteText}>
+                      删除
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            ))
-          )}
-          <Divider />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="添加时段"
-            onPress={addSlot}
-            style={styles.addSlot}>
-            <ThemedText type="small">＋ 添加时段</ThemedText>
-          </Pressable>
-        </View>
 
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-          备注
-        </ThemedText>
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder="想记的内容"
-          placeholderTextColor={theme.textSecondary}
-          multiline
-          style={[
-            styles.noteInput,
-            { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.backgroundElement },
-          ]}
-          accessibilityLabel="课程备注"
-        />
+              <View style={styles.groupCard}>
+                {/* 周数选择 */}
+                <TouchableOpacity
+                  style={styles.rowItem}
+                  onPress={() => {
+                    setActiveSessionIdx(idx);
+                    setShowWeekPicker(true);
+                  }}
+                >
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.rowEmoji}>📅</Text>
+                    <Text style={styles.rowLabel}>周数</Text>
+                  </View>
+                  <Text style={styles.rowRightValue}>
+                    {sess.weeks.length > 0 ? `第 ${formatWeeks(sess.weeks)} 周` : '未选择'} ›
+                  </Text>
+                </TouchableOpacity>
 
-        {error ? (
-          <ThemedText type="small" style={styles.error}>
-            {error}
-          </ThemedText>
-        ) : null}
+                {/* 节数选择 */}
+                <TouchableOpacity
+                  style={styles.rowItem}
+                  onPress={() => {
+                    setActiveSessionIdx(idx);
+                    setShowTimeWheel(true);
+                  }}
+                >
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.rowEmoji}>⏰</Text>
+                    <Text style={styles.rowLabel}>节数</Text>
+                  </View>
+                  <Text style={styles.rowRightValue}>
+                    {DAYS[sess.dayOfWeek - 1]}   第 {sess.startPeriod} - {sess.endPeriod} 节 ›
+                  </Text>
+                </TouchableOpacity>
+
+                {/* 自定义时间直达行 */}
+                <TouchableOpacity
+                  style={styles.rowItem}
+                  onPress={() => {
+                    setActiveSessionIdx(idx);
+                    setShowCustomTimePage(true);
+                  }}
+                >
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.rowEmoji}>📝</Text>
+                    <Text style={styles.rowLabel}>自定义时间</Text>
+                  </View>
+                  <Text style={styles.rowRightHint}>{customLabel} ›</Text>
+                </TouchableOpacity>
+
+                {/* 地点 */}
+                <View style={styles.rowItem}>
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.rowEmoji}>📍</Text>
+                    <Text style={styles.rowLabel}>地点</Text>
+                  </View>
+                  <TextInput
+                    value={sess.location}
+                    onChangeText={(txt) => updateSessionField(idx, 'location', txt)}
+                    placeholder="选填"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.rowInput}
+                  />
+                </View>
+
+                {/* 教师 */}
+                <View style={styles.rowItem}>
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.rowEmoji}>👤</Text>
+                    <Text style={styles.rowLabel}>教师</Text>
+                  </View>
+                  <TextInput
+                    value={sess.teacher}
+                    onChangeText={(txt) => updateSessionField(idx, 'teacher', txt)}
+                    placeholder="选填"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.rowInput}
+                  />
+                </View>
+
+                {/* 备注 */}
+                <View style={[styles.rowItem, { borderBottomWidth: 0 }]}>
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.rowEmoji}>📋</Text>
+                    <Text style={styles.rowLabel}>备注</Text>
+                  </View>
+                  <TextInput
+                    value={sess.remark || ''}
+                    maxLength={100}
+                    onChangeText={(txt) => updateSessionField(idx, 'remark', txt)}
+                    placeholder="选填，最长 100 字"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.rowInput}
+                  />
+                </View>
+              </View>
+            </View>
+          );
+        })}
+
+        {/* 底部按钮：＋ 添加时段（虚线框，高 48） */}
+        <TouchableOpacity
+          style={styles.addSessionBtn}
+          activeOpacity={0.7}
+          onPress={() => {
+            setSessions((prev) => [
+              ...prev,
+              {
+                id: newLocalId('s'),
+                courseId,
+                dayOfWeek: 1,
+                startPeriod: 1,
+                endPeriod: Math.min(1 + defaultSpan - 1, totalPeriods),
+                weeks: weeksFromRange(1, totalWeeks, 'all'),
+                teacher: '',
+                location: '',
+                remark: '',
+                customTime: {
+                  enabled: false,
+                  startTime: settings.periodTimes[0]?.start || '08:00',
+                  endTime: settings.periodTimes[1]?.end || '09:40',
+                },
+              },
+            ]);
+          }}
+        >
+          <Text style={styles.addSessionBtnText}>＋ 添加时段</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      <BottomSheet visible={slotSheet} onClose={() => setSlotSheet(false)} heightRatio={0.62}>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.sheetTitle}>
-          选择星期与节次
-        </ThemedText>
-        <WheelPicker
-          columns={[
-            { key: 'weekday', options: weekdayOptions },
-            { key: 'start', options: periodOptions },
-            { key: 'end', options: periodOptions },
+      {/* ================= 子模态 1：自定义时间页 ================= */}
+      <Modal visible={showCustomTimePage} animationType="slide">
+        <View
+          style={[
+            styles.subPageContainer,
+            { paddingTop: insets.top || SAFE_TOP_DP },
           ]}
-          value={{
-            weekday: String(slotDraft.weekday),
-            start: String(slotDraft.startPeriod),
-            end: String(slotDraft.endPeriod),
-          }}
-          onChange={(next) =>
-            setSlotDraft({
-              weekday: Number(next.weekday),
-              startPeriod: Number(next.start),
-              endPeriod: Number(next.end),
-              weeks: slotDraft.weeks,
-            })
-          }
-        />
-        <View style={styles.weeksRow}>
-          <ThemedText type="small" themeColor="textSecondary">
-            周次
-          </ThemedText>
-          <TextInput
-            value={weeksText}
-            onChangeText={setWeeksText}
-            placeholder="每周"
-            placeholderTextColor={theme.textSecondary}
-            style={[styles.weeksInput, { color: theme.text, borderColor: theme.backgroundElement }]}
-            accessibilityLabel="周次"
-          />
-          {['每周', '单周', '双周'].map((label) => (
-            <Pressable
-              key={label}
-              accessibilityRole="button"
-              accessibilityLabel={`周次 ${label}`}
-              onPress={() => setWeeksText(label === '每周' ? '' : label)}
-              style={[styles.quickChip, { borderColor: theme.backgroundElement }]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                {label}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-        <View style={styles.sheetActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="取消时段"
-            onPress={() => setSlotSheet(false)}
-            style={[styles.sheetButton, { borderColor: theme.backgroundElement }]}>
-            <ThemedText type="small">取消</ThemedText>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="确定时段"
-            onPress={confirmSlot}
-            style={[styles.sheetButton, { backgroundColor: theme.text }]}>
-            <ThemedText type="small" style={{ color: theme.background }}>
-              确定
-            </ThemedText>
-          </Pressable>
-        </View>
-      </BottomSheet>
+        >
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={() => setShowCustomTimePage(false)}>
+              <Text style={styles.backChevron}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.barTitle}>自定义时间</Text>
+            <View style={{ width: 32 }} />
+          </View>
 
-      <ConfirmDialog
-        visible={conflict !== null}
-        title="时间冲突"
-        message={conflict ? `与「${conflict.name}」冲突，仍要添加？` : ''}
-        confirmLabel="仍然保存"
-        onCancel={() => setConflict(null)}
-        onConfirm={() => {
-          setConflict(null);
-          persist().catch(() => undefined);
-        }}
-      />
+          <View style={{ padding: 16 }}>
+            <View style={styles.groupCard}>
+              <View style={styles.rowItem}>
+                <Text style={styles.rowLabel}>自定义时间</Text>
+                <Switch
+                  value={activeSession?.customTime?.enabled ?? false}
+                  onValueChange={(val) => {
+                    updateSessionField(activeSessionIdx, 'customTime', {
+                      enabled: val,
+                      startTime: activeSession?.customTime?.startTime || '08:00',
+                      endTime: activeSession?.customTime?.endTime || '09:30',
+                    });
+                  }}
+                  trackColor={{ false: '#E2E8F0', true: '#E15241' }}
+                />
+              </View>
+
+              <View style={styles.rowItem}>
+                <Text style={styles.rowLabel}>上课时间</Text>
+                <TextInput
+                  value={activeSession?.customTime?.startTime || '08:00'}
+                  onChangeText={(txt) =>
+                    updateSessionField(activeSessionIdx, 'customTime', {
+                      enabled: activeSession?.customTime?.enabled ?? true,
+                      startTime: txt,
+                      endTime: activeSession?.customTime?.endTime || '09:30',
+                    })
+                  }
+                  style={styles.timePillInput}
+                />
+              </View>
+
+              <View style={[styles.rowItem, { borderBottomWidth: 0 }]}>
+                <Text style={styles.rowLabel}>下课时间</Text>
+                <TextInput
+                  value={activeSession?.customTime?.endTime || '09:30'}
+                  onChangeText={(txt) =>
+                    updateSessionField(activeSessionIdx, 'customTime', {
+                      enabled: activeSession?.customTime?.enabled ?? true,
+                      startTime: activeSession?.customTime?.startTime || '08:00',
+                      endTime: txt,
+                    })
+                  }
+                  style={styles.timePillInput}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 子模态 2：20 周选择弹窗 ================= */}
+      <Modal visible={showWeekPicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetTopBar}>
+              <Text style={styles.sheetSubCount}>
+                已选 {activeSession?.weeks.length || 0} 周
+              </Text>
+              <Text style={styles.sheetTitle}>周数</Text>
+              <TouchableOpacity onPress={() => setShowWeekPicker(false)}>
+                <Text style={styles.sheetCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 快捷单选行 */}
+            <View style={styles.weekRadioRow}>
+              <TouchableOpacity
+                onPress={() =>
+                  updateSessionField(
+                    activeSessionIdx,
+                    'weeks',
+                    weeksFromRange(1, totalWeeks, 'odd')
+                  )
+                }
+              >
+                <Text style={styles.radioItemText}>○ 单周</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() =>
+                  updateSessionField(
+                    activeSessionIdx,
+                    'weeks',
+                    weeksFromRange(1, totalWeeks, 'even')
+                  )
+                }
+              >
+                <Text style={styles.radioItemText}>○ 双周</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() =>
+                  updateSessionField(
+                    activeSessionIdx,
+                    'weeks',
+                    weeksFromRange(1, totalWeeks, 'all')
+                  )
+                }
+              >
+                <Text style={[styles.radioItemText, { color: '#E15241', fontWeight: '700' }]}>
+                  ● 全部
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => updateSessionField(activeSessionIdx, 'weeks', [])}
+              >
+                <Text style={styles.radioItemText}>清空</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 周方块网格 */}
+            <View style={styles.weekGrid}>
+              {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((w) => {
+                const isSelected = activeSession?.weeks.includes(w);
+                return (
+                  <TouchableOpacity
+                    key={w}
+                    style={[styles.weekGridBox, isSelected && styles.weekGridBoxActive]}
+                    onPress={() => {
+                      const cur = activeSession?.weeks || [];
+                      const next = cur.includes(w)
+                        ? cur.filter((x) => x !== w)
+                        : [...cur, w].sort((a, b) => a - b);
+                      updateSessionField(activeSessionIdx, 'weeks', next);
+                    }}
+                  >
+                    <Text style={[styles.weekGridNum, isSelected && styles.weekGridNumActive]}>
+                      {w}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.fullWidthRedBtn}
+              onPress={() => setShowWeekPicker(false)}
+            >
+              <Text style={styles.fullWidthRedBtnText}>确定</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 子模态 3：星期与节次选择弹窗 ================= */}
+      <Modal visible={showTimeWheel} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.sheetContainer}>
+            <View style={styles.sheetTopBar}>
+              <View style={{ width: 24 }} />
+              <Text style={styles.sheetTitle}>选择上课时间</Text>
+              <TouchableOpacity onPress={() => setShowTimeWheel(false)}>
+                <Text style={styles.sheetCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 7 个等宽星期胶囊 */}
+            <View style={styles.dayCapsulesRow}>
+              {DAYS.map((dayLabel, i) => {
+                const dNum = i + 1;
+                const active = activeSession?.dayOfWeek === dNum;
+                return (
+                  <TouchableOpacity
+                    key={dNum}
+                    style={[styles.dayCap, active && styles.dayCapActive]}
+                    onPress={() => updateSessionField(activeSessionIdx, 'dayOfWeek', dNum)}
+                  >
+                    <Text style={[styles.dayCapText, active && styles.dayCapTextActive]}>
+                      {dayLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* 开始节 / 结束节选择 */}
+            <Text style={styles.wheelSectionLabel}>开始节次</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              {Array.from({ length: totalPeriods }, (_, i) => i + 1).map((p) => {
+                const active = activeSession?.startPeriod === p;
+                return (
+                  <TouchableOpacity
+                    key={p}
+                    style={[styles.periodPill, active && styles.periodPillActive]}
+                    onPress={() => {
+                      updateSessionField(activeSessionIdx, 'startPeriod', p);
+                      if ((activeSession?.endPeriod || 1) < p) {
+                        updateSessionField(
+                          activeSessionIdx,
+                          'endPeriod',
+                          Math.min(p + defaultSpan - 1, totalPeriods)
+                        );
+                      }
+                    }}
+                  >
+                    <Text style={[styles.periodPillText, active && styles.periodPillTextActive]}>
+                      第 {p} 节
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={styles.wheelSectionLabel}>结束节次</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+              {Array.from({ length: totalPeriods }, (_, i) => i + 1).map((p) => {
+                const disabled = p < (activeSession?.startPeriod || 1);
+                const active = activeSession?.endPeriod === p;
+                return (
+                  <TouchableOpacity
+                    key={p}
+                    disabled={disabled}
+                    style={[
+                      styles.periodPill,
+                      active && styles.periodPillActive,
+                      disabled && { opacity: 0.35 },
+                    ]}
+                    onPress={() => updateSessionField(activeSessionIdx, 'endPeriod', p)}
+                  >
+                    <Text style={[styles.periodPillText, active && styles.periodPillTextActive]}>
+                      第 {p} 节
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.fullWidthRedBtn}
+              onPress={() => setShowTimeWheel(false)}
+            >
+              <Text style={styles.fullWidthRedBtnText}>确定</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 子模态 4：20 色选择器 ================= */}
+      <Modal visible={showColorPicker} transparent animationType="fade">
+        <View style={[styles.modalOverlay, { justifyContent: 'center', padding: 20 }]}>
+          <View style={styles.colorDialogCard}>
+            <Text style={styles.dialogTitle}>选择课程颜色</Text>
+
+            <View style={styles.presetColorGrid}>
+              {PRESET_COLORS.map((c) => (
+                <TouchableOpacity
+                  key={c}
+                  style={[
+                    styles.colorBubble,
+                    { backgroundColor: c },
+                    color.toUpperCase() === c.toUpperCase() && styles.colorBubbleActive,
+                  ]}
+                  onPress={() => setColor(c)}
+                />
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.fullWidthRedBtn}
+              onPress={() => setShowColorPicker(false)}
+            >
+              <Text style={styles.fullWidthRedBtnText}>确认颜色</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
-}
-
-function InputRow({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={styles.inputRow}>
-      <ThemedText type="small" style={styles.inputLabel}>
-        {label}
-      </ThemedText>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textSecondary}
-        style={[styles.input, { color: theme.text }]}
-        accessibilityLabel={label}
-      />
-    </View>
-  );
-}
-
-function Divider() {
-  const theme = useTheme();
-  return <View style={[styles.divider, { backgroundColor: theme.backgroundSelected }]} />;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: Space.three,
-    paddingBottom: Space.five,
-    gap: Space.one,
-  },
-  card: {
-    borderRadius: Space.two,
-    paddingHorizontal: Space.three,
-  },
-  sectionLabel: {
-    paddingTop: Space.three,
-    paddingBottom: Space.one,
-    paddingHorizontal: Space.one,
-  },
-  inputRow: {
+  container: { flex: 1, backgroundColor: '#F7F8FA' },
+  subPageContainer: { flex: 1, backgroundColor: '#F7F8FA' },
+  topBar: {
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.two,
-    minHeight: 54,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E2E8F0',
   },
-  inputLabel: {
-    width: 76,
+  iconBtn: { padding: 4 },
+  closeIcon: { fontSize: 18, color: '#64748B' },
+  backChevron: { fontSize: 26, color: '#1E293B', fontWeight: '300' },
+  barTitle: { fontSize: 17, fontWeight: '600', color: '#111113' },
+  saveBtn: { padding: 4 },
+  saveText: { fontSize: 15, fontWeight: '700', color: '#E15241' },
+  scrollContent: { flex: 1, padding: 16 },
+  nameCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
   },
-  input: {
+  nameInput: { fontSize: 17, fontWeight: '600', color: '#0F172A', padding: 0 },
+  groupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  rowItem: {
+    height: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
+  },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowEmoji: { fontSize: 16 },
+  rowLabel: { fontSize: 14, fontWeight: '500', color: '#1E293B' },
+  colorRingBorder: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: '#F472B6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorCenterCircle: { width: 18, height: 18, borderRadius: 9 },
+  rowRightHint: { fontSize: 13, color: '#94A3B8' },
+  rowRightValue: { fontSize: 13, color: '#1E293B', fontWeight: '500' },
+  rowInput: {
+    fontSize: 13,
+    color: '#0F172A',
+    textAlign: 'right',
+    width: 150,
+    fontWeight: '500',
+    padding: 0,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  sectionTitle: { fontSize: 12, color: '#94A3B8', fontWeight: '600' },
+  sectionActions: { flexDirection: 'row', gap: 14 },
+  copyText: { fontSize: 12, color: '#E15241', fontWeight: '600' },
+  deleteActiveText: { fontSize: 12, color: '#EF4444', fontWeight: '600' },
+  deleteText: { fontSize: 12, color: 'rgba(0,0,0,0.25)', fontWeight: '500' },
+  addSessionBtn: {
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0,0,0,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  addSessionBtnText: { fontSize: 13, fontWeight: '600', color: 'rgba(0,0,0,0.6)' },
+  timePillInput: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    fontSize: 13,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+    color: '#1E293B',
+    textAlign: 'center',
+    minWidth: 80,
+  },
+  modalOverlay: {
     flex: 1,
-    minHeight: 44,
-    ...Type.body,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
+  sheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
   },
-  swatchCard: {
+  sheetTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  sheetSubCount: { fontSize: 12, color: '#64748B', fontWeight: '500' },
+  sheetTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
+  sheetCloseText: { fontSize: 16, color: '#94A3B8', padding: 4 },
+  weekRadioRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginBottom: 16,
+  },
+  radioItemText: { fontSize: 13, color: '#64748B', fontWeight: '600' },
+  weekGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Space.two,
-    paddingVertical: Space.three,
+    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  swatch: {
-    width: 34,
+  weekGridBox: {
+    width: '18%',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#EDF2F7',
+    alignItems: 'center',
+  },
+  weekGridBoxActive: {
+    backgroundColor: '#FFE6E9',
+    borderColor: '#FFCCD2',
+  },
+  weekGridNum: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  weekGridNumActive: { color: '#E15241', fontWeight: '700' },
+  fullWidthRedBtn: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E15241',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullWidthRedBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  dayCapsulesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 4,
+  },
+  dayCap: {
+    flex: 1,
     height: 34,
-    borderRadius: 17,
-  },
-  segmentCard: {
-    flexDirection: 'row',
-    padding: 3,
-    marginVertical: Space.one,
-  },
-  segmentItem: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: Space.two - 2,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptySlots: {
-    paddingVertical: Space.two,
+  dayCapActive: { backgroundColor: '#E15241' },
+  dayCapText: { fontSize: 11, fontWeight: '600', color: '#334155' },
+  dayCapTextActive: { color: '#FFFFFF' },
+  wheelSectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 8,
   },
-  slotRow: {
+  periodPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginRight: 8,
+  },
+  periodPillActive: { backgroundColor: '#E15241' },
+  periodPillText: { fontSize: 12, fontWeight: '600', color: '#334155' },
+  periodPillTextActive: { color: '#FFFFFF' },
+  colorDialogCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+  },
+  dialogTitle: { fontSize: 16, fontWeight: '700', textAlign: 'center', marginBottom: 16 },
+  presetColorGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.two,
-    minHeight: 54,
-  },
-  slotText: {
-    flex: 1,
-    gap: 2,
-  },
-  removeSlot: {
-    paddingHorizontal: Space.two,
-    paddingVertical: Space.one,
-  },
-  addSlot: {
-    minHeight: 48,
+    flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'center',
+    marginBottom: 20,
   },
-  noteInput: {
-    minHeight: 88,
-    borderRadius: Space.two,
-    borderWidth: StyleSheet.hairlineWidth,
-    padding: Space.two,
-    textAlignVertical: 'top',
-  },
-  error: {
-    color: '#D14343',
-    paddingTop: Space.two,
-  },
-  sheetTitle: {
-    paddingBottom: Space.two,
-  },
-  weeksRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.one,
-    paddingTop: Space.two,
-  },
-  weeksInput: {
-    flex: 1,
-    minHeight: 40,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Space.two,
-    paddingHorizontal: Space.two,
-  },
-  quickChip: {
-    paddingHorizontal: Space.two,
-    minHeight: 36,
-    justifyContent: 'center',
-    borderRadius: Space.three,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  sheetActions: {
-    flexDirection: 'row',
-    gap: Space.two,
-    paddingTop: Space.three,
-  },
-  sheetButton: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: Space.three,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  colorBubble: { width: 36, height: 36, borderRadius: 18 },
+  colorBubbleActive: { borderWidth: 2.5, borderColor: '#0F172A' },
 });

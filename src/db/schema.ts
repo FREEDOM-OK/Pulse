@@ -214,6 +214,52 @@ export const MIGRATION_V6 = `
 ALTER TABLE courses ADD COLUMN background TEXT NOT NULL DEFAULT 'plain';
 `;
 
+/**
+ * v1.3：课表按 Schedule 项目重写——多课表 + 课程 + 时段；
+ * 删除 v1.2 的旧课程三表（数据不保留）。
+ */
+export const MIGRATION_V7 = `
+DROP TABLE IF EXISTS course_exceptions;
+DROP TABLE IF EXISTS course_slots;
+DROP TABLE IF EXISTS courses;
+
+CREATE TABLE IF NOT EXISTS schedules (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  start_date  TEXT NOT NULL,
+  total_weeks INTEGER NOT NULL DEFAULT 20,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sched_courses (
+  id          TEXT PRIMARY KEY,
+  schedule_id TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  color       TEXT NOT NULL,
+  credits     TEXT DEFAULT '选填',
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sched_sessions (
+  id           TEXT PRIMARY KEY,
+  course_id    TEXT NOT NULL,
+  teacher      TEXT NOT NULL DEFAULT '',
+  location     TEXT NOT NULL DEFAULT '',
+  day_of_week  INTEGER NOT NULL,
+  start_period INTEGER NOT NULL,
+  end_period   INTEGER NOT NULL,
+  weeks        TEXT NOT NULL,
+  remark       TEXT DEFAULT '',
+  custom_time  TEXT DEFAULT ''
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sched_sessions_conflict
+  ON sched_sessions(course_id, day_of_week, start_period);
+CREATE INDEX IF NOT EXISTS idx_sched_courses_schedule ON sched_courses(schedule_id);
+`;
+
 export const MIGRATIONS: string[] = [
   MIGRATION_V1,
   MIGRATION_V2,
@@ -221,6 +267,7 @@ export const MIGRATIONS: string[] = [
   MIGRATION_V4,
   MIGRATION_V5,
   MIGRATION_V6,
+  MIGRATION_V7,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
@@ -233,9 +280,9 @@ export const ALL_TABLES = [
   'wishlist',
   'tasks',
   'memos',
-  'course_exceptions',
-  'course_slots',
-  'courses',
+  'sched_sessions',
+  'sched_courses',
+  'schedules',
   'events',
   'exercises',
   'settings',

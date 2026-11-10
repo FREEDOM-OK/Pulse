@@ -4,6 +4,7 @@ import { migrate } from './migrations';
 import { migrateLegacyQuickMemo } from './migrations-v4';
 import { migratePeriodTimesV5 } from './migrations-v5';
 import { seedExercises } from './seed';
+import { ensureTimetableSeed } from '@/features/timetable/repository';
 
 let initPromise: Promise<void> | null = null;
 
@@ -42,4 +43,5 @@ async function doInit(): Promise<void> {
   await migrateLegacyQuickMemo();
   await migratePeriodTimesV5();
   await seedExercises();
+  await ensureTimetableSeed();
 }

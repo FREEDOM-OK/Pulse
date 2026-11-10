@@ -4,9 +4,7 @@ import { getDayExercises } from './training';
 import { listEventsByDate } from './events';
 import { listPlayedInRange } from './games';
 import { listMemosByDate } from './memos';
-import { listCourses } from './courses';
-import { getPeriodTimes, getTermConfig } from './settings';
-import { coursesOnDate, type CourseOnDate } from '@/lib/timetable';
+import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
 import type { EventRow, MemoRow, PlayedGameRow, TaskRow } from '../types';
 
 export interface DayFlags {
@@ -86,15 +84,13 @@ export async function countRecordsInRange(from: string, to: string): Promise<num
 
 /** 某一天的全部明细（日历回顾用）。 */
 export async function getDayDetail(date: string): Promise<DayDetail> {
-  const [tasks, fitness, events, games, memos, courses, term, periodTimes] = await Promise.all([
+  const [tasks, fitness, events, games, memos, courses] = await Promise.all([
     listTasksByDate(date),
     getDayExercises(date),
     listEventsByDate(date),
     listPlayedInRange(date, date),
     listMemosByDate(date),
-    listCourses(),
-    getTermConfig(),
-    getPeriodTimes(),
+    listCoursesForDate(date),
   ]);
 
   return {
@@ -103,6 +99,6 @@ export async function getDayDetail(date: string): Promise<DayDetail> {
     events,
     games,
     memos,
-    courses: coursesOnDate(date, courses, term.startDate, periodTimes),
+    courses,
   };
 }

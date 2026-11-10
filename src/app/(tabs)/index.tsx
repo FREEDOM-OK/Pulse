@@ -10,16 +10,15 @@ import { TAB_BAR_HEIGHT } from '@/components/nav/app-tab-bar';
 import { TodayList } from '@/components/today/today-list';
 import { DashCardSize, Spacing } from '@/constants/theme';
 import { countRecordsInRange } from '@/db/repositories/calendar';
-import { listCourses } from '@/db/repositories/courses';
+import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
 import { getLatestPlayed, listWishlist } from '@/db/repositories/games';
 import { getProfile } from '@/db/repositories/profile';
-import { getCardColor, getCardStyle, getDashMode, getHomeCards, getPeriodTimes, getTermConfig } from '@/db/repositories/settings';
+import { getCardColor, getCardStyle, getDashMode, getHomeCards } from '@/db/repositories/settings';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
 import type { CardStyle, DashMode, HomeCardId, ProfileRow, WishlistRow, PlayedGameRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { useDataVersion } from '@/lib/data-version';
 import { formatMonthDay, parseDate, todayStr } from '@/lib/date';
-import { coursesOnDate, type CourseOnDate } from '@/lib/timetable';
 
 const WEEKDAY_CHARS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -66,8 +65,6 @@ export default function HomeScreen() {
       monthTotal,
       todayTotal,
       courseList,
-      term,
-      periodTimes,
     ] = await Promise.all([
       getProfile(),
       getHomeCards(),
@@ -79,9 +76,7 @@ export default function HomeScreen() {
       getLatestPlayed(),
       countRecordsInRange(monthStart, monthEnd),
       countRecordsInRange(today, today),
-      listCourses(),
-      getTermConfig(),
-      getPeriodTimes(),
+      listCoursesForDate(today),
     ]);
     setProfile(profileRow);
     setCards(cardIds);
@@ -93,7 +88,7 @@ export default function HomeScreen() {
     setLatestPlayed(latest);
     setMonthCount(monthTotal);
     setTodayCount(todayTotal);
-    setTodayCourses(coursesOnDate(today, courseList, term.startDate, periodTimes));
+    setTodayCourses(courseList);
   }, [today]);
 
   useEffect(() => {

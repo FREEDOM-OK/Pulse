@@ -1,8 +1,6 @@
-import { getSetting, setSetting } from './repositories/settings';
-import { normalizePeriodTimes } from '@/lib/timetable-periods';
+import { getPeriodTimes, getSetting, setPeriodTimes } from './repositories/settings';
 
 const PERIOD_TIMES_KEY = 'period.times';
-const PERIOD_COUNT_KEY = 'timetable.periodCount';
 
 /**
  * v1.2.1：把旧的 `period.times`（纯开始时间字符串数组）转成 `{ start, end }`。
@@ -22,8 +20,8 @@ export async function migratePeriodTimesV5(): Promise<void> {
   const needsMigration = parsed.some((item) => typeof item === 'string');
   if (!needsMigration) return;
 
-  const countRaw = Number(await getSetting(PERIOD_COUNT_KEY));
-  const count = Number.isFinite(countRaw) && countRaw >= 1 ? Math.round(countRaw) : parsed.length;
-  const normalized = normalizePeriodTimes(parsed, count);
-  await setSetting(PERIOD_TIMES_KEY, JSON.stringify(normalized));
+  // setPeriodTimes 内部会把纯时间字符串补齐结束时间，复用同一套归一化逻辑。
+  await setPeriodTimes(parsed);
+  // 触发一次读取，确保写入结果可解析（异常时回落默认值）。
+  await getPeriodTimes();
 }
