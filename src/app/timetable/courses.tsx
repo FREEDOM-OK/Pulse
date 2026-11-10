@@ -5,10 +5,10 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { askConfirm, showActions } from '@/lib/dialogs';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import {
   SAFE_TOP_DP,
@@ -71,28 +71,31 @@ export default function AllCoursesScreen() {
                 }
                 delayLongPress={400}
                 onLongPress={() => {
-                  Alert.alert(c.name, '选择操作', [
-                    {
-                      text: '编辑',
-                      onPress: () =>
-                        router.push({ pathname: '/timetable/course', params: { id: c.id } }),
-                    },
-                    {
-                      text: '删除',
-                      style: 'destructive',
-                      onPress: () => {
-                        Alert.alert('确认删除', `确定删除「${c.name}」吗？`, [
-                          { text: '取消', style: 'cancel' },
-                          {
-                            text: '删除',
-                            style: 'destructive',
-                            onPress: () => deleteCourse(c.id),
-                          },
-                        ]);
+                  showActions({
+                    title: c.name,
+                    message: '选择操作',
+                    options: [
+                      {
+                        label: '编辑',
+                        onPress: () =>
+                          router.push({ pathname: '/timetable/course', params: { id: c.id } }),
                       },
-                    },
-                    { text: '取消', style: 'cancel' },
-                  ]);
+                      {
+                        label: '删除',
+                        danger: true,
+                        onPress: () => {
+                          void askConfirm({
+                            title: '确认删除',
+                            message: `确定删除「${c.name}」吗？`,
+                            confirmLabel: '删除',
+                            danger: true,
+                          }).then((ok) => {
+                            if (ok) deleteCourse(c.id);
+                          });
+                        },
+                      },
+                    ],
+                  });
                 }}
               >
                 <View style={styles.rowLeft}>

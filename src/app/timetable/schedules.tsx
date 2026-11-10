@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import { ScheduleEntity } from '@/features/timetable/repository';
+import { askConfirm, showActions, showNotice } from '@/lib/dialogs';
 import { SAFE_TOP_DP, SAFE_BOTTOM_DP } from '@/lib/timetable-core';
 
 export default function SchedulesManageScreen() {
@@ -51,16 +51,16 @@ export default function SchedulesManageScreen() {
   const handleSave = async () => {
     const trimmed = schedName.trim();
     if (!trimmed) {
-      Alert.alert('提示', '请填写课表名称');
+      showNotice('请填写课表名称');
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())) {
-      Alert.alert('提示', '开学日期格式应为 YYYY-MM-DD');
+      showNotice('开学日期格式应为 YYYY-MM-DD');
       return;
     }
     const weeksNum = parseInt(totalWeeks, 10);
     if (isNaN(weeksNum) || weeksNum < 1 || weeksNum > 60) {
-      Alert.alert('提示', '总周数应为 1-60 的数字');
+      showNotice('总周数应为 1-60 的数字');
       return;
     }
 
@@ -124,32 +124,31 @@ export default function SchedulesManageScreen() {
               <TouchableOpacity
                 style={styles.moreBtn}
                 onPress={() => {
-                  Alert.alert(s.name, '操作课表', [
-                    { text: '重命名', onPress: () => openForm(s) },
-                    {
-                      text: '删除',
-                      style: 'destructive',
-                      onPress: () => {
-                        if (schedules.length <= 1) {
-                          Alert.alert('提示', '至少保留一张课表');
-                          return;
-                        }
-                        Alert.alert(
-                          '确认删除',
-                          `确定删除「${s.name}」吗？里面的课程也会一并删除。`,
-                          [
-                            { text: '取消', style: 'cancel' },
-                            {
-                              text: '删除',
-                              style: 'destructive',
-                              onPress: () => deleteSchedule(s.id),
-                            },
-                          ]
-                        );
+                  showActions({
+                    title: s.name,
+                    message: '操作课表',
+                    options: [
+                      { label: '重命名', onPress: () => openForm(s) },
+                      {
+                        label: '删除',
+                        danger: true,
+                        onPress: () => {
+                          if (schedules.length <= 1) {
+                            showNotice('至少保留一张课表');
+                            return;
+                          }
+                          void askConfirm({
+                            title: '确认删除',
+                            message: `确定删除「${s.name}」吗？里面的课程也会一并删除。`,
+                            confirmLabel: '删除',
+                            danger: true,
+                          }).then((ok) => {
+                            if (ok) deleteSchedule(s.id);
+                          });
+                        },
                       },
-                    },
-                    { text: '取消', style: 'cancel' },
-                  ]);
+                    ],
+                  });
                 }}
               >
                 <Text style={styles.moreDots}>⋯</Text>

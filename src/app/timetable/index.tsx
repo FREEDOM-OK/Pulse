@@ -9,9 +9,9 @@ import {
   useWindowDimensions,
   Modal,
   Pressable,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { askConfirm } from '@/lib/dialogs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import { CourseEntity } from '@/features/timetable/repository';
@@ -416,17 +416,16 @@ export default function TimetableHomeScreen() {
           setSelectedCourse(null);
         }}
         onDelete={(c) => {
-          Alert.alert('确认删除', `确定删除「${c.name}」吗？`, [
-            { text: '取消', style: 'cancel' },
-            {
-              text: '删除',
-              style: 'destructive',
-              onPress: async () => {
-                await deleteCourse(c.id);
-                setSelectedCourse(null);
-              },
-            },
-          ]);
+          void askConfirm({
+            title: '确认删除',
+            message: `确定删除「${c.name}」吗？`,
+            confirmLabel: '删除',
+            danger: true,
+          }).then(async (ok) => {
+            if (!ok) return;
+            await deleteCourse(c.id);
+            setSelectedCourse(null);
+          });
         }}
       />
 

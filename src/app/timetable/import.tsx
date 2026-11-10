@@ -6,12 +6,12 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { askConfirm } from '@/lib/dialogs';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import {
   ParseResult,
@@ -48,23 +48,17 @@ export default function ImportTimetableScreen() {
     setPreview(res);
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (!preview || preview.courses.length === 0) return;
-    Alert.alert(
-      '确认导入',
-      '将覆盖当前课表的全部课程，确定导入吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确定',
-          style: 'destructive',
-          onPress: async () => {
-            await importCoursesToActiveSchedule(preview.courses);
-            router.replace('/timetable');
-          },
-        },
-      ]
-    );
+    const ok = await askConfirm({
+      title: '确认导入',
+      message: '将覆盖当前课表的全部课程，确定导入吗？',
+      confirmLabel: '确定',
+      danger: true,
+    });
+    if (!ok) return;
+    await importCoursesToActiveSchedule(preview.courses);
+    router.replace('/timetable');
   };
 
   return (

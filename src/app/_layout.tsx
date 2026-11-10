@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { initDatabase } from '@/db';
+import { DialogHost } from '@/components/ui/dialog-host';
 import { ThemePreferenceProvider, useThemePreference } from '@/theme/theme-context';
 
 SplashScreen.preventAutoHideAsync();
@@ -35,6 +36,7 @@ export default function RootLayout() {
   return (
     <ThemePreferenceProvider>
       <AppStack />
+      <DialogHost />
     </ThemePreferenceProvider>
   );
 }

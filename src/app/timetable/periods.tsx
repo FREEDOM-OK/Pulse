@@ -6,11 +6,11 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
+import { showNotice } from '@/lib/dialogs';
 import { PeriodTime, SAFE_TOP_DP, SAFE_BOTTOM_DP } from '@/lib/timetable-core';
 
 export default function PeriodsSettingScreen() {
@@ -45,15 +45,15 @@ export default function PeriodsSettingScreen() {
     for (let i = 0; i < list.length; i++) {
       const { start, end } = list[i];
       if (!timeRegex.test(start) || !timeRegex.test(end)) {
-        Alert.alert('提示', '时间格式应为 HH:MM');
+        showNotice('时间格式应为 HH:MM');
         return;
       }
       if (start >= end && !(start >= '23:00' && end <= '02:00')) {
-        Alert.alert('提示', `第 ${i + 1} 节的结束时间需晚于开始时间`);
+        showNotice(`第 ${i + 1} 节的结束时间需晚于开始时间`);
         return;
       }
       if (i > 0 && start < list[i - 1].end) {
-        Alert.alert('提示', `第 ${i + 1} 节与第 ${i} 节时间重叠`);
+        showNotice(`第 ${i + 1} 节与第 ${i} 节时间重叠`);
         return;
       }
     }

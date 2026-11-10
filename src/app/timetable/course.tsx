@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   Modal,
   Switch,
-  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import { SessionEntity } from '@/features/timetable/repository';
+import { askConfirm, showNotice } from '@/lib/dialogs';
 import {
   COURSE_COLORS,
   SAFE_TOP_DP,
@@ -130,22 +130,22 @@ export default function AddOrEditCourseScreen() {
   const handleSave = () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert('提示', '请填写课程名称');
+      showNotice('请填写课程名称');
       return;
     }
     if (trimmedName.length > 30) {
-      Alert.alert('提示', '课程名称最多 30 个字');
+      showNotice('课程名称最多 30 个字');
       return;
     }
     if (sessions.length === 0) {
-      Alert.alert('提示', '至少添加一个时段');
+      showNotice('至少添加一个时段');
       return;
     }
 
     for (let i = 0; i < sessions.length; i++) {
       const s = sessions[i];
       if (!s.weeks || s.weeks.length === 0) {
-        Alert.alert('提示', `请为「时段${i + 1}」选择上课周数`);
+        showNotice(`请为「时段${i + 1}」选择上课周数`);
         return;
       }
       if (
@@ -154,11 +154,11 @@ export default function AddOrEditCourseScreen() {
         s.endPeriod < 1 ||
         s.endPeriod > totalPeriods
       ) {
-        Alert.alert('提示', `节次需在 1–${totalPeriods} 之间`);
+        showNotice(`节次需在 1–${totalPeriods} 之间`);
         return;
       }
       if (s.endPeriod < s.startPeriod) {
-        Alert.alert('提示', '结束节不能早于开始节');
+        showNotice('结束节不能早于开始节');
         return;
       }
     }
@@ -188,14 +188,13 @@ export default function AddOrEditCourseScreen() {
     }
 
     if (conflictCourseName) {
-      Alert.alert(
-        '冲突确认',
-        `与「${conflictCourseName}」时间冲突，仍要保存吗？`,
-        [
-          { text: '取消', style: 'cancel' },
-          { text: '仍然保存', onPress: () => commitSave(trimmedName) },
-        ]
-      );
+      void askConfirm({
+        title: '冲突确认',
+        message: `与「${conflictCourseName}」时间冲突，仍要保存吗？`,
+        confirmLabel: '仍然保存',
+      }).then((ok) => {
+        if (ok) commitSave(trimmedName);
+      });
       return;
     }
 
