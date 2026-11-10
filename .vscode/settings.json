@@ -1,7 +1,18 @@
 {
-  "editor.codeActionsOnSave": {
-    "source.fixAll": "explicit",
-    "source.organizeImports": "explicit",
-    "source.sortMembers": "explicit"
-  }
+    "todo-tree.general.tags": ["AI_START", "AI_END"],
+    "todo-tree.highlights.custom": {
+        "AI_START": {
+            "background": "#93c5fd25",
+            "foreground": "#2563eb",
+            "icon": "comment"
+        },
+        "AI_END": {
+            "background": "#93c5fd25",
+            "foreground": "#2563eb",
+            "icon": "comment"
+        }
+    },
+    "todo-tree.regex.regex": "((<!--|//)\\s*($TAGS))",
+    "todo-tree.regex.regexCaseSensitive": true
 }
+
