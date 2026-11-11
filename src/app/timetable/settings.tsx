@@ -9,6 +9,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import {
@@ -42,7 +43,11 @@ export default function TimetableSettingsScreen() {
       ]}
     >
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnCircle}
+          accessibilityLabel="返回"
+          onPress={() => router.back()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>设置</Text>
@@ -55,6 +60,7 @@ export default function TimetableSettingsScreen() {
         <View style={styles.cardGroup}>
           <TouchableOpacity
             style={styles.row}
+            accessibilityLabel="节次设置"
             onPress={() => router.push('/timetable/periods')}
           >
             <Text style={styles.rowTitle}>节次设置</Text>
@@ -62,6 +68,7 @@ export default function TimetableSettingsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.row, { borderBottomWidth: 0 }]}
+            accessibilityLabel="导入课表"
             onPress={() => router.push('/timetable/import')}
           >
             <Text style={styles.rowTitle}>导入课表</Text>
@@ -74,6 +81,7 @@ export default function TimetableSettingsScreen() {
         <View style={styles.cardGroup}>
           <TouchableOpacity
             style={styles.row}
+            accessibilityLabel="课表管理"
             onPress={() => router.push('/timetable/schedules')}
           >
             <Text style={styles.rowTitle}>课表管理</Text>
@@ -84,6 +92,7 @@ export default function TimetableSettingsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.row, { borderBottomWidth: 0 }]}
+            accessibilityLabel="全部课程"
             onPress={() => router.push('/timetable/courses')}
           >
             <Text style={styles.rowTitle}>全部课程</Text>
@@ -97,7 +106,11 @@ export default function TimetableSettingsScreen() {
         {/* 外观分组 */}
         <Text style={styles.groupTitle}>外观</Text>
         <View style={styles.cardGroup}>
-          <TouchableOpacity style={styles.row} onPress={() => setShowSatDrawer(true)}>
+          <TouchableOpacity
+            style={styles.row}
+            accessibilityLabel="色彩饱和度"
+            onPress={() => setShowSatDrawer(true)}
+          >
             <Text style={styles.rowTitle}>色彩饱和度</Text>
             <View style={styles.rowRight}>
               <Text style={styles.rowValue}>{Math.round(settings.saturation * 100)}%</Text>
@@ -105,7 +118,11 @@ export default function TimetableSettingsScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => setShowLunchDrawer(true)}>
+          <TouchableOpacity
+            style={styles.row}
+            accessibilityLabel="午休位置"
+            onPress={() => setShowLunchDrawer(true)}
+          >
             <Text style={styles.rowTitle}>午休位置</Text>
             <View style={styles.rowRight}>
               <Text style={styles.rowValue}>
@@ -115,7 +132,11 @@ export default function TimetableSettingsScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.row} onPress={() => setShowDurationDrawer(true)}>
+          <TouchableOpacity
+            style={styles.row}
+            accessibilityLabel="单节时长"
+            onPress={() => setShowDurationDrawer(true)}
+          >
             <Text style={styles.rowTitle}>单节时长</Text>
             <View style={styles.rowRight}>
               <Text style={styles.rowValue}>{settings.periodDuration} 分钟</Text>
@@ -125,6 +146,7 @@ export default function TimetableSettingsScreen() {
 
           <TouchableOpacity
             style={[styles.row, { borderBottomWidth: 0 }]}
+            accessibilityLabel="默认连堂节数"
             onPress={() => setShowSpanDrawer(true)}
           >
             <Text style={styles.rowTitle}>默认连堂节数</Text>
@@ -140,7 +162,9 @@ export default function TimetableSettingsScreen() {
         <View style={styles.cardGroup}>
           <View style={[styles.row, { borderBottomWidth: 0 }]}>
             <Text style={styles.rowTitle}>版本</Text>
-            <Text style={styles.rowValue}>1.0.0</Text>
+            <Text style={styles.rowValue}>
+              {Constants.expoConfig?.version ?? '1.2.2'}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -158,6 +182,7 @@ export default function TimetableSettingsScreen() {
               {[0.2, 0.4, 0.6, 0.8, 1.0].map((v) => (
                 <TouchableOpacity
                   key={v}
+                  accessibilityLabel={`饱和度${Math.round(v * 100)}%`}
                   style={[
                     styles.stepPill,
                     Math.abs(settings.saturation - v) < 0.05 && styles.stepPillActive,
@@ -189,6 +214,7 @@ export default function TimetableSettingsScreen() {
                 <TouchableOpacity
                   key={pos}
                   style={styles.optionRow}
+                  accessibilityLabel={pos === 0 ? '午休不显示' : `午休第${pos}节后`}
                   onPress={async () => {
                     await updateSetting('lunchAfter', pos);
                     setShowLunchDrawer(false);
@@ -215,6 +241,7 @@ export default function TimetableSettingsScreen() {
                 <TouchableOpacity
                   key={min}
                   style={styles.optionRow}
+                  accessibilityLabel={`${min}分钟`}
                   onPress={async () => {
                     await updateSetting('periodDuration', min);
                     setShowDurationDrawer(false);
@@ -238,6 +265,7 @@ export default function TimetableSettingsScreen() {
               <TouchableOpacity
                 key={span}
                 style={styles.optionRow}
+                accessibilityLabel={`${span}节`}
                 onPress={async () => {
                   await updateSetting('defaultSpan', span);
                   setShowSpanDrawer(false);

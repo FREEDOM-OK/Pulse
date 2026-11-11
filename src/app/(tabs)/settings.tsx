@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TAB_BAR_CLEARANCE } from '@/components/nav/app-tab-bar';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ModalSheet } from '@/components/ui/modal-sheet';
@@ -57,6 +58,7 @@ function errorMessage(error: unknown): string {
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { preference, setPreference } = useThemePreference();
   const router = useRouter();
 
@@ -97,7 +99,7 @@ export default function SettingsScreen() {
     }, [])
   );
 
-  const version = Constants.expoConfig?.version ?? '1.0.0';
+  const version = Constants.expoConfig?.version ?? '1.2.2';
 
   const handleExport = async () => {
     setBusy(true);
@@ -188,7 +190,11 @@ export default function SettingsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
+          ]}>
           <View style={styles.header}>
             <ThemedText type="subtitle" style={styles.title}>
               设置
@@ -312,7 +318,7 @@ export default function SettingsScreen() {
               <View style={styles.rowText}>
                 <ThemedText type="small">第三个标签</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  底栏中间放健身还是课表
+                  底栏中间放健身、课表还是日历
                 </ThemedText>
               </View>
               <ThemedText type="small" themeColor="textSecondary">
@@ -645,7 +651,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,
-    paddingBottom: Spacing.six,
   },
   header: {
     paddingHorizontal: Spacing.one,

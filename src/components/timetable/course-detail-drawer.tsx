@@ -61,6 +61,9 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
         }
       });
     }
+  // backdropOpacity/translateY 是共享值（稳定引用），mounted 只用于判断是否挂载完成，
+    // 都故意不放进依赖，否则打开动画会被自身状态更新重新触发。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, course]);
 
   const backdropStyle = useAnimatedStyle(() => ({
@@ -103,7 +106,7 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
     <View style={ABSOLUTE_FILL} pointerEvents="box-none">
       {/* 独立半透明遮罩 */}
       <Animated.View style={[styles.backdropOverlay, backdropStyle]}>
-        <Pressable style={ABSOLUTE_FILL} onPress={onClose} />
+        <Pressable style={ABSOLUTE_FILL} onPress={onClose} accessibilityLabel="关闭详情" />
       </Animated.View>
 
       {/* 底部抽屉卡片 */}
@@ -163,6 +166,7 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
             <View style={styles.scopePillContainer}>
               <TouchableOpacity
                 style={[styles.scopeBtn, scopeIsThisWeek && styles.scopeBtnActive]}
+                accessibilityLabel="仅本周"
                 onPress={() => setScopeIsThisWeek(true)}
               >
                 <Text style={[styles.scopeText, scopeIsThisWeek && styles.scopeTextActive]}>
@@ -171,6 +175,7 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.scopeBtn, !scopeIsThisWeek && styles.scopeBtnActive]}
+                accessibilityLabel="所有周"
                 onPress={() => setScopeIsThisWeek(false)}
               >
                 <Text style={[styles.scopeText, !scopeIsThisWeek && styles.scopeTextActive]}>
@@ -186,6 +191,7 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
           <TouchableOpacity
             style={styles.editMainBtn}
             activeOpacity={0.8}
+            accessibilityLabel="编辑课程"
             onPress={() => onEdit(course)}
           >
             <Text style={styles.editMainBtnText}>编辑</Text>
@@ -194,6 +200,7 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
           <TouchableOpacity
             style={styles.iconSquareBtn}
             activeOpacity={0.7}
+            accessibilityLabel="复制课程"
             onPress={() => onCopy(course)}
           >
             <Text style={styles.iconSquareText}>📄</Text>
@@ -202,6 +209,7 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
           <TouchableOpacity
             style={styles.iconSquareBtn}
             activeOpacity={0.7}
+            accessibilityLabel="删除课程"
             onPress={() => onDelete(course)}
           >
             <Text style={styles.iconSquareText}>🗑️</Text>

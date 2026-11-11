@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,9 +9,10 @@ import {
   useWindowDimensions,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { askConfirm } from '@/lib/dialogs';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { askConfirm, showNotice } from '@/lib/dialogs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import { CourseEntity } from '@/features/timetable/repository';
@@ -42,7 +43,12 @@ export default function TimetableHomeScreen() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const screenWidth = windowWidth || 375;
-  const dayColWidth = (screenWidth - TIME_COL) / 7;
+  // 横向分页要用的真实宽度：以容器 onLayout 实测为准。窗口宽度和滚动容器宽度可能
+  // 因为内边距、安全区、刘海屏而不一致；差几个像素，每次翻页就会「差一点」，
+  // 在 Android 上表现为列表自己左右来回弹（抽搐）。
+  const [listWidth, setListWidth] = useState(0);
+  const pageWidth = listWidth || screenWidth;
+  const dayColWidth = (pageWidth - TIME_COL) / 7;
 
   const {
     schedules,
@@ -57,12 +63,27 @@ export default function TimetableHomeScreen() {
   } = useTimetable();
 
   const flatListRef = useRef<FlatList<number>>(null);
+  /** 当前横向滚动位置（px），用来判断「目标周」是不是已经在眼前，避免重复滚动。 */
+  const scrollOffsetRef = useRef(0);
+  /**
+   * 程序化翻周（按钮 / 回到本周 / 保存后跳周 / 深链）期间置 true。
+   * 这段时间产生的 momentum 事件一律不回写周次，只认用户手指滑动，
+   * 否则「程序滚动 → onMomentumScrollEnd 回写 → 再滚一次」会互相触发，表现为左右来回抽搐。
+   */
+  const programmaticScrollRef = useRef(false);
+  const programmaticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** web 上滚动停止后推算周次的计时器（RN-web 不派发 momentum 事件）。 */
+  const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   // 点击课程块弹出的抽屉状态
   const [selectedCourse, setSelectedCourse] = useState<CourseEntity | null>(null);
   const [selectedSessionIdx, setSelectedSessionIdx] = useState<number>(0);
+
+  // 从首页「今日课程」带 courseId 进来：定位到本周并直接打开详情抽屉
+  const { courseId: deepLinkCourseId } = useLocalSearchParams<{ courseId?: string }>();
+  const handledDeepLink = useRef<string | null>(null);
 
   const today = new Date();
   const currentWeek = currentWeekNumber(activeSchedule.startDate, today);
@@ -71,14 +92,101 @@ export default function TimetableHomeScreen() {
 
   const weeksArray = Array.from({ length: activeSchedule.totalWeeks }, (_, i) => i + 1);
 
+  // 深链落点：等课程加载出来后切到本周并打开该课抽屉（只处理一次）
   useEffect(() => {
-    if (flatListRef.current && viewingWeek >= 1 && viewingWeek <= activeSchedule.totalWeeks) {
-      flatListRef.current.scrollToIndex({
-        index: viewingWeek - 1,
-        animated: true,
-      });
-    }
-  }, [viewingWeek, activeSchedule.totalWeeks]);
+    if (!deepLinkCourseId || handledDeepLink.current === deepLinkCourseId) return;
+    const target = courses.find((c) => c.id === deepLinkCourseId);
+    if (!target) return;
+    handledDeepLink.current = deepLinkCourseId;
+    setViewingWeek(currentWeek);
+    const sIdx = target.sessions.findIndex((s) => s.dayOfWeek === todayDayOfWeek);
+    setSelectedSessionIdx(sIdx >= 0 ? sIdx : 0);
+    setSelectedCourse(target);
+  }, [deepLinkCourseId, courses, currentWeek, todayDayOfWeek, setViewingWeek]);
+
+  /**
+   * 把横向列表滚到指定周。滚动期间临时屏蔽 onMomentumScrollEnd 的回写，
+   * 避免动画过程中产生的 momentum 事件把 viewingWeek 改回去（抽搐的根因）。
+   */
+  const scrollToWeek = useCallback(
+    (week: number, animated: boolean) => {
+      if (week < 1 || week > activeSchedule.totalWeeks) return;
+      const target = (week - 1) * pageWidth;
+      // 已经在目标位置附近（误差小于半屏）就不再动它，省掉一次多余的滚动动画
+      if (Math.abs(scrollOffsetRef.current - target) < pageWidth / 2) return;
+
+      programmaticScrollRef.current = true;
+      if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+      programmaticTimerRef.current = setTimeout(
+        () => {
+          programmaticScrollRef.current = false;
+          programmaticTimerRef.current = null;
+        },
+        // 动画时长 + 余量：等 momentum 事件走完再放开回写
+        animated ? 480 : 80,
+      );
+      scrollOffsetRef.current = target;
+      flatListRef.current?.scrollToOffset({ offset: target, animated });
+    },
+    [activeSchedule.totalWeeks, pageWidth],
+  );
+
+  // viewingWeek 是唯一的「当前周」来源：手指滑动结束时回写它，程序化跳周时读它来滚。
+  useEffect(() => {
+    scrollToWeek(viewingWeek, true);
+  }, [viewingWeek, scrollToWeek]);
+
+  // 实测宽度确定/变化后，把当前周对齐到整页偏移（不带动画）：
+  // 否则首帧会按窗口宽度滚一次、再按真实宽度纠正一次，看起来就是「抽搐」。
+  useEffect(() => {
+    if (!listWidth) return;
+    const target = (viewingWeek - 1) * listWidth;
+    scrollOffsetRef.current = target;
+    programmaticScrollRef.current = true;
+    if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+    programmaticTimerRef.current = setTimeout(() => {
+      programmaticScrollRef.current = false;
+      programmaticTimerRef.current = null;
+    }, 120);
+    flatListRef.current?.scrollToOffset({ offset: target, animated: false });
+    // 只在实测宽度变化时对齐；周次变化由上面的 scrollToWeek 负责
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listWidth]);
+
+  // 卸载时清掉计时器，避免组件销毁后回调改 ref
+  useEffect(
+    () => () => {
+      if (programmaticTimerRef.current) clearTimeout(programmaticTimerRef.current);
+      if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+    },
+    [],
+  );
+
+  /** 按当前横向偏移回写周次（程序化滚动期间不认）。 */
+  const syncWeekFromOffset = useCallback(
+    (x: number) => {
+      if (programmaticScrollRef.current) return;
+      const nextW = Math.round(x / pageWidth) + 1;
+      if (nextW >= 1 && nextW <= activeSchedule.totalWeeks && nextW !== viewingWeek) {
+        setViewingWeek(nextW);
+      }
+    },
+    [activeSchedule.totalWeeks, pageWidth, viewingWeek, setViewingWeek],
+  );
+
+  /** 横向滚动中：记录偏移；web 没有 momentum 事件，停下 160ms 后按最终位置回写周次。 */
+  const handleHorizontalScroll = useCallback(
+    (x: number) => {
+      scrollOffsetRef.current = x;
+      if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+      if (Platform.OS !== 'web') return;
+      scrollSettleTimerRef.current = setTimeout(() => {
+        scrollSettleTimerRef.current = null;
+        syncWeekFromOffset(x);
+      }, 160);
+    },
+    [syncWeekFromOffset],
+  );
 
   const handleJumpWeek = (targetWeek: number) => {
     const clamped = Math.max(1, Math.min(activeSchedule.totalWeeks, targetWeek));
@@ -93,7 +201,7 @@ export default function TimetableHomeScreen() {
     const isThisWeek = weekNum === currentWeek;
 
     return (
-      <View style={{ width: screenWidth, flex: 1 }}>
+      <View style={{ width: pageWidth, flex: 1 }}>
         {/* 6.3 表头（横坐标行）固定在滚动区之外，高度 HEADER_H = 40 */}
         <View style={[styles.headerRow, { height: HEADER_H }]}>
           <View style={[styles.cornerCell, { width: TIME_COL }]}>
@@ -183,6 +291,7 @@ export default function TimetableHomeScreen() {
                         <TouchableOpacity
                           key={dIdx}
                           activeOpacity={0.6}
+                          accessibilityLabel={`${DAYS[dIdx]}第${p}节 添加课程`}
                           style={{ width: dayColWidth, height: ROW_H }}
                           onPress={() =>
                             router.push({
@@ -210,6 +319,7 @@ export default function TimetableHomeScreen() {
                   </Text>
                   <TouchableOpacity
                     style={styles.emptyBtn}
+                    accessibilityLabel="去设置导入"
                     onPress={() => router.push('/timetable/import')}
                   >
                     <Text style={styles.emptyBtnText}>去设置导入</Text>
@@ -244,6 +354,7 @@ export default function TimetableHomeScreen() {
                         <TouchableOpacity
                           key={`${session.id}_${bIdx}`}
                           activeOpacity={0.75}
+                          accessibilityLabel={`${course.name} ${DAYS[session.dayOfWeek - 1]}第${session.startPeriod}-${session.endPeriod}节`}
                           onPress={() => {
                             setSelectedCourse(course);
                             setSelectedSessionIdx(sIdx);
@@ -301,6 +412,7 @@ export default function TimetableHomeScreen() {
         <TouchableOpacity
           style={styles.topTitleArea}
           activeOpacity={0.7}
+          accessibilityLabel="切换课表"
           onPress={() => setShowScheduleMenu(true)}
         >
           <View style={styles.scheduleNameRow}>
@@ -314,7 +426,10 @@ export default function TimetableHomeScreen() {
               第 {viewingWeek} 周 · {weekRangeLabel(activeSchedule.startDate, viewingWeek)}
             </Text>
             {!isViewingCurrentWeek && (
-              <TouchableOpacity onPress={() => handleJumpWeek(currentWeek)}>
+              <TouchableOpacity
+                onPress={() => handleJumpWeek(currentWeek)}
+                accessibilityLabel="回到本周"
+              >
                 <Text style={styles.backToCurrentText}>回到本周</Text>
               </TouchableOpacity>
             )}
@@ -327,6 +442,7 @@ export default function TimetableHomeScreen() {
           <View style={styles.pageTurnPill}>
             <TouchableOpacity
               style={styles.pageTurnBtn}
+              accessibilityLabel="上一周"
               onPress={() => handleJumpWeek(viewingWeek - 1)}
             >
               <Text style={styles.pageTurnText}>‹</Text>
@@ -334,6 +450,7 @@ export default function TimetableHomeScreen() {
             <View style={styles.pageTurnDivider} />
             <TouchableOpacity
               style={styles.pageTurnBtn}
+              accessibilityLabel="下一周"
               onPress={() => handleJumpWeek(viewingWeek + 1)}
             >
               <Text style={styles.pageTurnText}>›</Text>
@@ -343,6 +460,7 @@ export default function TimetableHomeScreen() {
           {/* 2. +（添加课程） */}
           <TouchableOpacity
             style={styles.navIconBtn}
+            accessibilityLabel="添加课程"
             onPress={() =>
               router.push({
                 pathname: '/timetable/course',
@@ -356,6 +474,7 @@ export default function TimetableHomeScreen() {
           {/* 3. ...（三个点上下居中） */}
           <TouchableOpacity
             style={styles.navIconBtn}
+            accessibilityLabel="更多操作"
             onPress={() => setShowMoreMenu(true)}
           >
             <View style={styles.threeDotsRow}>
@@ -368,6 +487,7 @@ export default function TimetableHomeScreen() {
           {/* 4. 设置键 */}
           <TouchableOpacity
             style={styles.navIconBtn}
+            accessibilityLabel="课表设置"
             onPress={() => router.push('/timetable/settings')}
           >
             <Text style={styles.settingsIconText}>⚙</Text>
@@ -383,19 +503,32 @@ export default function TimetableHomeScreen() {
         horizontal
         pagingEnabled
         decelerationRate="fast"
+        disableIntervalMomentum
         showsHorizontalScrollIndicator={false}
         initialScrollIndex={Math.max(0, viewingWeek - 1)}
+        // 只渲染可视区附近的页：默认一次渲染 10 页（每页 7 列 × 十几行），进课表时会明显卡一下。
+        initialNumToRender={1}
+        maxToRenderPerBatch={1}
+        windowSize={3}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          handleHorizontalScroll(e.nativeEvent.contentOffset.x);
+        }}
         getItemLayout={(_, index) => ({
-          length: screenWidth,
-          offset: screenWidth * index,
+          length: pageWidth,
+          offset: pageWidth * index,
           index,
         })}
+        // 实测容器宽度：真正决定每页宽度的就是它，窗口宽度只是拿不到布局时的兜底
+        onLayout={(e) => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          if (w > 0 && w !== listWidth) setListWidth(w);
+        }}
         onMomentumScrollEnd={(e) => {
-          const pageIdx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-          const nextW = pageIdx + 1;
-          if (nextW >= 1 && nextW <= activeSchedule.totalWeeks && nextW !== viewingWeek) {
-            setViewingWeek(nextW);
-          }
+          const x = e.nativeEvent.contentOffset.x;
+          scrollOffsetRef.current = x;
+          // 程序化翻周导致的惯性结束不回写周次，只认用户手势
+          syncWeekFromOffset(x);
         }}
         renderItem={renderWeekPage}
       />
@@ -412,8 +545,14 @@ export default function TimetableHomeScreen() {
           router.push({ pathname: '/timetable/course', params: { id: c.id } });
         }}
         onCopy={async (c) => {
-          await duplicateCourse(c);
-          setSelectedCourse(null);
+          try {
+            await duplicateCourse(c);
+          } catch (err) {
+            // 写库失败要就地提示，绝不能让 Promise 拒绝逃出去（原生端会整页崩回首页）
+            showNotice(`复制失败：${err instanceof Error ? err.message : '未知错误'}`);
+          } finally {
+            setSelectedCourse(null);
+          }
         }}
         onDelete={(c) => {
           void askConfirm({
@@ -421,11 +560,17 @@ export default function TimetableHomeScreen() {
             message: `确定删除「${c.name}」吗？`,
             confirmLabel: '删除',
             danger: true,
-          }).then(async (ok) => {
-            if (!ok) return;
-            await deleteCourse(c.id);
-            setSelectedCourse(null);
-          });
+          })
+            .then(async (ok) => {
+              if (!ok) return;
+              try {
+                await deleteCourse(c.id);
+              } catch (err) {
+                showNotice(`删除失败：${err instanceof Error ? err.message : '未知错误'}`);
+              }
+              setSelectedCourse(null);
+            })
+            .catch(() => undefined);
         }}
       />
 
@@ -440,8 +585,12 @@ export default function TimetableHomeScreen() {
                   key={s.id}
                   style={styles.popupItemRow}
                   onPress={async () => {
-                    await switchSchedule(s.id);
-                    setShowScheduleMenu(false);
+                    try {
+                      await switchSchedule(s.id);
+                      setShowScheduleMenu(false);
+                    } catch (err) {
+                      showNotice(`切换失败：${err instanceof Error ? err.message : '未知错误'}`);
+                    }
                   }}
                 >
                   <Text style={[styles.popupItemText, isCurrent && styles.popupItemTextActive]}>

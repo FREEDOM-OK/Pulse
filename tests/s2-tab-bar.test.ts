@@ -8,46 +8,106 @@ function readSource(relative: string) {
   return fs.readFileSync(path.join(ROOT, 'src', relative), 'utf8');
 }
 
-describe('S2 底栏胶囊与第三标签（PRDv1.2.2 第 2.4 节）', () => {
+describe('S2 悬浮胶囊底栏与第三标签（2026-11-11 第二版）', () => {
   const bar = readSource('components/nav/app-tab-bar.tsx');
 
-  it('读取 middle 并据此生成 4 个标签', () => {
+  it('读取 middle 并据此生成 4 个真实标签', () => {
     expect(bar).toContain('middle: MiddleTab');
     expect(bar).toContain('buildTabItems(middle)');
   });
 
-  it('不再使用圆点高亮', () => {
-    expect(bar).not.toContain('styles.dot');
-    expect(bar).not.toContain('borderRadius: 1.5');
+  it('底座为 66dp 高、33dp 圆角的纯白胶囊', () => {
+    expect(bar).toContain('const BAR_HEIGHT = 66');
+    expect(bar).toContain('const BAR_RADIUS = 33');
+    expect(bar).toContain("const NAV_BACKGROUND = '#FFFFFF'");
+    expect(bar).toContain('backgroundColor: NAV_BACKGROUND');
+    expect(bar).toContain('shadowOffset: { width: 0, height: 6 }');
+    expect(bar).toContain('shadowOpacity: 0.1');
+    expect(bar).toContain('shadowRadius: 12');
+    expect(bar).toContain('elevation: 8');
   });
 
-  it('激活态是滑动的胶囊，时长取 Motion.move', () => {
-    expect(bar).toContain('CAPSULE_WIDTH = 64');
-    expect(bar).toContain('CAPSULE_HEIGHT = 36');
-    expect(bar).toContain('Animated.timing(capsuleX');
-    expect(bar).toContain('Motion.move');
-    expect(bar).toContain('backgroundColor: theme.backgroundElement');
+  it('外层绝对悬浮、透明、可穿透点击且压在最上层', () => {
+    expect(bar).toContain('position: \'absolute\'');
+    expect(bar).toContain('left: 0');
+    expect(bar).toContain('right: 0');
+    expect(bar).toContain('bottom: 0');
+    expect(bar).toContain('zIndex: 999');
+    expect(bar).toContain("backgroundColor: 'transparent'");
+    expect(bar).toContain('pointerEvents="box-none"');
   });
 
-  it('胶囊位置按槽位计算，账号槽位为 0/1/3/4', () => {
-    expect(bar).toContain('const SLOT_INDEX = [0, 1, 3, 4]');
-    expect(bar).toContain('(slotWidth - CAPSULE_WIDTH) / 2');
+  it('5 个平级槽位、space-evenly，Tab 点击区统一 56dp', () => {
+    expect(bar).toContain('const SLOT_COUNT = 5');
+    expect(bar).toContain('const SLOT_INDEX = [0, 1, 3, 4] as const');
+    expect(bar).toContain('const TAB_SIZE = 56');
+    expect(bar).toContain("justifyContent: 'space-evenly'");
+    expect(bar).toContain('width: TAB_SIZE');
+    expect(bar).toContain('height: TAB_SIZE');
   });
 
-  it('底栏上移 8，凸起按钮同步上移', () => {
-    expect(bar).toContain('marginBottom: Spacing.one');
-    expect(bar).toContain('marginTop: -16');
+  it('中间加号是 42dp 黑圆，完全嵌在 56dp 槽位内、没有负外边距', () => {
+    expect(bar).toContain('const PLUS_CIRCLE_SIZE = 42');
+    expect(bar).toContain("const PLUS_BACKGROUND = '#000000'");
+    expect(bar).toContain('width: PLUS_CIRCLE_SIZE');
+    expect(bar).toContain('height: PLUS_CIRCLE_SIZE');
+    expect(bar).not.toContain('marginTop: -16');
+    expect(bar).not.toContain('marginBottom: Spacing.one');
   });
 
-  it('课表标签点击走 router.push，其余走 navigateToTab', () => {
-    expect(bar).toContain("if (tab.name === 'timetable')");
+  it('指示器为 52×46、圆角 23，按 activeSlot 做 250ms 贝塞尔滑动', () => {
+    expect(bar).toContain('const INDICATOR_WIDTH = 52');
+    expect(bar).toContain('const INDICATOR_HEIGHT = 46');
+    expect(bar).toContain('const INDICATOR_RADIUS = 23');
+    expect(bar).toContain("const INDICATOR_COLOR = '#F2F2F7'");
+    expect(bar).toContain('indicatorLeft(activeSlot, barWidth)');
+    expect(bar).toContain('duration: 250');
+    expect(bar).toContain('Easing.bezier(0.25, 0.1, 0.25, 1)');
+    expect(bar).toContain('withTiming(target, INDICATOR_TIMING)');
+    expect(bar).not.toContain('withSpring');
+    expect(bar).toContain('translateX: indicatorX.value');
+  });
+
+  it('底部留白为 20dp 加安全区，并提供 100dp 内容避让常量', () => {
+    expect(bar).toContain('const BOTTOM_GAP = 20');
+    expect(bar).toContain('paddingBottom: BOTTOM_GAP + insets.bottom');
+    expect(bar).toContain('TAB_BAR_CLEARANCE = BAR_HEIGHT + BOTTOM_GAP + 14');
+  });
+
+  it('可滚动 Tab 页按底栏高度与安全区预留内容空间', () => {
+    // 首页按新首页规格固定留 120dp；其余 Tab 页继续按底栏高度 + 安全区计算。
+    expect(readSource('app/(tabs)/index.tsx')).toContain('paddingBottom: 120');
+    expect(readSource('app/(tabs)/today.tsx')).toContain(
+      'paddingBottom: TAB_BAR_CLEARANCE + insets.bottom'
+    );
+    expect(readSource('app/(tabs)/settings.tsx')).toContain(
+      'paddingBottom: TAB_BAR_CLEARANCE + insets.bottom'
+    );
+    expect(readSource('components/fitness/fitness-screen.tsx')).toContain(
+      "mode === 'tab' ? { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom }"
+    );
+    expect(readSource('components/calendar/calendar-screen.tsx')).toContain(
+      "mode === 'tab' ? { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom }"
+    );
+  });
+
+  it('选中色纯黑、未选中 #8E8E93，并带 180ms 颜色淡入', () => {
+    expect(bar).toContain("const ACTIVE_COLOR = '#000000'");
+    expect(bar).toContain("const INACTIVE_COLOR = '#8E8E93'");
+    expect(bar).toContain('withTiming(active ? 1 : 0, { duration: 180 })');
+    expect(bar).toContain('fontSize: 10');
+  });
+
+  it('第三格选课表时点击走 router.push，其余走 navigateToTab', () => {
+    expect(bar).toContain("tab.name === 'middle' && middle === 'timetable'");
     expect(bar).toContain("router.push('/timetable')");
     expect(bar).toContain('navigateToTab(route.key)');
   });
 
-  it('激活文字加粗，并对读屏暴露选中状态', () => {
-    expect(bar).toContain("fontWeight: active ? '700' : '500'");
+  it('对读屏暴露 tab 与选中状态', () => {
+    expect(bar).toContain('accessibilityRole="tab"');
     expect(bar).toContain('accessibilityState={{ selected: active }}');
+    expect(bar).toContain('accessibilityLabel="新建"');
   });
 
   it('布局把 middle 读取后传给底栏', () => {

@@ -16,9 +16,7 @@ async function checkedTheme(page) {
 /** P8 设置：主题切换与持久化、健身默认值、导出备份、清空数据（含自动备份） */
 export async function run(page, baseUrl) {
   // 前面的场景会留下训练/饮食记录，这里先清空浏览器里的数据库，保证从空数据开始。
-  await page.goto(baseUrl);
-  await page.evaluate('localStorage.clear()');
-  await page.goto(baseUrl);
+  await page.gotoFresh(baseUrl);
   await page.waitForText('首页');
   await page.clickLabel('我的');
   await page.waitForText('数据与偏好');

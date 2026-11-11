@@ -16,7 +16,7 @@ describe('S4 今日/健身/资料/个性化细节（PRDv1.2.2 第 4–7 节）',
   });
 
   it('健身页显示组数，日历按钮在添加左侧且同高 48', () => {
-    const page = read('app/(tabs)/fitness.tsx');
+    const page = read('components/fitness/fitness-screen.tsx');
     expect(page).toContain('组');
     expect(page).toContain('accessibilityLabel="打开日历"');
     expect(page).toContain('headerButton');
@@ -29,7 +29,7 @@ describe('S4 今日/健身/资料/个性化细节（PRDv1.2.2 第 4–7 节）',
   });
 
   it('健身完成一组后对勾 2.5 秒消失', () => {
-    const page = read('app/(tabs)/fitness.tsx');
+    const page = read('components/fitness/fitness-screen.tsx');
     expect(page).toContain('flashId');
     expect(page).toContain('2500');
     const card = read('components/fitness/training-card.tsx');

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -19,6 +19,9 @@ interface Ripple {
   y: number;
 }
 
+/** 按下时缩到 96%，松手用弹簧回 1（PRD_module 第 10 节 E1）。 */
+const PRESS_SCALE = 0.96;
+
 export interface RipplePressableProps extends Omit<PressableProps, 'style' | 'children'> {
   children: React.ReactNode;
   /** 外层容器样式，负责圆角与 overflow 裁切。 */
@@ -33,7 +36,7 @@ let rippleSeed = 0;
 
 /**
  * 自绘波纹按钮（PRDv1.2.2 第 5 节）：从触点扩散、200ms 结束。
- * 不依赖系统原生 ripple，三端表现一致；开启减弱动效时直接不画波纹。
+ * 不依赖系统原生 ripple，三端表现一致；开启减弱动效时直接不画波纹、也不做回弹。
  */
 export function RipplePressable({
   children,
@@ -43,10 +46,12 @@ export function RipplePressable({
   rippleRadius = 48,
   disabled,
   onPressIn,
+  onPressOut,
   ...rest
 }: RipplePressableProps) {
   const reduced = useReducedMotion();
   const [ripples, setRipples] = useState<Ripple[]>([]);
+  const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = useCallback<NonNullable<PressableProps['onPressIn']>>(
     (event) => {
@@ -54,10 +59,31 @@ export function RipplePressable({
         const { locationX, locationY } = event.nativeEvent;
         rippleSeed += 1;
         setRipples((current) => [...current, { key: rippleSeed, x: locationX, y: locationY }]);
+        Animated.timing(scale, {
+          toValue: PRESS_SCALE,
+          duration: 90,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
       }
       onPressIn?.(event);
     },
-    [onPressIn, reduced],
+    [onPressIn, reduced, scale],
+  );
+
+  const handlePressOut = useCallback<NonNullable<PressableProps['onPressOut']>>(
+    (event) => {
+      if (!reduced) {
+        Animated.spring(scale, {
+          toValue: 1,
+          useNativeDriver: true,
+          bounciness: 6,
+          speed: 20,
+        }).start();
+      }
+      onPressOut?.(event);
+    },
+    [onPressOut, reduced, scale],
   );
 
   const dropRipple = useCallback((key: number) => {
@@ -65,23 +91,32 @@ export function RipplePressable({
   }, []);
 
   return (
-    <Pressable
-      {...rest}
-      disabled={disabled}
-      onPressIn={handlePressIn}
-      style={({ pressed }) => [styles.container, style, disabled ? styles.disabled : null, pressed ? styles.pressed : null]}>
-      <View style={[styles.clip, contentStyle]}>{children}</View>
-      {ripples.map((ripple) => (
-        <RippleBubble
-          key={ripple.key}
-          x={ripple.x}
-          y={ripple.y}
-          radius={rippleRadius}
-          color={rippleColor}
-          onDone={() => dropRipple(ripple.key)}
-        />
-      ))}
-    </Pressable>
+    <Animated.View
+      style={[
+        styles.container,
+        style,
+        disabled ? styles.disabled : null,
+        { transform: [{ scale }] },
+      ]}>
+      <Pressable
+        {...rest}
+        disabled={disabled}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={({ pressed }) => [styles.hit, pressed ? styles.pressed : null]}>
+        <View style={[styles.clip, contentStyle]}>{children}</View>
+        {ripples.map((ripple) => (
+          <RippleBubble
+            key={ripple.key}
+            x={ripple.x}
+            y={ripple.y}
+            radius={rippleRadius}
+            color={rippleColor}
+            onDone={() => dropRipple(ripple.key)}
+          />
+        ))}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -142,6 +177,13 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
+  },
+  // 内容层铺满外层：卡片有固定宽高，按钮按内容撑开，两种都用 grow/shrink + basis auto 兼顾。
+  hit: {
+    position: 'relative',
+    overflow: 'hidden',
+    flexGrow: 1,
+    flexShrink: 1,
   },
   clip: {
     flex: 1,

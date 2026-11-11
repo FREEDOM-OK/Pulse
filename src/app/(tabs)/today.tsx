@@ -2,9 +2,10 @@ import { SymbolView } from 'expo-symbols';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TAB_BAR_CLEARANCE } from '@/components/nav/app-tab-bar';
 import { TodayList } from '@/components/today/today-list';
 import { DateStrip, dateLabel } from '@/components/ui/date-strip';
 import { MonthPicker } from '@/components/ui/month-picker';
@@ -15,6 +16,7 @@ import { addDays, todayStr } from '@/lib/date';
 
 export default function TodayScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [date, setDate] = useState(todayStr());
   const [stats, setStats] = useState({ total: 0, done: 0 });
   const [markedDays, setMarkedDays] = useState<Record<string, boolean>>({});
@@ -128,7 +130,10 @@ export default function TodayScreen() {
 
         <ScrollView
           style={styles.list}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}>
           <TodayList date={date} onStats={setStats} />
         </ScrollView>
@@ -187,7 +192,6 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Spacing.four,
-    paddingBottom: 40,
     flexGrow: 1,
   },
   pressed: {

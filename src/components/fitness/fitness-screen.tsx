@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TAB_BAR_CLEARANCE } from '@/components/nav/app-tab-bar';
 import { ExercisePicker } from '@/components/fitness/exercise-picker';
 import { SetRecordItem } from '@/components/fitness/set-record-row';
 import { TrainingCard } from '@/components/fitness/training-card';
+import { SubPageHeader } from '@/components/nav/sub-page-header';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { DateStrip } from '@/components/ui/date-strip';
@@ -30,8 +32,14 @@ import type { SetRecordRow, TrainingItemRow } from '@/db/types';
 import { addDays, formatDay, isToday, todayStr } from '@/lib/date';
 import { useTheme } from '@/hooks/use-theme';
 
-export default function FitnessScreen() {
+export interface FitnessScreenProps {
+  /** tab = 底栏第三格（无返回、带底栏）；page = 二级页（圆形返回）。 */
+  mode?: 'tab' | 'page';
+}
+
+export function FitnessScreen({ mode = 'tab' }: FitnessScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [date, setDate] = useState(todayStr());
   const [items, setItems] = useState<TrainingItemRow[]>([]);
   const [records, setRecords] = useState<SetRecordRow[]>([]);
@@ -121,48 +129,49 @@ export default function FitnessScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <View>
-            <ThemedText type="subtitle" style={styles.title}>
-              健身
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              {formatDay(date)} · {isToday(date) ? `今日 ${totalSets} 组` : `${totalSets} 组`}
-            </ThemedText>
-          </View>
-          <View style={styles.headerActions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="打开日历"
-              onPress={() => setCalendarOpen(true)}
-              style={({ pressed }) => [
-                styles.headerButton,
-                { backgroundColor: theme.backgroundElement },
-                pressed && styles.pressed,
-              ]}>
-              <SymbolView
-                name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
-                tintColor={theme.text}
-                size={20}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => setPickerOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="添加训练"
-              style={({ pressed }) => [
-                styles.headerButton,
-                { backgroundColor: theme.backgroundElement },
-                pressed && styles.pressed,
-              ]}>
-              <ThemedText type="small">添加</ThemedText>
-            </Pressable>
-          </View>
-        </View>
+        <SubPageHeader
+          title="健身"
+          mode={mode}
+          subtitle={`${formatDay(date)} · ${isToday(date) ? `今日 ${totalSets} 组` : `${totalSets} 组`}`}
+          right={
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="打开日历"
+                onPress={() => setCalendarOpen(true)}
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  { backgroundColor: theme.backgroundElement },
+                  pressed && styles.pressed,
+                ]}>
+                <SymbolView
+                  name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
+                  tintColor={theme.text}
+                  size={20}
+                />
+              </Pressable>
+              <Pressable
+                onPress={() => setPickerOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="添加训练"
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  { backgroundColor: theme.backgroundElement },
+                  pressed && styles.pressed,
+                ]}>
+                <ThemedText type="small">添加</ThemedText>
+              </Pressable>
+            </View>
+          }
+        />
 
         <DateStrip value={date} onChange={setDate} marked={markedDays} />
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.content,
+            mode === 'tab' ? { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom } : null,
+          ]}>
           <View style={styles.sectionHeader}>
             <ThemedText type="smallBold">待训练</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
@@ -315,17 +324,10 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  header: {
+  headerActions: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.two,
-  },
-  title: {
-    fontSize: 26,
-    lineHeight: 32,
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   headerButton: {
     height: 48,
@@ -334,11 +336,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.five,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
   },
   content: {
     paddingHorizontal: Spacing.three,

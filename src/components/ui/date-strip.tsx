@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { ScrollViewInstance } from 'react-native';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
@@ -24,12 +25,15 @@ const WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六'];
 
 /**
  * 日期条：数字在上、星期在下，选中项是黑色胶囊。
- * 左右滑动 45 天，选中项自动居中；日历入口放在页面右上角，不在这里。
+ * 45 天窗口以「今天」为中心；点选只换选中态，**不滚动**（用户要求：滑动位置保持不动）。
+ * 只有窗口本身变化（从日历跳到 45 天以外的日期）才把选中项滚到中间。
+ * 日历入口放在页面右上角，不在这里。
  */
 export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStripProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const today = todayStr();
+  const scrollRef = useRef<ScrollViewInstance>(null);
 
   const days = useMemo(() => {
     const list: string[] = [];
@@ -43,20 +47,36 @@ export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStrip
     return list;
   }, [today, value]);
 
-  const selectedIndex = days.indexOf(value);
-  const contentOffset = {
-    x: Math.max(0, selectedIndex * (ITEM_WIDTH + ITEM_GAP) + ITEM_WIDTH / 2 - width / 2),
-    y: 0,
-  };
+  const centerOffsetOf = (index: number) =>
+    Math.max(0, index * (ITEM_WIDTH + ITEM_GAP) + ITEM_WIDTH / 2 - width / 2);
+
+  const selectedIndex = Math.max(0, days.indexOf(value));
+
+  // 首帧定位：挂载时直接把选中项放在中间，避免先渲染第一格再跳（会闪一下）。
+  // 用 ref 存住，之后 `value` 变了也不重算，这样 ScrollView 不会因为 prop 变化被拉回去。
+  const initialOffset = useRef({ x: centerOffsetOf(selectedIndex), y: 0 });
+  const centeredLength = useRef(days.length);
+
+  useEffect(() => {
+    // 成员没变 = 用户点的是同一个 45 天窗口里的日期 → 什么都不做。
+    if (days.length === centeredLength.current) return;
+    centeredLength.current = days.length;
+    const index = days.indexOf(value);
+    if (index < 0) return;
+    scrollRef.current?.scrollTo({
+      x: Math.max(0, index * (ITEM_WIDTH + ITEM_GAP) + ITEM_WIDTH / 2 - width / 2),
+      animated: true,
+    });
+  }, [days, value, width]);
 
   return (
     <View style={styles.container}>
       <ScrollView
-        key={value}
+        ref={scrollRef}
         horizontal
         style={styles.scroll}
         showsHorizontalScrollIndicator={false}
-        contentOffset={contentOffset}
+        contentOffset={initialOffset.current}
         contentContainerStyle={styles.scrollContent}>
         {days.map((date) => {
           const selected = date === value;

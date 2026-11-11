@@ -260,6 +260,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sched_sessions_conflict
 CREATE INDEX IF NOT EXISTS idx_sched_courses_schedule ON sched_courses(schedule_id);
 `;
 
+/**
+ * v8：放宽时段唯一约束——同一课程同一天允许两段相同起始节的时段
+ * （如「1-2 节实验」与「1-4 节理论」并存），改为普通查询索引。
+ */
+export const MIGRATION_V8 = `
+DROP INDEX IF EXISTS idx_sched_sessions_conflict;
+CREATE INDEX IF NOT EXISTS idx_sched_sessions_course
+  ON sched_sessions(course_id, day_of_week);
+`;
+
 export const MIGRATIONS: string[] = [
   MIGRATION_V1,
   MIGRATION_V2,
@@ -268,6 +278,7 @@ export const MIGRATIONS: string[] = [
   MIGRATION_V5,
   MIGRATION_V6,
   MIGRATION_V7,
+  MIGRATION_V8,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

@@ -64,13 +64,17 @@ export default function SchedulesManageScreen() {
       return;
     }
 
-    await createOrUpdateSchedule({
-      id: editingId,
-      name: trimmed,
-      startDate: startDate.trim(),
-      totalWeeks: weeksNum,
-    });
-    setDrawerVisible(false);
+    try {
+      await createOrUpdateSchedule({
+        id: editingId,
+        name: trimmed,
+        startDate: startDate.trim(),
+        totalWeeks: weeksNum,
+      });
+      setDrawerVisible(false);
+    } catch (err) {
+      showNotice(`保存失败：${err instanceof Error ? err.message : '未知错误'}`);
+    }
   };
 
   return (
@@ -84,11 +88,15 @@ export default function SchedulesManageScreen() {
       ]}
     >
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnCircle}
+          accessibilityLabel="返回"
+          onPress={() => router.back()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>课表管理</Text>
-        <TouchableOpacity onPress={() => openForm()}>
+        <TouchableOpacity onPress={() => openForm()} accessibilityLabel="新建课表">
           <Text style={styles.addTopText}>＋ 新建</Text>
         </TouchableOpacity>
       </View>
@@ -102,8 +110,14 @@ export default function SchedulesManageScreen() {
             <TouchableOpacity
               key={s.id}
               style={styles.schedCard}
+              accessibilityLabel={`课表 ${s.name}`}
               onPress={async () => {
-                await switchSchedule(s.id);
+                try {
+                  await switchSchedule(s.id);
+                } catch (err) {
+                  showNotice(`切换失败：${err instanceof Error ? err.message : '未知错误'}`);
+                  return;
+                }
                 router.replace('/timetable');
               }}
             >
@@ -123,6 +137,7 @@ export default function SchedulesManageScreen() {
 
               <TouchableOpacity
                 style={styles.moreBtn}
+                accessibilityLabel={`更多操作 ${s.name}`}
                 onPress={() => {
                   showActions({
                     title: s.name,
@@ -143,8 +158,14 @@ export default function SchedulesManageScreen() {
                             confirmLabel: '删除',
                             danger: true,
                           }).then((ok) => {
-                            if (ok) deleteSchedule(s.id);
-                          });
+                            if (!ok) return;
+                            // deleteSchedule 是异步写库，失败时要提示，不能让拒绝逃逸成崩溃
+                            void deleteSchedule(s.id).catch((err: unknown) => {
+                              showNotice(
+                                `删除失败：${err instanceof Error ? err.message : '未知错误'}`,
+                              );
+                            });
+                          }).catch(() => undefined);
                         },
                       },
                     ],
@@ -168,12 +189,14 @@ export default function SchedulesManageScreen() {
               value={schedName}
               onChangeText={setSchedName}
               placeholder="例如：2026 秋"
+              accessibilityLabel="课表名称"
               style={styles.input}
             />
 
             <View style={styles.labelRow}>
               <Text style={styles.fieldLabel}>开学日期 (YYYY-MM-DD)</Text>
               <TouchableOpacity
+                accessibilityLabel="选今天"
                 onPress={() => {
                   const d = new Date();
                   const y = d.getFullYear();
@@ -189,6 +212,7 @@ export default function SchedulesManageScreen() {
               value={startDate}
               onChangeText={setStartDate}
               placeholder="2026-09-07"
+              accessibilityLabel="开学日期"
               style={styles.input}
             />
 
@@ -197,17 +221,23 @@ export default function SchedulesManageScreen() {
               value={totalWeeks}
               onChangeText={setTotalWeeks}
               keyboardType="number-pad"
+              accessibilityLabel="总周数"
               style={styles.input}
             />
 
             <View style={styles.btnRow}>
               <TouchableOpacity
                 style={styles.cancelBtn}
+                accessibilityLabel="取消"
                 onPress={() => setDrawerVisible(false)}
               >
                 <Text style={styles.cancelBtnText}>取消</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                accessibilityLabel="保存课表"
+                onPress={handleSave}
+              >
                 <Text style={styles.saveBtnText}>确定</Text>
               </TouchableOpacity>
             </View>

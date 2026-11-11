@@ -1,12 +1,15 @@
 /**
- * 底部导航配置：4 个 Tab + 中间凸起的新建按钮。
- * 游戏已改为二级页（/games），不再占用 Tab；
- * 第三个 Tab 可在健身与课表之间切换（PRDv1.2.2 第 2.5 节）。
+ * 底部导航配置：4 个 Tab（首页 / 计划 / 第三个标签 / 我的）+ 中间凸起的新建按钮。
+ *
+ * v1.2.2（PRD_module 第 8 节）：
+ * - 「健身 / 课表 / 日历」中被选进第三格的，就是真正的第 3 页（路由名 `middle`，带底栏）；
+ * - 没被选中的只能从首页 Dash 或「我的」以二级页打开；
+ * - 课表保持现状（独立全屏页 `/timetable`），第三格选课表时底栏点它仍然 push 进去。
  */
 
 import type { SymbolViewProps } from 'expo-symbols';
 
-import type { MiddleTab } from '@/db/types';
+import { MIDDLE_TAB_LABELS, type MiddleTab } from '@/db/types';
 
 export type TabIcon = NonNullable<SymbolViewProps['name']>;
 
@@ -14,8 +17,6 @@ export interface TabItem {
   name: string;
   title: string;
   icon: TabIcon;
-  /** 该项不是 Tab 路由，点击要走 router.push（目前只有课表）。 */
-  route?: string;
 }
 
 const FIRST: TabItem[] = [
@@ -31,21 +32,15 @@ const FIRST: TabItem[] = [
   },
 ];
 
-const FITNESS: TabItem = {
-  name: 'fitness',
-  title: '健身',
-  icon: {
+/** 第三格的图标随设置切。 */
+export const MIDDLE_ICONS: Record<MiddleTab, TabIcon> = {
+  fitness: {
     ios: 'figure.strengthtraining.traditional',
     android: 'fitness_center',
     web: 'fitness_center',
   },
-};
-
-const TIMETABLE: TabItem = {
-  name: 'timetable',
-  title: '课表',
-  icon: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' },
-  route: '/timetable',
+  timetable: { ios: 'calendar', android: 'calendar_month', web: 'calendar_month' },
+  calendar: { ios: 'calendar', android: 'event', web: 'event' },
 };
 
 const LAST: TabItem = {
@@ -54,9 +49,14 @@ const LAST: TabItem = {
   icon: { ios: 'person.fill', android: 'person', web: 'person' },
 };
 
-/** 按「第三个标签」设置生成 4 个 Tab：首页 / 计划 / 健身或课表 / 我的。 */
+/** 按「第三个标签」设置生成 4 个 Tab：首页 / 计划 / 中间 / 我的。 */
 export function buildTabItems(middle: MiddleTab): TabItem[] {
-  return [FIRST[0], FIRST[1], middle === 'timetable' ? TIMETABLE : FITNESS, LAST];
+  const middleItem: TabItem = {
+    name: 'middle',
+    title: MIDDLE_TAB_LABELS[middle],
+    icon: MIDDLE_ICONS[middle],
+  };
+  return [FIRST[0], FIRST[1], middleItem, LAST];
 }
 
 /** 默认配置（第三格为健身），保持旧引用可用。 */

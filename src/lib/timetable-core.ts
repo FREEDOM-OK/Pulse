@@ -17,6 +17,16 @@ export const COURSE_COLORS: string[] = [
   '#7C3AED', '#D946EF', '#64748B', '#78716C', '#9CA3AF',
 ];
 
+/**
+ * 课表模块的本地主键：时间戳 + 进程内自增。
+ * 同一毫秒内连续创建（双击保存、批量导入）也不会撞主键。
+ */
+let localIdSeed = 0;
+export function createLocalId(prefix: 'c' | 's' | 'sched'): string {
+  localIdSeed += 1;
+  return `${prefix}_${Date.now()}_${localIdSeed}`;
+}
+
 export interface PeriodTime {
   start: string;
   end: string;
@@ -194,7 +204,7 @@ export function rowBottom(p: number, rowH: number, lunchH: number, lunchAfter: n
 }
 
 /** 跨午休时切成两块：[[start, lunchAfter], [lunchAfter+1, end]] */
-export function blocksOf(start: number, end: number, lunchAfter: number): Array<[number, number]> {
+export function blocksOf(start: number, end: number, lunchAfter: number): [number, number][] {
   if (lunchAfter > 0 && start <= lunchAfter && end > lunchAfter) {
     return [
       [start, lunchAfter],

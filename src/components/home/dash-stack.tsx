@@ -14,6 +14,12 @@ export interface DashStackProps {
 }
 
 const FLY_OUT = 250;
+/** 堆叠模式一次最多显示 3 张（PRD_module 第 8.6 节：下面叠 2 张、侧边窥视）。 */
+const VISIBLE = 3;
+/** 每深一层向下错开的距离。 */
+const OFFSET_Y = 18;
+/** 每深一层向右错开的距离。 */
+const OFFSET_X = 12;
 
 /**
  * Dash 卡片堆叠模式（PRDv1.2.2 第 3.6 节）：
@@ -89,12 +95,12 @@ export function DashStack({ cards, style, color, width, height }: DashStackProps
   }
 
   return (
-    <View style={[styles.wrap, { height: height + 48 }]}>
+    <View style={[styles.wrap, { width, height: height + OFFSET_Y * (VISIBLE - 1) }]}>
       {ordered
-        .slice(0, 4)
+        .slice(0, VISIBLE)
         .map((card, index) => {
           const isTop = index === 0;
-          const depth = Math.min(index, 3);
+          const depth = Math.min(index, VISIBLE - 1);
           return (
             <Animated.View
               key={card.id}
@@ -105,7 +111,11 @@ export function DashStack({ cards, style, color, width, height }: DashStackProps
                   height,
                   transform: isTop
                     ? [{ translateX }, { rotate: translateX.interpolate({ inputRange: [-width, 0, width], outputRange: ['-8deg', '0deg', '8deg'] }) }]
-                    : [{ translateY: depth * 24 }, { scale: 1 - depth * 0.04 }],
+                    : [
+                        { translateY: depth * OFFSET_Y },
+                        { translateX: depth * OFFSET_X },
+                        { scale: 1 - depth * 0.05 },
+                      ],
                   zIndex: 10 - index,
                   opacity: isTop && dragging ? 0.96 : 1,
                 },
@@ -118,7 +128,6 @@ export function DashStack({ cards, style, color, width, height }: DashStackProps
                 style={style}
                 color={color}
                 kind={card.id}
-                tone={index === 0 ? 'primary' : 'plain'}
                 width={width}
                 height={height}
                 onPress={isTop ? card.onPress : () => undefined}

@@ -73,6 +73,14 @@ function WheelColumnView({
 
   return (
     <View style={styles.column}>
+      {/* 选中高亮固定钉在中间行（第 3 行），不再画在列表项上 —— 否则一滚就跟着内容走。 */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.highlight,
+          { backgroundColor: highlightColor, top: WHEEL_ITEM_HEIGHT * 2 },
+        ]}
+      />
       <FlatList
         ref={listRef}
         data={column.options}
@@ -105,14 +113,13 @@ function WheelColumnView({
             accessibilityState={{ selected: item.value === selected }}
             accessibilityLabel={`选择 ${item.label}`}
             onPress={() => onSelect(item.value)}
-            style={[
-              styles.item,
-              itemIndex === index && { backgroundColor: highlightColor, borderRadius: 10 },
-            ]}>
+            style={styles.item}>
             <ThemedText
               style={[
                 styles.itemText,
-                { color: item.value === selected ? textColor : mutedColor },
+                // 离中间行越远越淡，做出滚轮上下渐隐的效果。
+                // 用文字透明度而不是遮罩层，是因为不知道外面容器的底色，遮罩容易露出色差。
+                { color: item.value === selected ? textColor : mutedColor, opacity: fadeFor(itemIndex, index) },
                 item.value === selected && styles.itemTextActive,
               ]}>
               {item.label}
@@ -122,6 +129,11 @@ function WheelColumnView({
       />
     </View>
   );
+}
+
+/** 中间行 1.0，每远一行减 0.3，最淡 0.28。 */
+function fadeFor(itemIndex: number, centerIndex: number): number {
+  return Math.max(0.28, 1 - Math.abs(itemIndex - centerIndex) * 0.3);
 }
 
 function clampIndex(value: number, length: number): number {
@@ -137,6 +149,14 @@ const styles = StyleSheet.create({
   column: {
     flex: 1,
     alignItems: 'stretch',
+    position: 'relative',
+  },
+  highlight: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: WHEEL_ITEM_HEIGHT,
+    borderRadius: 10,
   },
   item: {
     height: WHEEL_ITEM_HEIGHT,

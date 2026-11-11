@@ -9,6 +9,10 @@ export interface CheckMarkProps {
   checked: boolean;
   /** 勾选框边长，默认 22。 */
   size?: number;
+  /** 方形（默认）或圆形；首页 Tasks 用圆形。 */
+  shape?: 'square' | 'circle';
+  /** 未勾选时的描边色，默认跟随主题次要文字色。 */
+  uncheckedColor?: string;
   onPress?: () => void;
   accessibilityLabel?: string;
   disabled?: boolean;
@@ -21,6 +25,8 @@ export interface CheckMarkProps {
 export function CheckMark({
   checked,
   size = 22,
+  shape = 'square',
+  uncheckedColor,
   onPress,
   accessibilityLabel,
   disabled,
@@ -51,8 +57,8 @@ export function CheckMark({
         {
           width: size,
           height: size,
-          borderRadius: 7,
-          borderColor: checked ? theme.text : theme.textSecondary,
+          borderRadius: shape === 'circle' ? size / 2 : 7,
+          borderColor: checked ? theme.text : (uncheckedColor ?? theme.textSecondary),
           backgroundColor: checked ? theme.text : 'transparent',
         },
       ]}>

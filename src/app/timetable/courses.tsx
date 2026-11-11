@@ -37,7 +37,11 @@ export default function AllCoursesScreen() {
       ]}
     >
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnCircle}
+          accessibilityLabel="返回"
+          onPress={() => router.back()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>全部课程</Text>
@@ -49,6 +53,7 @@ export default function AllCoursesScreen() {
           <Text style={styles.emptyTitle}>还没有课程</Text>
           <TouchableOpacity
             style={styles.addBtn}
+            accessibilityLabel="添加课程"
             onPress={() => router.push('/timetable/course')}
           >
             <Text style={styles.addBtnText}>添加课程</Text>
@@ -66,6 +71,7 @@ export default function AllCoursesScreen() {
               <TouchableOpacity
                 key={c.id}
                 style={styles.courseCard}
+                accessibilityLabel={`课程 ${c.name}`}
                 onPress={() =>
                   router.push({ pathname: '/timetable/course', params: { id: c.id } })
                 }

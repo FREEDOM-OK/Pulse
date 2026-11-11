@@ -159,14 +159,15 @@ export const DEFAULT_HOME_CARDS: HomeCardId[] = ['fitness', 'games', 'calendar',
 /** 首页卡片默认开关：课表默认关闭。 */
 export const DEFAULT_ENABLED_CARDS: HomeCardId[] = ['fitness', 'games', 'calendar'];
 
-/** 底栏第三个标签放哪个模块。 */
-export type MiddleTab = 'fitness' | 'timetable';
+/** 底栏第三个标签放哪个模块（PRD_module 第 8 节：健身 / 课表 / 日历）。 */
+export type MiddleTab = 'fitness' | 'timetable' | 'calendar';
 
-export const MIDDLE_TABS: MiddleTab[] = ['fitness', 'timetable'];
+export const MIDDLE_TABS: MiddleTab[] = ['fitness', 'timetable', 'calendar'];
 
 export const MIDDLE_TAB_LABELS: Record<MiddleTab, string> = {
   fitness: '健身',
   timetable: '课表',
+  calendar: '日历',
 };
 
 /** Dash 卡片的展示模式。 */

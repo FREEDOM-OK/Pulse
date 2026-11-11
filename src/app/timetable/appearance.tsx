@@ -29,7 +29,11 @@ export default function AppearanceScreen() {
       ]}
     >
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnCircle}
+          accessibilityLabel="返回"
+          onPress={() => router.back()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>外观</Text>
@@ -45,7 +49,11 @@ export default function AppearanceScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.resetBtn} onPress={resetAppearanceDefaults}>
+        <TouchableOpacity
+          style={styles.resetBtn}
+          accessibilityLabel="恢复默认"
+          onPress={resetAppearanceDefaults}
+        >
           <Text style={styles.resetBtnText}>恢复默认</Text>
         </TouchableOpacity>
       </View>

@@ -1,21 +1,10 @@
-import { StyleSheet } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { ThemedView } from '@/components/themed-view';
-import { CalendarPanel } from '@/components/calendar/calendar-panel';
+import { CalendarScreen } from '@/components/calendar/calendar-screen';
 
-export default function CalendarScreen() {
+/** 日历二级页：从首页 Dash / 「我的 → 快捷入口」/ 其他页的日历按钮进来。 */
+export default function CalendarPage() {
   const params = useLocalSearchParams<{ date?: string }>();
   const initialDate = typeof params.date === 'string' && params.date ? params.date : undefined;
 
-  return (
-    <ThemedView style={styles.container}>
-      <CalendarPanel initialDate={initialDate} />
-    </ThemedView>
-  );
+  return <CalendarScreen mode="page" initialDate={initialDate} />;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});

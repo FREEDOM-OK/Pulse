@@ -4,31 +4,29 @@ import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
 import { RipplePressable } from '@/components/ui/ripple-pressable';
 import type { CardStyle, HomeCardId } from '@/db/types';
+import { useTheme } from '@/hooks/use-theme';
 import { CartoonArt } from './cartoon-art';
 
 export interface DashCardProps {
   title: string;
   subtitle: string;
   icon: Parameters<typeof SymbolView>[0]['name'];
-  /** 卡片样式：默认（黑白）/ 自定义颜色 / 卡通。 */
+  /** 卡片样式：默认（跟随主题）/ 自定义颜色 / 卡通。 */
   style: CardStyle;
-  /** 自定义样式下的底色（仅主卡使用）。 */
+  /** 自定义样式下的底色。 */
   color: string;
   /** 卡片种类，卡通样式用来选图案。 */
   kind: HomeCardId;
-  /** primary = 深色主卡，plain = 浅色普通卡。 */
-  tone?: 'primary' | 'plain';
   width: number;
   height: number;
   onPress: () => void;
 }
 
-const PRIMARY_BG = '#26262A';
-const PLAIN_BG = '#F2F2F4';
-
 /**
  * Dash 卡片：无边框、无渐变、无纹理（PRDv1.2.2 第 3.2 / 3.7 节）。
- * 264×163 时宽高比为黄金比。
+ *
+ * v1.2.2 起所有卡片长一样（不再有「首卡深色」），底色跟主题走，
+ * 尺寸是竖卡 264×427（黄金比 1:1.618）。
  */
 export function DashCard({
   title,
@@ -37,23 +35,29 @@ export function DashCard({
   style,
   color,
   kind,
-  tone = 'plain',
   width,
   height,
   onPress,
 }: DashCardProps) {
-  const isPrimary = tone === 'primary';
-  const isDark = isPrimary;
-  const backgroundColor = isPrimary ? (style === 'custom' ? color : PRIMARY_BG) : PLAIN_BG;
-  const ink = isDark ? '#FFFFFF' : '#111111';
-  const subInk = isDark ? 'rgba(255,255,255,0.64)' : '#6B6B70';
-  const showCartoon = isPrimary && style === 'cartoon';
+  const theme = useTheme();
+  const isCustom = style === 'custom';
+  const backgroundColor = isCustom ? color : theme.backgroundElement;
+  const ink = isCustom ? inkFor(color) : theme.text;
+  const subInk = isCustom
+    ? ink === '#FFFFFF'
+      ? 'rgba(255,255,255,0.7)'
+      : 'rgba(0,0,0,0.55)'
+    : theme.textSecondary;
+  const chipBackground = isCustom ? (ink === '#FFFFFF' ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)') : theme.background;
+  const arrowBorder = isCustom ? (ink === '#FFFFFF' ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.18)') : theme.backgroundSelected;
+  const showCartoon = style === 'cartoon';
 
   return (
     <RipplePressable
       style={[styles.card, { width, height, backgroundColor }]}
+      contentStyle={styles.content}
       onPress={onPress}
-      rippleColor={isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'}
+      rippleColor={ink === '#FFFFFF' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'}
       accessibilityRole="button"
       accessibilityLabel={`${title}，${subtitle}`}>
       <View style={styles.topRow}>
@@ -62,11 +66,11 @@ export function DashCard({
             <CartoonArt kind={kind} size={54} color={ink} />
           </View>
         ) : (
-          <View style={[styles.iconChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#FFFFFF' }]}>
+          <View style={[styles.iconChip, { backgroundColor: chipBackground }]}>
             <SymbolView name={icon} tintColor={ink} size={20} />
           </View>
         )}
-        <View style={[styles.arrow, { borderColor: isDark ? 'rgba(255,255,255,0.32)' : '#DCDCE0' }]}>
+        <View style={[styles.arrow, { borderColor: arrowBorder }]}>
           <ThemedText style={[styles.arrowText, { color: ink }]}>›</ThemedText>
         </View>
       </View>
@@ -83,12 +87,26 @@ export function DashCard({
   );
 }
 
+/** 自定义底色上要能读清文字：按亮度阈值选黑/白。 */
+function inkFor(background: string): '#111111' | '#FFFFFF' {
+  const match = /^#([0-9a-f]{6})$/i.exec(background.trim());
+  if (!match) return '#111111';
+  const value = parseInt(match[1], 16);
+  const r = (value >> 16) & 0xff;
+  const g = (value >> 8) & 0xff;
+  const b = value & 0xff;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? '#111111' : '#FFFFFF';
+}
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: 24,
+    overflow: 'hidden',
+  },
+  content: {
     padding: 18,
     justifyContent: 'space-between',
-    overflow: 'hidden',
   },
   topRow: {
     flexDirection: 'row',

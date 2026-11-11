@@ -64,13 +64,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    // 已完成的一组记录要高过「待训练」卡（用户要求 +32），
+    // 原来只有 8pt 上下内边距、实际高度约 38，这里拉到 16pt 内边距 + 70 最小高度。
+    paddingVertical: Spacing.three,
+    minHeight: 70,
     borderRadius: Spacing.three,
   },
   indexBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: 'rgba(127,127,127,0.18)',
     alignItems: 'center',
     justifyContent: 'center',

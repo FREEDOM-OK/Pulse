@@ -1,17 +1,20 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import {
   getDb,
   ScheduleEntity,
   CourseEntity,
   SessionEntity,
   TimetableSettings,
+  saveCourseWithSessions,
+  deleteCourseWithSessions,
 } from './repository';
 import {
   DEFAULT_PERIOD_TIMES,
-  PeriodTime,
+  createLocalId,
   currentWeekNumber,
   getFirstMondayOfCurrentMonth,
 } from '@/lib/timetable-core';
+import { bumpDataVersion } from '@/lib/data-version';
 
 interface TimetableContextValue {
   ready: boolean;
@@ -33,18 +36,18 @@ interface TimetableContextValue {
   deleteCourse: (courseId: string) => Promise<void>;
   duplicateCourse: (course: CourseEntity) => Promise<void>;
   importCoursesToActiveSchedule: (
-    parsedCourses: Array<{
+    parsedCourses: {
       name: string;
       color: string;
-      sessions: Array<{
+      sessions: {
         dayOfWeek: number;
         startPeriod: number;
         endPeriod: number;
         weeks: number[];
         teacher: string;
         location: string;
-      }>;
-    }>
+      }[];
+    }[]
   ) => Promise<void>;
   updateSetting: <K extends keyof TimetableSettings>(
     key: K,
@@ -68,6 +71,9 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     lunchAfter: 4,
     saturation: 0.8,
   });
+
+  /** 只在首次加载时把查看周对齐到当前周；后续 reloadAll（增删改后）不能把用户翻到的周拽回去。 */
+  const initializedWeekRef = useRef(false);
 
   const reloadAll = useCallback(async () => {
     const db = await getDb();
@@ -150,12 +156,14 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setCourses(loadedCourses);
 
     const activeSched = loadedSchedules.find((s) => s.id === activeId) || loadedSchedules[0];
-    if (activeSched && !ready) {
+    if (activeSched && !initializedWeekRef.current) {
+      initializedWeekRef.current = true;
       const cw = currentWeekNumber(activeSched.startDate, new Date());
       setViewingWeek(Math.min(Math.max(1, cw), activeSched.totalWeeks));
     }
     setReady(true);
-  }, [ready]);
+    // 依赖留空：reloadAll 只写 state，不读 state；挂在 [ready] 上会让首帧多跑一整轮查询（进课表「卡一下」的来源之一）。
+  }, []);
 
   useEffect(() => {
     reloadAll();
@@ -184,6 +192,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setViewingWeek(Math.min(Math.max(1, cw), target.totalWeeks));
     }
     await reloadAll();
+    bumpDataVersion();
   };
 
   const createOrUpdateSchedule = async (payload: {
@@ -200,7 +209,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         [payload.name, payload.startDate, payload.totalWeeks, now, payload.id]
       );
     } else {
-      const newId = `sched_${Date.now()}`;
+      const newId = createLocalId('sched');
       await db.runAsync(
         'INSERT INTO schedules (id, name, start_date, total_weeks, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?);',
         [newId, payload.name, payload.startDate, payload.totalWeeks, now, now]
@@ -211,6 +220,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       ]);
     }
     await reloadAll();
+    bumpDataVersion();
   };
 
   const deleteSchedule = async (scheduleId: string) => {
@@ -238,74 +248,31 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }
     await reloadAll();
+    bumpDataVersion();
     return { ok: true };
   };
 
   const saveCourse = async (course: Omit<CourseEntity, 'createdAt' | 'updatedAt'>) => {
-    const db = await getDb();
-    const now = new Date().toISOString();
-    const exists = courses.some((c) => c.id === course.id);
-
-    if (exists) {
-      await db.runAsync(
-        'UPDATE sched_courses SET name = ?, color = ?, credits = ?, updated_at = ? WHERE id = ?;',
-        [course.name, course.color, course.credits || '选填', now, course.id]
-      );
-      await db.runAsync('DELETE FROM sched_sessions WHERE course_id = ?;', [course.id]);
-    } else {
-      await db.runAsync(
-        'INSERT INTO sched_courses (id, schedule_id, name, color, credits, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-        [
-          course.id,
-          course.scheduleId,
-          course.name,
-          course.color,
-          course.credits || '选填',
-          now,
-          now,
-        ]
-      );
-    }
-
-    for (const s of course.sessions) {
-      await db.runAsync(
-        `INSERT OR REPLACE INTO sched_sessions
-          (id, course_id, teacher, location, day_of_week, start_period, end_period, weeks, remark, custom_time)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [
-          s.id,
-          course.id,
-          s.teacher || '',
-          s.location || '',
-          s.dayOfWeek,
-          s.startPeriod,
-          s.endPeriod,
-          JSON.stringify(s.weeks),
-          s.remark || '',
-          s.customTime ? JSON.stringify(s.customTime) : '',
-        ]
-      );
-    }
-
+    await saveCourseWithSessions(course);
     const firstWeek = course.sessions[0]?.weeks[0];
     if (firstWeek) {
       setViewingWeek(firstWeek);
     }
     await reloadAll();
+    bumpDataVersion();
   };
 
   const deleteCourse = async (courseId: string) => {
-    const db = await getDb();
-    await db.runAsync('DELETE FROM sched_sessions WHERE course_id = ?;', [courseId]);
-    await db.runAsync('DELETE FROM sched_courses WHERE id = ?;', [courseId]);
+    await deleteCourseWithSessions(courseId);
     await reloadAll();
+    bumpDataVersion();
   };
 
   const duplicateCourse = async (course: CourseEntity) => {
-    const newCourseId = `c_${Date.now()}`;
-    const clonedSessions: SessionEntity[] = course.sessions.map((s, idx) => ({
+    const newCourseId = createLocalId('c');
+    const clonedSessions: SessionEntity[] = course.sessions.map((s) => ({
       ...s,
-      id: `s_${Date.now()}_${idx}`,
+      id: createLocalId('s'),
       courseId: newCourseId,
     }));
     await saveCourse({
@@ -319,63 +286,66 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const importCoursesToActiveSchedule = async (
-    parsedCourses: Array<{
+    parsedCourses: {
       name: string;
       color: string;
-      sessions: Array<{
+      sessions: {
         dayOfWeek: number;
         startPeriod: number;
         endPeriod: number;
         weeks: number[];
         teacher: string;
         location: string;
-      }>;
-    }>
+      }[];
+    }[]
   ) => {
     const db = await getDb();
     const now = new Date().toISOString();
     const activeId = activeSchedule.id;
 
-    // 覆盖当前课表的全部课程
-    const oldCourses = await db.getAllAsync<{ id: string }>(
-      'SELECT id FROM sched_courses WHERE schedule_id = ?;',
-      [activeId]
-    );
-    for (const oc of oldCourses) {
-      await db.runAsync('DELETE FROM sched_sessions WHERE course_id = ?;', [oc.id]);
-    }
-    await db.runAsync('DELETE FROM sched_courses WHERE schedule_id = ?;', [activeId]);
-
-    for (let i = 0; i < parsedCourses.length; i++) {
-      const pc = parsedCourses[i];
-      const cId = `c_${Date.now()}_${i}`;
-      await db.runAsync(
-        'INSERT INTO sched_courses (id, schedule_id, name, color, credits, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
-        [cId, activeId, pc.name, pc.color, '选填', now, now]
+    await db.withTransactionAsync(async () => {
+      // 覆盖当前课表的全部课程
+      const oldCourses = await db.getAllAsync<{ id: string }>(
+        'SELECT id FROM sched_courses WHERE schedule_id = ?;',
+        [activeId]
       );
-      for (let j = 0; j < pc.sessions.length; j++) {
-        const ps = pc.sessions[j];
-        const sId = `s_${Date.now()}_${i}_${j}`;
-        await db.runAsync(
-          `INSERT OR REPLACE INTO sched_sessions
-            (id, course_id, teacher, location, day_of_week, start_period, end_period, weeks, remark, custom_time)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-          [
-            sId,
-            cId,
-            ps.teacher,
-            ps.location,
-            ps.dayOfWeek,
-            ps.startPeriod,
-            ps.endPeriod,
-            JSON.stringify(ps.weeks),
-            '',
-            '',
-          ]
-        );
+      for (const oc of oldCourses) {
+        await db.runAsync('DELETE FROM sched_sessions WHERE course_id = ?;', [oc.id]);
       }
-    }
+      await db.runAsync('DELETE FROM sched_courses WHERE schedule_id = ?;', [activeId]);
+
+      for (let i = 0; i < parsedCourses.length; i++) {
+        const pc = parsedCourses[i];
+        const cId = createLocalId('c');
+        await db.runAsync(
+          'INSERT INTO sched_courses (id, schedule_id, name, color, credits, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+          [cId, activeId, pc.name, pc.color, '选填', now, now]
+        );
+        for (let j = 0; j < pc.sessions.length; j++) {
+          const ps = pc.sessions[j];
+          const sId = createLocalId('s');
+          await db.runAsync(
+            `INSERT INTO sched_sessions
+              (id, course_id, teacher, location, day_of_week, start_period, end_period, weeks, remark, custom_time)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            [
+              sId,
+              cId,
+              ps.teacher,
+              ps.location,
+              ps.dayOfWeek,
+              ps.startPeriod,
+              ps.endPeriod,
+              JSON.stringify(ps.weeks),
+              '',
+              '',
+            ]
+          );
+        }
+      }
+    });
     await reloadAll();
+    bumpDataVersion();
   };
 
   const updateSetting = async <K extends keyof TimetableSettings>(
@@ -392,6 +362,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       serialized,
     ]);
     await reloadAll();
+    bumpDataVersion();
   };
 
   const resetAppearanceDefaults = async () => {
@@ -413,6 +384,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       '2',
     ]);
     await reloadAll();
+    bumpDataVersion();
   };
 
   return (

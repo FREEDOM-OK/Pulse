@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -91,6 +91,8 @@ export default function AddOrEditCourseScreen() {
 
   // 当前正在编辑哪个时段子模态
   const [activeSessionIdx, setActiveSessionIdx] = useState<number>(0);
+  /** 保存进行中标记：挡住双击「保存」造成的并发写入。 */
+  const savingRef = useRef(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showWeekPicker, setShowWeekPicker] = useState(false);
   const [showTimeWheel, setShowTimeWheel] = useState(false);
@@ -202,15 +204,27 @@ export default function AddOrEditCourseScreen() {
   };
 
   const commitSave = async (trimmedName: string) => {
-    await saveCourse({
-      id: courseId,
-      scheduleId: activeSchedule.id,
-      name: trimmedName,
-      color,
-      credits,
-      sessions,
-    });
-    router.back();
+    // 双击保存 / 点「仍然保存」时手指还没离开：第二次直接忽略，避免同一门课并发写两次。
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      await saveCourse({
+        id: courseId,
+        scheduleId: activeSchedule.id,
+        name: trimmedName,
+        color,
+        credits,
+        sessions,
+      });
+      if (router.canGoBack()) router.back();
+      else router.replace('/timetable');
+    } catch (err) {
+      // 写库失败（例如旧库还带着 v7 的唯一索引）不能把异常冒成未捕获的 Promise 拒绝：
+      // 原生端会直接崩掉页面回到首页，用户看到的就是「保存后闪退」。
+      showNotice(`保存失败：${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      savingRef.current = false;
+    }
   };
 
   return (
@@ -225,11 +239,15 @@ export default function AddOrEditCourseScreen() {
     >
       {/* 1. 顶部操作栏 */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.iconBtn}
+          accessibilityLabel="关闭"
+        >
           <Text style={styles.closeIcon}>✕</Text>
         </TouchableOpacity>
         <Text style={styles.barTitle}>{existingCourse ? '编辑课程' : '添加课程'}</Text>
-        <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
+        <TouchableOpacity onPress={handleSave} style={styles.saveBtn} accessibilityLabel="保存课程">
           <Text style={styles.saveText}>保存</Text>
         </TouchableOpacity>
       </View>
@@ -241,6 +259,7 @@ export default function AddOrEditCourseScreen() {
             value={name}
             onChangeText={setName}
             maxLength={30}
+            accessibilityLabel="课程名称"
             placeholder="例如：高等数学"
             placeholderTextColor="#94A3B8"
             style={styles.nameInput}
@@ -252,6 +271,7 @@ export default function AddOrEditCourseScreen() {
           <TouchableOpacity
             style={styles.rowItem}
             onPress={() => setShowColorPicker(true)}
+            accessibilityLabel="选择颜色"
           >
             <View style={styles.rowLeft}>
               <Text style={styles.rowEmoji}>🎨</Text>
@@ -264,6 +284,7 @@ export default function AddOrEditCourseScreen() {
 
           <TouchableOpacity
             style={[styles.rowItem, { borderBottomWidth: 0 }]}
+            accessibilityLabel="学分"
             onPress={() => {
               const order = ['选填', '1.0', '2.0', '3.0', '4.0'];
               const next = order[(order.indexOf(credits) + 1) % order.length];
@@ -291,12 +312,16 @@ export default function AddOrEditCourseScreen() {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>时段{idx + 1}</Text>
                 <View style={styles.sectionActions}>
-                  <TouchableOpacity onPress={() => handleCopySession(idx)}>
+                  <TouchableOpacity
+                    onPress={() => handleCopySession(idx)}
+                    accessibilityLabel={`复制时段${idx + 1}`}
+                  >
                     <Text style={styles.copyText}>复制</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     disabled={!canDelete}
                     onPress={() => handleDeleteSession(idx)}
+                    accessibilityLabel={`删除时段${idx + 1}`}
                   >
                     <Text style={canDelete ? styles.deleteActiveText : styles.deleteText}>
                       删除
@@ -309,6 +334,7 @@ export default function AddOrEditCourseScreen() {
                 {/* 周数选择 */}
                 <TouchableOpacity
                   style={styles.rowItem}
+                  accessibilityLabel={`选择周数 时段${idx + 1}`}
                   onPress={() => {
                     setActiveSessionIdx(idx);
                     setShowWeekPicker(true);
@@ -326,6 +352,7 @@ export default function AddOrEditCourseScreen() {
                 {/* 节数选择 */}
                 <TouchableOpacity
                   style={styles.rowItem}
+                  accessibilityLabel={`选择节次 时段${idx + 1}`}
                   onPress={() => {
                     setActiveSessionIdx(idx);
                     setShowTimeWheel(true);
@@ -343,6 +370,7 @@ export default function AddOrEditCourseScreen() {
                 {/* 自定义时间直达行 */}
                 <TouchableOpacity
                   style={styles.rowItem}
+                  accessibilityLabel={`自定义时间 时段${idx + 1}`}
                   onPress={() => {
                     setActiveSessionIdx(idx);
                     setShowCustomTimePage(true);
@@ -365,6 +393,7 @@ export default function AddOrEditCourseScreen() {
                     value={sess.location}
                     onChangeText={(txt) => updateSessionField(idx, 'location', txt)}
                     placeholder="选填"
+                    accessibilityLabel={`地点 时段${idx + 1}`}
                     placeholderTextColor="#94A3B8"
                     style={styles.rowInput}
                   />
@@ -380,6 +409,7 @@ export default function AddOrEditCourseScreen() {
                     value={sess.teacher}
                     onChangeText={(txt) => updateSessionField(idx, 'teacher', txt)}
                     placeholder="选填"
+                    accessibilityLabel={`教师 时段${idx + 1}`}
                     placeholderTextColor="#94A3B8"
                     style={styles.rowInput}
                   />
@@ -396,6 +426,7 @@ export default function AddOrEditCourseScreen() {
                     maxLength={100}
                     onChangeText={(txt) => updateSessionField(idx, 'remark', txt)}
                     placeholder="选填，最长 100 字"
+                    accessibilityLabel={`备注 时段${idx + 1}`}
                     placeholderTextColor="#94A3B8"
                     style={styles.rowInput}
                   />
@@ -409,6 +440,7 @@ export default function AddOrEditCourseScreen() {
         <TouchableOpacity
           style={styles.addSessionBtn}
           activeOpacity={0.7}
+          accessibilityLabel="添加时段"
           onPress={() => {
             setSessions((prev) => [
               ...prev,
@@ -444,7 +476,7 @@ export default function AddOrEditCourseScreen() {
           ]}
         >
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => setShowCustomTimePage(false)}>
+            <TouchableOpacity onPress={() => setShowCustomTimePage(false)} accessibilityLabel="返回">
               <Text style={styles.backChevron}>‹</Text>
             </TouchableOpacity>
             <Text style={styles.barTitle}>自定义时间</Text>
@@ -456,6 +488,7 @@ export default function AddOrEditCourseScreen() {
               <View style={styles.rowItem}>
                 <Text style={styles.rowLabel}>自定义时间</Text>
                 <Switch
+                  accessibilityLabel="启用自定义时间"
                   value={activeSession?.customTime?.enabled ?? false}
                   onValueChange={(val) => {
                     updateSessionField(activeSessionIdx, 'customTime', {
@@ -472,6 +505,7 @@ export default function AddOrEditCourseScreen() {
                 <Text style={styles.rowLabel}>上课时间</Text>
                 <TextInput
                   value={activeSession?.customTime?.startTime || '08:00'}
+                  accessibilityLabel="上课时间"
                   onChangeText={(txt) =>
                     updateSessionField(activeSessionIdx, 'customTime', {
                       enabled: activeSession?.customTime?.enabled ?? true,
@@ -487,6 +521,7 @@ export default function AddOrEditCourseScreen() {
                 <Text style={styles.rowLabel}>下课时间</Text>
                 <TextInput
                   value={activeSession?.customTime?.endTime || '09:30'}
+                  accessibilityLabel="下课时间"
                   onChangeText={(txt) =>
                     updateSessionField(activeSessionIdx, 'customTime', {
                       enabled: activeSession?.customTime?.enabled ?? true,
@@ -511,7 +546,7 @@ export default function AddOrEditCourseScreen() {
                 已选 {activeSession?.weeks.length || 0} 周
               </Text>
               <Text style={styles.sheetTitle}>周数</Text>
-              <TouchableOpacity onPress={() => setShowWeekPicker(false)}>
+              <TouchableOpacity onPress={() => setShowWeekPicker(false)} accessibilityLabel="关闭周数">
                 <Text style={styles.sheetCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -519,6 +554,7 @@ export default function AddOrEditCourseScreen() {
             {/* 快捷单选行 */}
             <View style={styles.weekRadioRow}>
               <TouchableOpacity
+                accessibilityLabel="单周"
                 onPress={() =>
                   updateSessionField(
                     activeSessionIdx,
@@ -530,6 +566,7 @@ export default function AddOrEditCourseScreen() {
                 <Text style={styles.radioItemText}>○ 单周</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityLabel="双周"
                 onPress={() =>
                   updateSessionField(
                     activeSessionIdx,
@@ -541,6 +578,7 @@ export default function AddOrEditCourseScreen() {
                 <Text style={styles.radioItemText}>○ 双周</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityLabel="全部周"
                 onPress={() =>
                   updateSessionField(
                     activeSessionIdx,
@@ -554,6 +592,7 @@ export default function AddOrEditCourseScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
+                accessibilityLabel="清空周次"
                 onPress={() => updateSessionField(activeSessionIdx, 'weeks', [])}
               >
                 <Text style={styles.radioItemText}>清空</Text>
@@ -567,6 +606,7 @@ export default function AddOrEditCourseScreen() {
                 return (
                   <TouchableOpacity
                     key={w}
+                    accessibilityLabel={`第${w}周`}
                     style={[styles.weekGridBox, isSelected && styles.weekGridBoxActive]}
                     onPress={() => {
                       const cur = activeSession?.weeks || [];
@@ -586,6 +626,7 @@ export default function AddOrEditCourseScreen() {
 
             <TouchableOpacity
               style={styles.fullWidthRedBtn}
+              accessibilityLabel="确定周数"
               onPress={() => setShowWeekPicker(false)}
             >
               <Text style={styles.fullWidthRedBtnText}>确定</Text>
@@ -601,7 +642,7 @@ export default function AddOrEditCourseScreen() {
             <View style={styles.sheetTopBar}>
               <View style={{ width: 24 }} />
               <Text style={styles.sheetTitle}>选择上课时间</Text>
-              <TouchableOpacity onPress={() => setShowTimeWheel(false)}>
+              <TouchableOpacity onPress={() => setShowTimeWheel(false)} accessibilityLabel="关闭节次">
                 <Text style={styles.sheetCloseText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -614,6 +655,7 @@ export default function AddOrEditCourseScreen() {
                 return (
                   <TouchableOpacity
                     key={dNum}
+                    accessibilityLabel={`星期${dNum} ${dayLabel}`}
                     style={[styles.dayCap, active && styles.dayCapActive]}
                     onPress={() => updateSessionField(activeSessionIdx, 'dayOfWeek', dNum)}
                   >
@@ -633,6 +675,7 @@ export default function AddOrEditCourseScreen() {
                 return (
                   <TouchableOpacity
                     key={p}
+                    accessibilityLabel={`开始第${p}节`}
                     style={[styles.periodPill, active && styles.periodPillActive]}
                     onPress={() => {
                       updateSessionField(activeSessionIdx, 'startPeriod', p);
@@ -662,6 +705,7 @@ export default function AddOrEditCourseScreen() {
                   <TouchableOpacity
                     key={p}
                     disabled={disabled}
+                    accessibilityLabel={`结束第${p}节`}
                     style={[
                       styles.periodPill,
                       active && styles.periodPillActive,
@@ -679,6 +723,7 @@ export default function AddOrEditCourseScreen() {
 
             <TouchableOpacity
               style={styles.fullWidthRedBtn}
+              accessibilityLabel="确定节次"
               onPress={() => setShowTimeWheel(false)}
             >
               <Text style={styles.fullWidthRedBtnText}>确定</Text>

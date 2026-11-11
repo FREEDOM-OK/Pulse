@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import {
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Animated,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -12,7 +11,6 @@ import { SymbolView } from 'expo-symbols';
 
 import { ThemedText } from '@/components/themed-text';
 import type { CardStyle, HomeCardId } from '@/db/types';
-import { DashCardSize } from '@/constants/theme';
 import { DashCard } from './dash-card';
 
 export interface DashCardModel {
@@ -30,37 +28,42 @@ export interface DashCarouselProps {
   onManage: () => void;
 }
 
-const GAP = 16;
-const SIDE_PAD = 24;
+/** 卡片高度固定 200，宽度按屏幕的 72% 计算。 */
+const CARD_HEIGHT = 200;
+/** 卡片之间的水平间距。 */
+const SPACING = 16;
+/** 首卡左侧 / 末卡右侧与屏幕边缘的距离。 */
+const SIDE_PADDING = 20;
 
 /**
- * Dash 横滑卡片（PRDv1.2.2 第 3.2 节）：一次只走一张，带回弹吸附。
- * 尾部留一张虚线幽灵卡，点它去管理页。
+ * Dash 横滑卡片：左侧吸附 + 视差缩放。
+ *
+ * 每一张卡都占满 snapToInterval，松手后由原生滚动吸附到左侧；
+ * scrollX 同时驱动当前卡 1.0、左右邻卡 0.85 的缩放。
  */
 export function DashCarousel({ cards, style, color, onManage }: DashCarouselProps) {
   const { width: screenWidth } = useWindowDimensions();
-  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
-  const cardWidth = Math.min(DashCardSize.width, Math.max(200, screenWidth - 2 * SIDE_PAD - 48));
-  const cardHeight = Math.round(cardWidth / 1.618);
-  const snap = cardWidth + GAP;
+  const CARD_WIDTH = Math.round(screenWidth * 0.72);
+  const SNAP_INTERVAL = CARD_WIDTH + SPACING;
 
-  const dots = useMemo(() => cards.map((card) => card.id), [cards]);
-
-  const handleScrollEnd = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offset = event.nativeEvent.contentOffset.x;
-      const next = Math.round(offset / snap);
-      const clamped = Math.min(Math.max(next, 0), Math.max(cards.length - 1, 0));
-      setActiveIndex(clamped);
-    },
-    [snap, cards.length],
+  const handleScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+    [scrollX]
   );
 
   if (cards.length === 0) {
     return (
-      <View style={styles.wrap}>
-        <Pressable style={styles.emptyCard} onPress={onManage} accessibilityRole="button">
+      <View style={styles.emptyWrap}>
+        <Pressable
+          style={styles.emptyCard}
+          onPress={onManage}
+          accessibilityRole="button"
+          accessibilityLabel="去开启 Dash 卡片">
           <ThemedText style={styles.emptyText}>Dash 卡片都关掉了</ThemedText>
           <ThemedText style={styles.emptyAction}>去开启 ›</ThemedText>
         </Pressable>
@@ -69,65 +72,65 @@ export function DashCarousel({ cards, style, color, onManage }: DashCarouselProp
   }
 
   return (
-    <View style={styles.wrap}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        snapToInterval={snap}
-        disableIntervalMomentum
-        decelerationRate="fast"
-        contentContainerStyle={styles.content}
-        onMomentumScrollEnd={handleScrollEnd}
-        onScrollEndDrag={handleScrollEnd}
-        accessibilityLabel="Dash 卡片">
-        {cards.map((card, index) => (
-          <View key={card.id} style={{ marginRight: GAP }}>
+    <Animated.FlatList
+      data={cards}
+      horizontal
+      style={styles.list}
+      keyExtractor={(item) => item.id}
+      showsHorizontalScrollIndicator={false}
+      snapToInterval={SNAP_INTERVAL}
+      snapToAlignment="start"
+      decelerationRate="fast"
+      contentContainerStyle={styles.content}
+      ItemSeparatorComponent={() => <View style={styles.separator} />}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
+      accessibilityLabel="Dash 卡片"
+      renderItem={({ item, index }) => {
+        const scale = scrollX.interpolate({
+          inputRange: [
+            (index - 1) * SNAP_INTERVAL,
+            index * SNAP_INTERVAL,
+            (index + 1) * SNAP_INTERVAL,
+          ],
+          outputRange: [0.85, 1, 0.85],
+          extrapolate: 'clamp',
+        });
+
+        return (
+          <Animated.View style={{ transform: [{ scale }] }}>
             <DashCard
-              title={card.title}
-              subtitle={card.subtitle}
-              icon={card.icon}
+              title={item.title}
+              subtitle={item.subtitle}
+              icon={item.icon}
               style={style}
               color={color}
-              kind={card.id}
-              tone={index === 0 ? 'primary' : 'plain'}
-              width={cardWidth}
-              height={cardHeight}
-              onPress={card.onPress}
+              kind={item.id}
+              width={CARD_WIDTH}
+              height={CARD_HEIGHT}
+              onPress={item.onPress}
             />
-          </View>
-        ))}
-        <Pressable
-          style={[styles.ghost, { height: cardHeight }]}
-          onPress={onManage}
-          accessibilityRole="button"
-          accessibilityLabel="添加卡片">
-          <ThemedText style={styles.ghostPlus}>＋</ThemedText>
-          <ThemedText style={styles.ghostText}>添加卡片</ThemedText>
-        </Pressable>
-      </ScrollView>
-
-      {dots.length > 1 ? (
-        <View style={styles.dots} accessibilityLabel={`第 ${activeIndex + 1} 张，共 ${dots.length} 张`}>
-          {dots.map((id, index) => (
-            <View key={id} style={[styles.dot, index === activeIndex && styles.dotActive]} />
-          ))}
-        </View>
-      ) : null}
-    </View>
+          </Animated.View>
+        );
+      }}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    gap: 12,
+  list: {
+    height: CARD_HEIGHT,
   },
   content: {
-    paddingHorizontal: SIDE_PAD,
-    paddingRight: SIDE_PAD - GAP,
-    alignItems: 'center',
+    paddingHorizontal: SIDE_PADDING,
+  },
+  separator: {
+    width: SPACING,
+  },
+  emptyWrap: {
+    paddingHorizontal: SIDE_PADDING,
   },
   emptyCard: {
-    marginHorizontal: SIDE_PAD,
     height: 132,
     borderRadius: 24,
     borderWidth: 1,
@@ -144,38 +147,6 @@ const styles = StyleSheet.create({
   emptyAction: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  ghost: {
-    width: 120,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#E2E2E6',
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  ghostPlus: {
-    fontSize: 26,
-    color: '#B0B0B6',
-  },
-  ghostText: {
-    fontSize: 12,
-    color: '#8A8A90',
-  },
-  dots: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: SIDE_PAD,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#D9D9DE',
-  },
-  dotActive: {
-    width: 18,
-    backgroundColor: '#111111',
+    color: '#111111',
   },
 });

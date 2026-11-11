@@ -2,7 +2,154 @@
 
 > 规则（用户约定）：
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
-> - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本仍为 1.0.0，等你发话再升 1.1。
+> - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
+
+## v1.2.7 — 2026-11-11
+
+### 首页重构（头部 / Search / Dash 吸附轮播 / Tasks）
+
+- 首页改为纯白 `Animated.ScrollView`，`contentContainerStyle` 固定 `paddingBottom: 120`；顶部用 `insets.top + 20`，左右 20。头部左侧问候 + 日期，右侧 44×44 圆头像。
+- 新增 50dp 高 Search 条：白底、16 圆角、`shadowOffset(0,4)` / 0.06 / 12 / `elevation: 4`；左侧搜索图标与占位文字，右侧 34×34 浅色筛选按钮。
+- Dash 改为 `Animated.FlatList` 横滑：卡片宽 72% 屏宽、高 200、间距 16、圆角 24；`snapToInterval` + `snapToAlignment="start"` + `decelerationRate="fast"`；`scrollX` 驱动 `[0.85, 1, 0.85]` 视差缩放。
+- Tasks 复用 `TodayList`，新增 `onlyTasks` / `rowSpacing` / `showSeparators` / `showAddRow` / `checkShape` / `checkBorderColor`；首页只列任务，22dp 圆形未选框（#CCCCCC），行距 16。
+- `CheckMark` 支持 `shape="circle"`，计划页默认方形不变；保留 DashStack 管理开关、安卓下拉拉伸、卡片跳转与个人资料入口。
+- 首页固定浅色体系：`TodayList` / `TaskRow` / `EmptyState` 新增可选显式文字色，深色模式下任务标题、备注、时间与空态仍为黑/灰，不会出现白字白底。
+- 文件：`src/app/(tabs)/index.tsx`、`src/components/home/dash-carousel.tsx`、`src/components/today/today-list.tsx`、`src/components/today/task-row.tsx`、`src/components/ui/check-mark.tsx`、`src/components/ui/empty-state.tsx`。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts`、`tests/s3-dash.test.ts`、`tests/s1-tokens.test.ts`、`tests/s2-tab-bar.test.ts` 与 `tests/e2e/home.e2e.mjs`（问候语、完成分组、首页 120dp 留白）。
+- `npm run verify` 通过：37 个测试文件 / 250 条用例、`tsc --noEmit`、`expo lint`。
+- Web 实测（500×1000）：头部 x=20、Search 460×50、Dash 卡 360×200、第二张从 x=396 露出；9 个 E2E 场景全部通过。
+
+## v1.2.6 — 2026-11-11
+
+### 底栏修正（遮挡 / 杂色 / 尺寸 / 动画）
+
+- 胶囊改为绝对定位贴底（`zIndex: 999`），最外层 `backgroundColor: 'transparent'` + `pointerEvents="box-none"`，只让胶囊本身接收点击，左右透明区不再拦截背后列表；触发区域固定 `bottom: 0`，底部留白 `20 + insets.bottom`。
+- 胶囊高度收到 66、圆角 33；5 个入口全部 56×56 且在同一水平线，中间加号改为 42×42 / 圆角 21 的黑底白 +，不再有任何元素冲出胶囊。
+- 选中指示器改为 52×46 / 圆角 23 的 `#F2F2F7` 块，在 56 槽内水平居中，留出更紧的图标文字包裹感。
+- 动画由约 500ms 拖尾的 Spring 改为 `withTiming` 250ms + `Easing.bezier(0.25, 0.1, 0.25, 1)`；Web 实测首次落位 263ms、热切换 275ms，无过冲、无反复回弹。
+- 滚动页统一补 `TAB_BAR_CLEARANCE + insets.bottom`（约 100 + 安全区）的底部留白：首页、计划、我的、健身第三格、日历第三格。`src/components/nav/app-tab-bar.tsx` 及各页。
+
+### 测试
+
+- `tests/s2-tab-bar.test.ts` 更新为 66/33、42 加号、52×46/23、绝对定位 + `zIndex: 999` + 透明 + `box-none`、100dp 留白、250ms 贝塞尔等断言。
+- Web 实测（500×1000）：胶囊 460×66、5 槽均 y=919、42 黑圆 y=926、指示器 52×46；真实鼠标点击可切到第三格，点击胶囊外透明区不导航。
+- `npm run verify` 通过：37 个测试文件 / 250 条用例、`tsc --noEmit`、`expo lint`。
+
+## v1.2.5 — 2026-11-11
+
+### 底栏改版（悬浮胶囊）
+
+- 底栏改为悬浮纯白胶囊：左右各留 20、固定高 68、圆角 34；底部留白 `20 + insets.bottom`。保留原阴影参数并加 Android `elevation: 8`。
+- 4 个真实 Tab 与中间「新建」共 5 个平级槽位，`space-evenly` 排布，点击区统一 56×56，全部位于底座内部；中间加号改为 44×44 黑底白 + 实心圆，不再用负 `marginTop` 凸出。
+- 选中态改为底座内绝对定位的 56×48、圆角 24 的 `#F2F2F7` 指示器，监听 activeIndex 用 Reanimated Spring（`damping: 16, stiffness: 120`）横滑；图标/文字以 180ms 淡入从 `#8E8E93` 过渡到 `#000000`，字号 10。
+- 第三格选课表仍直接 `router.push('/timetable')`；新建菜单、任务/备忘/事件表单及「新建」无障碍标签保持不变。`src/components/nav/app-tab-bar.tsx`。
+
+### 测试
+
+- `tests/s2-tab-bar.test.ts` 更新为新规格断言（68/34、56、44、5 槽、Spring 参数、安全区、`#F2F2F7`、180ms 淡入）。
+- Web 实测：底座 460×68（500 宽视口）、5 槽均在 y=918、加号不越界；切到「计划」后指示器落到 x=136。
+- `npm run verify` 通过：37 个测试文件 / 248 条用例、`tsc --noEmit`、`expo lint`。
+
+## v1.2.2 — 2026-11-11（App 内版本定为 1.2.2）
+
+> 说明：本文件此前已有 v1.2.2 / v1.2.3 / v1.2.4 三条记录（历史内容保留在下方不动）。用户本次要求「App 内版本定为 1.2.2」，
+> 因此 `app.json` / `package.json` / 我的-关于 / 课表设置-关于 统一改为读取 1.2.2，App 内不再出现 1.0.0。
+> 除课表「设置 → 关于」那一行外，本次不修改课表任何功能（用户明确说课程表已满意）。
+
+### 版本
+
+- `app.json`、`package.json` 的 `version` 改为 `1.2.2`。
+- 「我的 → 关于」的兜底版本号同步为 1.2.2（`src/app/(tabs)/settings.tsx`）。
+- 课表「设置 → 关于」由硬编码 `1.0.0` 改为读 `Constants.expoConfig?.version`（`src/app/timetable/settings.tsx`，本次唯一触碰课表的改动）。
+
+### 日期条（M1）
+
+- 点日期不再把选中的那天滑到屏幕中间：去掉「换值就重挂 ScrollView 并居中」的实现（`key={value}`），只在首次进入、以及从日历跳到远处日期时居中一次。`src/components/ui/date-strip.tsx`。
+
+### 健身（M1）
+
+- 已完成的训练卡比进行中的更高（`set-record-row.tsx` 行高 `minHeight: 70`、序号圆点 24，与原卡片留白呼应）。
+
+### 滚轮选择器（M1）
+
+- 灰色高亮条固定钉在中间行，数字从后面滚过；上下行文字按距离淡出，不再出现「高亮跟着内容跑」。`src/components/ui/wheel-picker.tsx`。
+
+### 底部抽屉（M2）
+
+- 抽屉支持半屏 / 全屏两档（`size="half" | "full"`），遮罩独立淡入，不再跟着抽屉一起从屏幕底下滑上来（`animationType="none"` + 两段式动画）。`src/components/ui/bottom-sheet.tsx`。
+
+### 底栏第三格 ↔ 二级页（M3）
+
+- 底栏第三格现在可以放健身、课表、日历三者之一：放进第三格的那个模块带着底栏作为「第 3 页」打开，其余的两个从首页 Dash / 我的进入时是二级页（无底栏）。
+- 二级页统一用新的 `SubPageHeader`：最左 36×36 圆形描边返回按钮，标题右移，不再占用一整条系统导航栏高度。
+- 课表按用户要求保持原样：第三格选中课表时仍直接进入课表页（课表页没有底栏），第三方页面逻辑不抽到课表上。
+- `src/app/(tabs)/middle.tsx`、`src/app/fitness.tsx`、`src/components/fitness/fitness-screen.tsx`、`src/components/calendar/calendar-screen.tsx`、`src/components/nav/sub-page-header.tsx`。
+
+### 首页 Dash（M4）
+
+- 卡片改为竖版（宽 264、高 = 宽 × 1.618 ≈ 427），标题区不再固定占 30% 屏高，Dash 行紧贴标题栏。
+- 所有卡片统一样式：取消「第一张深色主卡」的 `tone` 区分，文字颜色按卡片底色自动判深浅。
+- 堆叠模式改为向下堆叠、下方露出 2 张、侧边微错位；横滑模式一次一张居中，离开中心的卡片轻微缩小。
+- `src/components/home/dash-card.tsx`、`dash-carousel.tsx`、`dash-stack.tsx`、`src/constants/theme.ts`（`DashCardSize` / `DASH_CARD_RATIO` / `dashCardHeight`）。
+
+### 安卓下拉拉伸（M5）
+
+- Android 没有 iOS 的橡皮筋效果，改为在首页顶部用 `PanResponder` 接管下拉：标题随手指下移并轻微放大，松手回弹。iOS 仍用原来的滚动插值。
+
+### 动效（M6，仅做按压回弹）
+
+- `RipplePressable` 按下缩到 96% 并保留波纹，松开用弹簧回到 100%（`bounciness: 6`）。
+- 勾选描边、弹性开关、数字滚动等纯视觉项按计划列为可选，未在本轮改动，留待单独排期。
+
+### 测试
+
+- 新增 `tests/s5-module-m1.test.ts`、`tests/s6-module-m2.test.ts`、`tests/s7-module-m3.test.ts`、`tests/s8-module-m5.test.ts`、`tests/s9-module-m6.test.ts`，并同步 `p0-navigation` / `p2-tabs` / `s1-tokens` / `s2-tab-bar` / `s3-dash` / `s4-polish` / `p5-home` 的旧断言。
+- E2E 基础设施：`page.gotoFresh(url)` 用 `?resetDb=1` 清库再回到干净地址（此前清库后下一次刷新会把旧库写回）；课表场景用它从「只有播种课表」的状态开始。
+
+## v1.2.4 — 2026-11-11
+
+修复用户反馈的 4 个课表问题（只改课表相关文件）。
+
+### 课表
+
+- 修 `UNIQUE constraint failed: sched_courses.id`：保存课程改为单条 upsert（`ON CONFLICT(id) DO UPDATE`），不再靠「列表里有没有这门课」猜 INSERT/UPDATE；双击保存、状态未刷新时重复保存都不会再撞主键。
+- 修「添加完课程会闪退回首页」：`course.tsx` 的保存回调加单飞锁 + try/catch，失败就地弹「保存失败：…」，成功才返回；抽屉的复制/删除、课表切换、导入、删课表也全部兜住写库异常，未捕获的 Promise 拒绝不会再崩页面。
+- 修「点进课表卡一下」：`TimetableProvider` 从课表子路由上移到 `src/app/_layout.tsx`，课表数据在启动时就热好；横向列表只渲染可视页（`initialNumToRender` / `maxToRenderPerBatch` 为 1，`windowSize` 3）。
+- 修「左右滑动翻周抽搐、自动来回滚」：分页宽度改用容器 `onLayout` 实测值（窗口宽度与实际容器宽度不一致时每次翻页都差几像素，Android 上会自己弹）；程序化翻周期间屏蔽 `onMomentumScrollEnd` 回写并加半屏容差，消除「滚动 → 回写周次 → 再滚」的回环；新增 `disableIntervalMomentum` 保证一次只翻一页。
+- 网页端补回写：RN-web 不派发 momentum 事件，改为滚动停止 160ms 后按最终位置更新周次（Android 仍走 momentum 事件）。
+
+### 测试
+
+- `tests/a1-timetable-v7.test.ts`：同一 id 重复保存断言走 upsert 且只留 1 行。
+- `tests/e2e/timetable.e2e.mjs`：保存当天课程后若弹出「冲突确认」自动点「仍然保存」。
+
+## v1.2.3 — 2026-11-10
+
+课表功能移植收尾（只改课表相关文件，首页 / 健身 / 游戏 / 我的未动）。
+
+### 课表
+
+- 今日计划里点课程进课表时，自动切到本周并打开该课程的详情抽屉（此前传了参数但页面没接收，点了没反应）。
+- 课表增删改、切换课表、改外观设置后，首页与今日计划立即刷新，不再需要手动切页。
+- 保存课程改为事务写入：失败不会留下「有课程没时段」的半门课。
+- 同一课程同一天的两个不同时段不再互相覆盖（v8 迁移放宽了唯一约束）。
+- 课表所有可点区域补齐无障碍标签，UI 自动化可稳定定位。
+
+### 数据
+
+- schema v8：删除 `idx_sched_sessions_conflict`（`UNIQUE(course_id, day_of_week, start_period)` 会静默吞掉同起始节的第二段），改为非唯一索引 `idx_sched_sessions_course`；`BACKUP_VERSION` 随之为 8。
+
+### 测试
+
+- 重写 `tests/e2e/timetable.e2e.mjs`：设置页、课表管理、饱和度跨刷新持久化、多时段表单、详情抽屉、翻周与回到本周、今日计划深链、文本导入。
+- 新增回归用例：同一课程同一天保存两个同起始节的时段。
+
+### 清理
+
+- 删除无引用的 `src/lib/course-form.ts`、`src/lib/course-copy.ts` 与旧的失败截图。
 
 ## v1.2.2 — 2026-11-09
 

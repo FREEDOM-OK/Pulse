@@ -1,8 +1,6 @@
 /** P8b 个人资料：点击设置页账号进入资料页，改名/性别/生日后保存并持久化。 */
 export async function run(page, baseUrl) {
-  await page.goto(baseUrl);
-  await page.evaluate('localStorage.clear()');
-  await page.goto(baseUrl);
+  await page.gotoFresh(baseUrl);
   await page.waitForText('首页');
   await page.clickLabel('我的');
   await page.waitForText('数据与偏好');

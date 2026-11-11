@@ -9,6 +9,7 @@ import type { SqlDriver } from '@/db/driver';
 import {
   DEFAULT_PERIOD_TIMES,
   PeriodTime,
+  createLocalId,
   getFirstMondayOfCurrentMonth,
 } from '@/lib/timetable-core';
 
@@ -65,13 +66,23 @@ export const TIMETABLE_KEY_PREFIX = 'timetable.';
 export const PERIOD_TIMES_KEY = 'period.times';
 
 let seeded = false;
+/**
+ * 播种是单源的：首页、课表页、今日计划都会在启动阶段同时调用 getDb()，
+ * 如果不合并成同一个 Promise，两次并发播种会同时通过「没有 period.times」的检查，
+ * 第二次 `INSERT INTO settings` 就会抛 `UNIQUE constraint failed: settings.key`（整页红屏）。
+ */
+let seedPromise: Promise<void> | null = null;
 
 /** 返回主库驱动；首次调用时确保有默认课表与默认设置。 */
 export async function getDb(): Promise<SqlDriver> {
   const driver = getDriver();
   if (!seeded) {
-    await ensureTimetableSeed(driver);
-    seeded = true;
+    if (!seedPromise) {
+      seedPromise = ensureTimetableSeed(driver).finally(() => {
+        seedPromise = null;
+      });
+    }
+    await seedPromise;
   }
   return driver;
 }
@@ -79,6 +90,7 @@ export async function getDb(): Promise<SqlDriver> {
 /** 测试用：重置「已播种」标记。 */
 export function resetTimetableSeedFlagForTests(): void {
   seeded = false;
+  seedPromise = null;
 }
 
 /** 幂等播种：至少一张「我的课表」+ 外观四项默认值。 */
@@ -89,7 +101,7 @@ export async function ensureTimetableSeed(driver: SqlDriver = getDriver()): Prom
 
   let firstScheduleId = existing?.id;
   if (!firstScheduleId) {
-    firstScheduleId = `sched_${Date.now()}`;
+    firstScheduleId = createLocalId('sched');
     const now = new Date().toISOString();
     const startDate = getFirstMondayOfCurrentMonth(new Date());
     await driver.runAsync(
@@ -98,7 +110,7 @@ export async function ensureTimetableSeed(driver: SqlDriver = getDriver()): Prom
     );
   }
 
-  const defaults: Array<[string, string]> = [
+  const defaults: [string, string][] = [
     ['timetable.activeScheduleId', firstScheduleId],
     ['timetable.periodDuration', '45'],
     ['timetable.defaultSpan', '2'],
@@ -113,16 +125,85 @@ export async function ensureTimetableSeed(driver: SqlDriver = getDriver()): Prom
   }
 
   // 节次时间：主库里可能已有用户改过的 period.times，只有缺失时才写默认值。
+  // 用 INSERT OR IGNORE 兜住并发：即使两个调用同时判断为「缺失」，后到的也不会抛唯一约束错误。
   const times = await driver.getFirstAsync<{ value: string }>(
     'SELECT value FROM settings WHERE key = ?;',
     [PERIOD_TIMES_KEY]
   );
   if (!times) {
-    await driver.runAsync('INSERT INTO settings (key, value) VALUES (?, ?);', [
+    await driver.runAsync('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?);', [
       PERIOD_TIMES_KEY,
       JSON.stringify(DEFAULT_PERIOD_TIMES),
     ]);
   }
 
   seeded = true;
+}
+
+/**
+ * 事务内保存课程及其全部时段：先 upsert 课程行，再整体替换时段。
+ *
+ * 用 `ON CONFLICT(id) DO UPDATE` 而不是「先判断存在与否再决定 INSERT/UPDATE」：
+ * 双击保存、上一个页面还没刷新完就再次提交时，两次调用都会带同一个课表 id，
+ * 走 INSERT 会抛 `UNIQUE constraint failed: sched_courses.id`。upsert 让写入幂等。
+ * 时段用普通 INSERT（v8 起无唯一索引），同课同日同起始节的多段不会互相覆盖。
+ */
+export async function saveCourseWithSessions(
+  course: Omit<CourseEntity, 'createdAt' | 'updatedAt'>
+): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO sched_courses (id, schedule_id, name, color, credits, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         schedule_id = excluded.schedule_id,
+         name = excluded.name,
+         color = excluded.color,
+         credits = excluded.credits,
+         updated_at = excluded.updated_at;`,
+      [
+        course.id,
+        course.scheduleId,
+        course.name,
+        course.color,
+        course.credits || '选填',
+        now,
+        now,
+      ]
+    );
+
+    // 课程行可能已存在：先清掉旧时段，再按当前表单整体重写。
+    await db.runAsync('DELETE FROM sched_sessions WHERE course_id = ?;', [course.id]);
+
+    for (const s of course.sessions) {
+      await db.runAsync(
+        `INSERT INTO sched_sessions
+          (id, course_id, teacher, location, day_of_week, start_period, end_period, weeks, remark, custom_time)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [
+          s.id,
+          course.id,
+          s.teacher || '',
+          s.location || '',
+          s.dayOfWeek,
+          s.startPeriod,
+          s.endPeriod,
+          JSON.stringify(s.weeks),
+          s.remark || '',
+          s.customTime ? JSON.stringify(s.customTime) : '',
+        ]
+      );
+    }
+  });
+}
+
+/** 事务内删除课程及其全部时段。 */
+export async function deleteCourseWithSessions(courseId: string): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM sched_sessions WHERE course_id = ?;', [courseId]);
+    await db.runAsync('DELETE FROM sched_courses WHERE id = ?;', [courseId]);
+  });
 }

@@ -261,7 +261,7 @@ export default function ProfileScreen() {
         </Pressable>
       </ScrollView>
 
-      <BottomSheet visible={birthdayOpen} onClose={() => setBirthdayOpen(false)} heightRatio={0.5}>
+      <BottomSheet visible={birthdayOpen} onClose={() => setBirthdayOpen(false)} size="half">
         <ThemedText type="smallBold" style={styles.sheetTitle}>
           生日
         </ThemedText>

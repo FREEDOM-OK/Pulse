@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -9,42 +10,85 @@ import {
 } from 'react-native';
 import { useTheme } from '@/hooks/use-theme';
 
+/** 两档高度：半屏 / 近全屏（PRD 第 6 节）。 */
+export type BottomSheetSize = 'half' | 'full';
+
+const SIZE_RATIO: Record<BottomSheetSize, number> = {
+  half: 0.5,
+  full: 0.92,
+};
+
 interface BottomSheetProps {
   visible: boolean;
   onClose: () => void;
-  /** 占屏高度比例，默认 0.6。 */
+  /** 高度档位，默认半屏。 */
+  size?: BottomSheetSize;
+  /** 兼容旧调用：给了精确比例就以它为准。 */
   heightRatio?: number;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
 
+const ENTER_MS = 220;
+const EXIT_MS = 180;
+const BACKDROP_MS = 180;
+
 /**
  * 自下而上的抽屉：停屏幕中下、顶部把手、点遮罩关闭。
- * 用 Modal 的 slide 动画，避免自己维护 translateY 与返回键。
+ *
+ * 动画拆成两段（PRD 明确要求）：遮罩只淡入淡出 180ms，抽屉本体 220ms 从底部升起。
+ * 所以这里**不能**再借 Modal 的 `animationType="slide"` —— 那会让遮罩跟着抽屉一起滑上来。
+ * 关的时候先播完动画再卸载 Modal，否则会「啪」一下消失。
  */
 export function BottomSheet({
   visible,
   onClose,
-  heightRatio = 0.6,
+  size = 'half',
+  heightRatio,
   children,
   footer,
 }: BottomSheetProps) {
   const theme = useTheme();
   const { height } = useWindowDimensions();
-  const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
+  const sheetHeight = Math.round(height * (heightRatio ?? SIZE_RATIO[size]));
+
+  /** 0 = 收起，1 = 展开。用 0..1 的进度而不是像素，屏幕高度变了插值自动跟着变。 */
+  const progress = useRef(new Animated.Value(0)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
+  const [rendered, setRendered] = useState(visible);
 
   useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: visible ? 1 : 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [opacity, visible]);
+    if (visible) setRendered(true);
+    const animation = Animated.parallel([
+      Animated.timing(progress, {
+        toValue: visible ? 1 : 0,
+        duration: visible ? ENTER_MS : EXIT_MS,
+        easing: visible ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: visible ? 1 : 0,
+        duration: BACKDROP_MS,
+        useNativeDriver: true,
+      }),
+    ]);
+    animation.start(({ finished }) => {
+      if (finished && !visible) setRendered(false);
+    });
+    return () => animation.stop();
+  }, [backdropOpacity, progress, visible]);
+
+  const translateY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [sheetHeight, 0],
+  });
+
+  if (!rendered) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
-        <Animated.View style={[styles.backdrop, { opacity }]}>
+        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable
             accessibilityLabel="关闭抽屉"
             style={StyleSheet.absoluteFill}
@@ -52,18 +96,20 @@ export function BottomSheet({
           />
         </Animated.View>
 
-        <View
+        <Animated.View
+          accessibilityViewIsModal
           style={[
             styles.sheet,
             {
-              height: Math.round(height * heightRatio),
+              height: sheetHeight,
               backgroundColor: theme.background,
+              transform: [{ translateY }],
             },
           ]}>
           <View style={[styles.handle, { backgroundColor: theme.backgroundElement }]} />
           <View style={styles.body}>{children}</View>
           {footer ? <View style={styles.footer}>{footer}</View> : null}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

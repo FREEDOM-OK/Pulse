@@ -143,11 +143,19 @@ class Page {
 
   /** 点击 aria-label 匹配的元素；index 为 -1 时取最后一个（弹窗里的按钮通常在后）。 */
   async clickLabel(label, index = 0) {
+    await this.waitForLabel(label);
     const clicked = await this.evaluate(`(() => {
-      const list = Array.from(document.querySelectorAll('[aria-label="${label}"]'));
-      const el = ${index} < 0 ? list[list.length + ${index}] : list[${index}];
-      if (!el) return false;
-      el.click();
+      const all = Array.from(document.querySelectorAll('[aria-label]'))
+        .filter((node) => node.getAttribute('aria-label') === ${JSON.stringify(label)});
+      // 栈里上一页往往还挂在 DOM 上（尺寸 0 或被隐藏），先排掉，避免点到看不见的那一个。
+      const visible = all.filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && node.checkVisibility?.() !== false;
+      });
+      const pool = visible.length > 0 ? visible : all;
+      const target = ${index} < 0 ? pool[pool.length + ${index}] : pool[${index}];
+      if (!target) return false;
+      target.click();
       return true;
     })()`);
     if (!clicked) throw new Error(`找不到 aria-label「${label}」(index=${index})`);
@@ -223,6 +231,22 @@ class Page {
   async reload() {
     await this.send('Page.reload', { ignoreCache: false });
     await sleep(800);
+    await this.waitForApp();
+  }
+
+  /**
+   * 以空库打开某个地址：带 `?resetDb=1`，由 Web 驱动在读数前把上一次的库删掉。
+   *
+   * 不要用「localStorage.clear() 再 reload」：Web 驱动落盘有 50ms 去抖，
+   * 上一场景挂起的定时器会在两步之间把旧库写回来，P6 首页因此拿到健身记录而超时。
+   */
+  async gotoFresh(url) {
+    const target = new URL(url);
+    target.searchParams.set('resetDb', '1');
+    await this.goto(target.toString());
+    await this.waitForApp();
+    // 再走一遍干净地址：清库参数留在地址栏时，之后每次 reload 都会再清一次库。
+    await this.goto(url);
     await this.waitForApp();
   }
 

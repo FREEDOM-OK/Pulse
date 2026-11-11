@@ -30,10 +30,14 @@ describe('S1 设计令牌（PRDv1.2.2 第 5 节）', () => {
     expect(theme).toContain('export const Motion = {\n  enter: 250,\n  move: 300,\n  check: 200,\n  ripple: 200,\n} as const;');
   });
 
-  it('Dash 卡片为 264×163 黄金比例', () => {
+  it('Dash 卡片为 264×427 竖卡（黄金 1:1.618）', () => {
     expect(theme).toContain('width: 264');
-    expect(theme).toContain('height: 163');
-    expect(264 / 163).toBeCloseTo(1.62, 1);
+    // v1.2.2 起高度不再写死，统一由宽 × 1.618 推出来。
+    expect(theme).not.toContain('height: 163');
+    expect(theme).toContain('DASH_CARD_RATIO = 1.618');
+    // theme.ts 会 import react-native，单测里不能直接 import，按源码里的比例算一遍。
+    const ratio = Number(/DASH_CARD_RATIO = ([\d.]+)/.exec(theme)?.[1] ?? 0);
+    expect(Math.round(264 * ratio)).toBe(427);
   });
 
   it('减弱动效时把时长压成 0', () => {
@@ -58,10 +62,11 @@ describe('S1 通用组件', () => {
     expect(source).toContain('useReducedMotion');
   });
 
-  it('CheckMark 是 22 圆角 7 的方形框，勾选动画 200ms', () => {
+  it('CheckMark 默认 22 方形框，可切圆形，勾选动画 200ms', () => {
     const source = readSource('components/ui/check-mark.tsx');
     expect(source).toContain('size = 22');
-    expect(source).toContain('borderRadius: 7');
+    expect(source).toContain("shape = 'square'");
+    expect(source).toContain("borderRadius: shape === 'circle' ? size / 2 : 7");
     expect(source).toContain('Motion.check');
     expect(source).toContain('accessibilityRole="checkbox"');
   });

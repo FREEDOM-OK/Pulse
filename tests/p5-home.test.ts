@@ -20,18 +20,26 @@ afterEach(() => {
 });
 
 describe('首页结构（PRDv1.2 P5）', () => {
-  it('首页包含问候、日期、Dash 卡片与 Tasks 四段', () => {
+  it('首页包含问候、日期、Search、Dash 卡片与 Tasks 五段', () => {
     const page = readApp('(tabs)/index.tsx');
-    expect(page).toContain('Hey，');
-    expect(page).toContain('今天是');
+    expect(page).toContain('Hey, {name}!');
+    expect(page).toContain('今天是 ');
+    expect(page).toContain('styles.searchBar');
+    expect(page).toContain('height: 50');
+    expect(page).toContain('contentContainerStyle={{ paddingBottom: 120 }}');
     expect(page).toContain('<DashCarousel');
     expect(page).toContain('Dash');
     expect(page).toContain('Tasks');
+    expect(page).toContain('onlyTasks');
+    expect(page).toContain('checkShape="circle"');
+    expect(page).toContain('rowSpacing={16}');
   });
 
   it('首页不再有上下翻页、内嵌日历与悬浮 FAB', () => {
     const page = readApp('(tabs)/index.tsx');
-    expect(page).not.toContain('PanResponder');
+    // M5 起首页允许用 PanResponder 做「安卓下拉拉伸」，但不能再有横向翻页/滑动分页的响应者。
+    expect(page).not.toContain('onMoveShouldSetPanResponderCapture');
+    expect(page).not.toContain('pagingEnabled');
     expect(page).not.toContain('BackHandler');
     expect(page).not.toContain('CalendarPanel');
     expect(page).not.toContain('FAB');

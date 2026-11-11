@@ -103,9 +103,19 @@ export const Motion = {
   ripple: 200,
 } as const;
 
-/** Dash 卡片尺寸（PRDv1.2.2 第 3.4 节）。 */
+/**
+ * Dash 卡片尺寸（PRD_module 第 8.1 节）：宽度固定 264，高度按黄金比算 → 427。
+ * 卡片改成竖版，所以高度不再写死，统一用 `dashCardHeight()` 由宽度推出来。
+ */
 export const DashCardSize = {
   width: 264,
-  height: 163,
   gap: 16,
 } as const;
+
+/** 竖卡宽高比：高 = 宽 × 1.618。 */
+export const DASH_CARD_RATIO = 1.618;
+
+/** 由宽度算卡片高度：264 → 427。 */
+export function dashCardHeight(width: number): number {
+  return Math.round(width * DASH_CARD_RATIO);
+}

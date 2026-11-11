@@ -32,12 +32,16 @@ node tests/e2e/run.mjs   # 端到端（无头 Chrome，需先启动 Web dev serv
 
 - 小改动只在 `CHANGELOG.md` 里升补丁版本（v1.0.1、v1.0.2…），**不改 `app.json` 的 version，也不在 App 内加更新日志/提示**。
 - 只有用户明确说「进入下一个大版本」时，才动 App 内显示的版本号与日志；版本节奏由用户决定。
+- 当前 App 内版本：**1.2.2**（2026-11-11 用户指定，已同步到 `app.json` / `package.json` / 我的-关于 / 课表设置-关于）。
 
 ## 数据模型（v1.1）
 
-- 5 个 Tab：`index`（首页两页）/ `today` / `fitness` / `games` / `settings`；二级页 `calendar`、`profile`。
-- `SCHEMA_VERSION = 3`：`events(date, type, title, amount, note, created_at)` 替代已删除的 `diet_records` / `memos`；资料存在 `settings` 的 `profile.name|gender|birthday|avatar`。
-- 备份 `BACKUP_VERSION = 3`：导入 v1/v2 时 `dietRecords` 自动转成 `type='meal'` 事件、`memos` 忽略；导出不含预置动作与头像文件；清空数据保留 44 个预置动作并重置资料。
+- 4 个 Tab：`index`（首页）/ `today`（今日计划）/ `middle`（第三格）/ `settings`（我的）；二级页 `fitness`、`calendar`、`timetable`、`profile`、`games`、`cards`。
+  - 第三格 `middle` 的标题与内容随设置变化（`src/db/repositories/settings.ts` 的 `getMiddleTab()`，取值为 `fitness | timetable | calendar`）：健身/日历渲染在 `middle` 里（带底栏），课表则 `<Redirect href="/timetable" />`（课表页始终无底栏，按用户要求不动）。
+  - 二级页统一用 `src/components/nav/sub-page-header.tsx`（`mode: 'page' | 'tab'`）：page 模式左上角 36×36 圆形描边返回按钮，tab 模式无返回。
+  - 健身内容在 `src/components/fitness/fitness-screen.tsx`（`mode` 区分第三格/二级页），日历在 `src/components/calendar/calendar-screen.tsx`。
+- `SCHEMA_VERSION = 8`：`events(date, type, title, amount, note, created_at)` 存流水；课表用 `schedules` / `sched_courses` / `sched_sessions` 三表（v7 起，v8 把 `sched_sessions` 的唯一约束放宽为非唯一索引 `idx_sched_sessions_course`，允许同课程同日同起始节的多个时段）；资料存在 `settings` 的 `profile.name|gender|birthday|avatar`。
+- 备份 `BACKUP_VERSION = 8`：导入 v1/v2 时 `dietRecords` 自动转成 `type='meal'` 事件、`memos` 忽略；导出不含预置动作与头像文件；清空数据保留 44 个预置动作并重置资料；课表三表随备份导出导入，v6 及更早备份里的 `schedules` / `schedCourses` / `schedSessions` 按空数组处理。
 
 ## 已知坑（本项目实践，改动前先读）
 

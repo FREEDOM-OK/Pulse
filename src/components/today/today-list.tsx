@@ -28,6 +28,22 @@ export interface TodayListProps {
   date: string;
   emptyText?: string;
   emptyHint?: string;
+  /** 首页 Tasks 只列任务，不混入备忘 / 课表。 */
+  onlyTasks?: boolean;
+  /** 每行底部留白；首页用 16。 */
+  rowSpacing?: number;
+  /** 是否显示行间分隔线。 */
+  showSeparators?: boolean;
+  /** 是否显示底部「＋ 新建」入口。 */
+  showAddRow?: boolean;
+  /** 勾选框形状；首页 Tasks 用圆形。 */
+  checkShape?: 'square' | 'circle';
+  /** 未勾选时的描边色。 */
+  checkBorderColor?: string;
+  /** 固定浅色页面（首页）的标题色；不传则跟随主题。 */
+  textColor?: string;
+  /** 固定浅色页面（首页）的备注/时间/空态文字色。 */
+  secondaryTextColor?: string;
   /** 数据变化后回传任务完成情况，供页面头部显示「完成 x/y」。 */
   onStats?: (stats: { total: number; done: number }) => void;
 }
@@ -36,7 +52,20 @@ export interface TodayListProps {
  * 任务 + 备忘 + 课表派生行的混合列表。
  * 首页 Tasks 与今日计划共用同一组件与同一排序逻辑（PRD 3.3 / 5.1）。
  */
-export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProps) {
+export function TodayList({
+  date,
+  emptyText,
+  emptyHint,
+  onlyTasks = false,
+  rowSpacing = 0,
+  showSeparators = true,
+  showAddRow = true,
+  checkShape = 'square',
+  checkBorderColor,
+  textColor,
+  secondaryTextColor,
+  onStats,
+}: TodayListProps) {
   const theme = useTheme();
   const router = useRouter();
   const [tasks, setTasks] = useState<TaskRow[]>([]);
@@ -94,10 +123,10 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
     [tasks, justChecked]
   );
 
-  const items = useMemo(
-    () => buildTodayItems(date, sortingTasks, memos, courses),
-    [date, sortingTasks, memos, courses]
-  );
+  const items = useMemo(() => {
+    const all = buildTodayItems(date, sortingTasks, memos, courses);
+    return onlyTasks ? all.filter((item) => item.kind === 'task') : all;
+  }, [date, sortingTasks, memos, courses, onlyTasks]);
   const sorted = useMemo(() => sortTodayItems(items, mode), [items, mode]);
 
   const taskByKey = useMemo(() => new Map(tasks.map((task) => [`task-${task.id}`, task])), [tasks]);
@@ -149,6 +178,10 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
       return (
         <TaskRowItem
           task={task}
+          checkShape={checkShape}
+          checkBorderColor={checkBorderColor}
+          titleColor={textColor}
+          metaColor={secondaryTextColor}
           onToggle={() => handleToggleTask(task).catch(() => undefined)}
           onEdit={() => {
             setEditingTask(task);
@@ -183,13 +216,19 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
         <EmptyState
           text={emptyText ?? '这一天还没有安排'}
           hint={emptyHint ?? '点底部中间的「＋」添加任务或备忘'}
+          textColor={secondaryTextColor}
+          hintColor={secondaryTextColor}
         />
       ) : null}
 
       {sorted.active.map((item, index) => (
         <StaggeredAppear key={item.key} index={index}>
-          {renderRow(item)}
-          <View style={[styles.separator, { backgroundColor: theme.backgroundElement }]} />
+          <View style={rowSpacing > 0 ? { marginBottom: rowSpacing } : undefined}>
+            {renderRow(item)}
+            {showSeparators ? (
+              <View style={[styles.separator, { backgroundColor: theme.backgroundElement }]} />
+            ) : null}
+          </View>
         </StaggeredAppear>
       ))}
 
@@ -200,33 +239,46 @@ export function TodayList({ date, emptyText, emptyHint, onStats }: TodayListProp
             accessibilityState={{ expanded: completedOpen }}
             onPress={() => setCompletedOpen((open) => !open)}
             style={({ pressed }) => [styles.completedHeader, pressed && styles.pressed]}>
-            <ThemedText type="small" themeColor="textSecondary">
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={secondaryTextColor ? { color: secondaryTextColor } : undefined}>
               已完成 {sorted.completed.length} 项
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={secondaryTextColor ? { color: secondaryTextColor } : undefined}>
               {completedOpen ? '⌄' : '›'}
             </ThemedText>
           </Pressable>
           {completedOpen
             ? sorted.completed.map((item) => (
-                <View key={item.key}>
+                <View key={item.key} style={rowSpacing > 0 ? { marginBottom: rowSpacing } : undefined}>
                   {renderRow(item)}
-                  <View style={[styles.separator, { backgroundColor: theme.backgroundElement }]} />
+                  {showSeparators ? (
+                    <View style={[styles.separator, { backgroundColor: theme.backgroundElement }]} />
+                  ) : null}
                 </View>
               ))
             : null}
         </View>
       ) : null}
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="新建任务或备忘"
-        onPress={() => setNewMenuOpen(true)}
-        style={({ pressed }) => [styles.addRow, pressed && styles.pressed]}>
-        <ThemedText type="small" themeColor="textSecondary">
-          ＋ 新建
-        </ThemedText>
-      </Pressable>
+      {showAddRow ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="新建任务或备忘"
+          onPress={() => setNewMenuOpen(true)}
+          style={({ pressed }) => [styles.addRow, pressed && styles.pressed]}>
+          <ThemedText
+            type="small"
+            themeColor="textSecondary"
+            style={secondaryTextColor ? { color: secondaryTextColor } : undefined}>
+            ＋ 新建
+          </ThemedText>
+        </Pressable>
+      ) : null}
 
       <TaskForm
         visible={taskFormOpen}

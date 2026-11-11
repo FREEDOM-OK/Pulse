@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { askConfirm } from '@/lib/dialogs';
+import { askConfirm, showNotice } from '@/lib/dialogs';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import {
   ParseResult,
@@ -57,7 +57,13 @@ export default function ImportTimetableScreen() {
       danger: true,
     });
     if (!ok) return;
-    await importCoursesToActiveSchedule(preview.courses);
+    try {
+      await importCoursesToActiveSchedule(preview.courses);
+    } catch (err) {
+      // 导入失败要留在当前页并提示，避免未捕获的 Promise 拒绝把页面崩回首页
+      showNotice(`导入失败：${err instanceof Error ? err.message : '未知错误'}`);
+      return;
+    }
     router.replace('/timetable');
   };
 
@@ -72,7 +78,11 @@ export default function ImportTimetableScreen() {
       ]}
     >
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnCircle}
+          accessibilityLabel="返回"
+          onPress={() => router.back()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>导入课表</Text>
@@ -88,19 +98,28 @@ export default function ImportTimetableScreen() {
           value={rawText}
           onChangeText={setRawText}
           multiline
+          accessibilityLabel="导入文本"
           placeholder={DEMO_TEXT}
           placeholderTextColor="rgba(0,0,0,0.3)"
           style={styles.textArea}
         />
 
         <View style={styles.btnRow}>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setRawText(DEMO_TEXT)}>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            accessibilityLabel="粘贴示例"
+            onPress={() => setRawText(DEMO_TEXT)}
+          >
             <Text style={styles.secondaryBtnText}>粘贴示例</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={handlePickFile}>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            accessibilityLabel="从文件导入"
+            onPress={handlePickFile}
+          >
             <Text style={styles.secondaryBtnText}>从文件导入</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleParse}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleParse} accessibilityLabel="解析">
             <Text style={styles.primaryBtnText}>解析</Text>
           </TouchableOpacity>
         </View>
@@ -128,7 +147,11 @@ export default function ImportTimetableScreen() {
             )}
 
             {preview.errors.length === 0 && preview.courses.length > 0 && (
-              <TouchableOpacity style={styles.importCommitBtn} onPress={handleConfirmImport}>
+              <TouchableOpacity
+                style={styles.importCommitBtn}
+                accessibilityLabel="确认导入"
+                onPress={handleConfirmImport}
+              >
                 <Text style={styles.importCommitBtnText}>导入</Text>
               </TouchableOpacity>
             )}

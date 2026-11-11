@@ -5,13 +5,11 @@ import { sleep } from './browser.mjs';
  * 从空数据开始，避免前面场景留下的任务/事件干扰断言。
  */
 export async function run(page, baseUrl) {
-  await page.goto(baseUrl);
-  await page.evaluate('localStorage.clear()');
-  await page.reload();
+  await page.gotoFresh(baseUrl);
 
   const now = new Date();
   const weekday = '日一二三四五六'[now.getDay()];
-  await page.waitForText('Hey，用户！');
+  await page.waitForText('Hey, 用户!');
   await page.waitForText(`今天是 ${now.getMonth() + 1}月${now.getDate()}日`);
   await page.waitForText(`星期${weekday}`);
 
@@ -73,12 +71,13 @@ export async function run(page, baseUrl) {
   await page.waitForText('写周报');
 
   await page.clickLabel('首页');
-  await page.waitForText('完成 0/1');
+  await page.waitForText('写周报');
   await page.clickLabel('标记为完成');
-  await page.waitForText('完成 1/1');
+  await page.waitForText('已完成 1 项');
   await page.clickText('已完成 1 项');
   await page.clickLabel('标记为未完成');
-  await page.waitForText('完成 0/1');
+  await sleep(400);
+  if (await page.has('已完成 1 项')) throw new Error('取消完成后「已完成」分组应消失');
 
   // 刷新后事件仍在（日历卡统计含事件与任务：1 事件 + 1 任务）
   await page.reload();
@@ -94,5 +93,5 @@ export async function run(page, baseUrl) {
   await page.clickLabel('保存个人资料');
   await page.waitForText('数据与偏好');
   await page.clickLabel('首页');
-  await page.waitForText('Hey，小明！');
+  await page.waitForText('Hey, 小明!');
 }

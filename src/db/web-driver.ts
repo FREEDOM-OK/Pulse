@@ -49,6 +49,21 @@ export interface WebDriver extends SqlDriver {
 }
 
 export async function createWebDriver(): Promise<WebDriver> {
+  // E2E 用：`?resetDb=1` 打开时先丢掉上一次存下的库，保证从空库开始。
+  // 测试里如果先 localStorage.clear() 再 reload，上一次页面挂起的 50ms 落盘定时器
+  // 会在两步之间把旧库写回去，看起来「清了库」其实还是旧数据。
+  if (
+    typeof window !== 'undefined' &&
+    typeof localStorage !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('resetDb') === '1'
+  ) {
+    localStorage.removeItem(STORAGE_KEY);
+    // 用完立刻把参数从地址栏抹掉，否则之后每次 reload/刷新都会再清一次库。
+    const cleaned = new URL(window.location.href);
+    cleaned.searchParams.delete('resetDb');
+    window.history.replaceState(null, '', `${cleaned.pathname}${cleaned.search}${cleaned.hash}`);
+  }
+
   const SQL: SqlJsStatic = await initSqlJs();
   const saved = readSavedDatabase();
   const db: SqlJsDatabase = saved ? new SQL.Database(saved) : new SQL.Database();

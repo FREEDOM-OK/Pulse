@@ -72,11 +72,15 @@ export default function PeriodsSettingScreen() {
       ]}
     >
       <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backBtnCircle} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnCircle}
+          accessibilityLabel="返回"
+          onPress={() => router.back()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>节次设置</Text>
-        <TouchableOpacity onPress={handleSave}>
+        <TouchableOpacity onPress={handleSave} accessibilityLabel="保存节次">
           <Text style={styles.saveText}>保存</Text>
         </TouchableOpacity>
       </View>
@@ -91,6 +95,7 @@ export default function PeriodsSettingScreen() {
                 <TextInput
                   value={item.start}
                   maxLength={5}
+                  accessibilityLabel={`第${idx + 1}节开始时间`}
                   onChangeText={(txt) => {
                     const next = [...list];
                     next[idx].start = txt;
@@ -102,6 +107,7 @@ export default function PeriodsSettingScreen() {
                 <TextInput
                   value={item.end}
                   maxLength={5}
+                  accessibilityLabel={`第${idx + 1}节结束时间`}
                   onChangeText={(txt) => {
                     const next = [...list];
                     next[idx].end = txt;
@@ -111,6 +117,7 @@ export default function PeriodsSettingScreen() {
                 />
                 <TouchableOpacity
                   disabled={!canDelete}
+                  accessibilityLabel={`删除第${idx + 1}节`}
                   onPress={() => setList((prev) => prev.filter((_, i) => i !== idx))}
                 >
                   <Text style={canDelete ? styles.delText : styles.delDisabled}>删除</Text>
@@ -120,7 +127,7 @@ export default function PeriodsSettingScreen() {
           );
         })}
 
-        <TouchableOpacity style={styles.addBtn} onPress={handleAddPeriod}>
+        <TouchableOpacity style={styles.addBtn} onPress={handleAddPeriod} accessibilityLabel="添加一节">
           <Text style={styles.addBtnText}>＋ 添加一节</Text>
         </TouchableOpacity>
       </ScrollView>

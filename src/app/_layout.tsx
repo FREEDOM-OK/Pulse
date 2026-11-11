@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { initDatabase } from '@/db';
 import { DialogHost } from '@/components/ui/dialog-host';
+import { TimetableProvider } from '@/features/timetable/TimetableContext';
 import { ThemePreferenceProvider, useThemePreference } from '@/theme/theme-context';
 
 SplashScreen.preventAutoHideAsync();
@@ -35,7 +36,9 @@ export default function RootLayout() {
 
   return (
     <ThemePreferenceProvider>
-      <AppStack />
+      <TimetableProvider>
+        <AppStack />
+      </TimetableProvider>
       <DialogHost />
     </ThemePreferenceProvider>
   );
@@ -48,10 +51,8 @@ function AppStack() {
     <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack screenOptions={{ headerShown: false, headerShadowVisible: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="calendar"
-          options={{ headerShown: true, title: '日历回顾', headerBackTitle: '返回' }}
-        />
+        <Stack.Screen name="calendar" options={{ headerShown: false }} />
+        <Stack.Screen name="fitness" options={{ headerShown: false }} />
         <Stack.Screen
           name="profile"
           options={{ headerShown: true, title: '个人资料', headerBackTitle: '返回' }}
