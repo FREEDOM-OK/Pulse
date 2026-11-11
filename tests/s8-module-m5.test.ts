@@ -31,14 +31,21 @@ describe('S8 M5 安卓下拉拉伸（PRD_module 第 7 / 第 10 节）', () => {
     expect(page).toContain('Math.abs(gesture.dy) > Math.abs(gesture.dx)');
   });
 
-  it('松开后弹簧回弹，拉伸上限 120', () => {
-    expect(page).toContain('Math.min(gesture.dy * 0.5, 120)');
-    expect(page).toContain('toValue: 0, useNativeDriver: true, bounciness: 8');
-    expect(page).toContain('outputRange: [1, 1.18]');
+  it('松开后弹簧回弹，拉伸上限 120，超过阈值刷新', () => {
+    expect(page).toContain('const next = Math.min(Math.max(gesture.dy * 0.5, 0), 120);');
+    expect(page).toContain('const shouldRefresh = pullValueRef.current >= 64;');
+    expect(page).toContain('bounciness: 6');
+    expect(page).toContain('speed: 18');
+    expect(page).toContain('outputRange: [1, 1.2]');
+    expect(page).toContain('handleRefresh().catch');
   });
 
-  it('iOS 仍走原来的 scrollY 插值', () => {
-    expect(page).toContain('scrollY.interpolate({');
-    expect(page).toContain(': [{ scale: titleScale }]');
+  it('Android 位移包裹全部内容，iOS 仍走原生 scrollY 插值', () => {
+    expect(page).toContain('const contentTransform =');
+    expect(page).toContain("Platform.OS === 'android' ? { transform: [{ translateY: pull }] } : undefined");
+    expect(page).toContain('<Animated.View style={contentTransform}>');
+    expect(page).toContain('const iosTitleScale = scrollY.interpolate({');
+    expect(page).toContain('inputRange: [-180, 0]');
+    expect(page).toContain('outputRange: [1.2, 1]');
   });
 });

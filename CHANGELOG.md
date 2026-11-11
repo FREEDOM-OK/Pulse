@@ -4,6 +4,22 @@
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
 > - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
 
+## v1.2.8 — 2026-11-11
+
+### 首页下拉刷新 / 竖版卡片 / 课程+待办数据打通
+
+- 首页保持单一 `Animated.ScrollView`：iOS 使用原生 `RefreshControl`，Android 下拉时把整页内容一起 `translateY`，标题仅额外放大到 1.2；松手 spring 归位，标题不再单独位移压住卡片。
+- Dash 改为 150×190 竖卡、圆角 22；分类图标在左上、圆形箭头在右上，标题 18 / 副标题 11。卡片间距收到 10，390 宽屏幕下第二张完整候场、第三张右侧露出约 42dp；`snapToInterval` 左对齐，未激活卡片缩到 0.9。
+- 首页 Tasks 改为读取计划页同一份 SQLite 数据，只过滤备忘、保留课程+待办：课程显示 8dp `#4CD964` 圆点、无复选框；待办使用 20×20 / 圆角 6 / 1.5 边框 `#8E8E93` 的方形勾选，完成后黑底白勾。行距 16。
+- 添加任务弹窗补 `KeyboardAvoidingView` 与可收缩滚动区：卡片 `maxHeight: 100%`、正文 `flexShrink: 1`、头尾固定，矮屏/键盘弹出时不再裁掉“取消 / 保存”。390×844 与 390×500 实测完整显示。
+- 文件：`src/app/(tabs)/index.tsx`、`src/components/home/dash-card.tsx`、`src/components/home/dash-carousel.tsx`、`src/components/today/today-list.tsx`、`src/components/today/task-row.tsx`、`src/components/today/course-row.tsx`、`src/components/ui/check-mark.tsx`、`src/components/ui/modal-sheet.tsx`。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts`、`tests/s1-tokens.test.ts`、`tests/s3-dash.test.ts`、`tests/s8-module-m5.test.ts`。
+- `npm run verify` 通过：37 个测试文件 / 251 条用例、`tsc --noEmit`、`expo lint`。
+- E2E 9 个 UI 场景全部通过（含 P6 首页、P6b 卡片管理）。Web 390×844 实测：首卡 150×190，第二张 135×171，第三张从 x=348 开始、右侧可见 42dp。
+
 ## v1.2.7 — 2026-11-11
 
 ### 首页重构（头部 / Search / Dash 吸附轮播 / Tasks）

@@ -66,7 +66,7 @@ describe('S1 通用组件', () => {
     const source = readSource('components/ui/check-mark.tsx');
     expect(source).toContain('size = 22');
     expect(source).toContain("shape = 'square'");
-    expect(source).toContain("borderRadius: shape === 'circle' ? size / 2 : 7");
+    expect(source).toContain("borderRadius: shape === 'circle' ? size / 2 : (radius ?? 7)");
     expect(source).toContain('Motion.check');
     expect(source).toContain('accessibilityRole="checkbox"');
   });

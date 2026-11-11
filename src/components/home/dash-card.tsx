@@ -25,8 +25,7 @@ export interface DashCardProps {
 /**
  * Dash 卡片：无边框、无渐变、无纹理（PRDv1.2.2 第 3.2 / 3.7 节）。
  *
- * v1.2.2 起所有卡片长一样（不再有「首卡深色」），底色跟主题走，
- * 尺寸是竖卡 264×427（黄金比 1:1.618）。
+ * 所有卡片长一样，底色跟主题走；首页轮播使用 150×190 的竖卡。
  */
 export function DashCard({
   title,
@@ -101,11 +100,11 @@ function inkFor(background: string): '#111111' | '#FFFFFF' {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 24,
+    borderRadius: 22,
     overflow: 'hidden',
   },
   content: {
-    padding: 18,
+    padding: 14,
     justifyContent: 'space-between',
   },
   topRow: {
@@ -140,16 +139,16 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
   bottom: {
-    gap: 6,
+    gap: 4,
   },
   title: {
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

@@ -9,10 +9,16 @@ export interface CheckMarkProps {
   checked: boolean;
   /** 勾选框边长，默认 22。 */
   size?: number;
-  /** 方形（默认）或圆形；首页 Tasks 用圆形。 */
+  /** 方形（默认）或圆形；首页 Tasks 用方形圆角。 */
   shape?: 'square' | 'circle';
+  /** 方形圆角，默认 7；首页 Tasks 用 6。 */
+  radius?: number;
   /** 未勾选时的描边色，默认跟随主题次要文字色。 */
   uncheckedColor?: string;
+  /** 勾选后的填充色，默认跟随主题正文色。 */
+  checkedColor?: string;
+  /** 对勾颜色，默认跟随主题背景色。 */
+  checkColor?: string;
   onPress?: () => void;
   accessibilityLabel?: string;
   disabled?: boolean;
@@ -26,7 +32,10 @@ export function CheckMark({
   checked,
   size = 22,
   shape = 'square',
+  radius,
   uncheckedColor,
+  checkedColor,
+  checkColor,
   onPress,
   accessibilityLabel,
   disabled,
@@ -57,9 +66,9 @@ export function CheckMark({
         {
           width: size,
           height: size,
-          borderRadius: shape === 'circle' ? size / 2 : 7,
-          borderColor: checked ? theme.text : (uncheckedColor ?? theme.textSecondary),
-          backgroundColor: checked ? theme.text : 'transparent',
+          borderRadius: shape === 'circle' ? size / 2 : (radius ?? 7),
+          borderColor: checked ? (checkedColor ?? theme.text) : (uncheckedColor ?? theme.textSecondary),
+          backgroundColor: checked ? (checkedColor ?? theme.text) : 'transparent',
         },
       ]}>
       <Animated.View
@@ -70,7 +79,7 @@ export function CheckMark({
             height: size * 0.52,
             borderRightWidth: 2,
             borderBottomWidth: 2,
-            borderColor: theme.background,
+            borderColor: checkColor ?? theme.background,
             opacity: progress,
             transform: [
               { rotate: '45deg' },

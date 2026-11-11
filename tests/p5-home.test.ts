@@ -15,6 +15,10 @@ function readApp(relative: string) {
   return fs.readFileSync(path.join(ROOT, 'src', 'app', relative), 'utf8');
 }
 
+function readSrc(relative: string) {
+  return fs.readFileSync(path.join(ROOT, 'src', relative), 'utf8');
+}
+
 afterEach(() => {
   resetDriverForTests();
 });
@@ -30,8 +34,12 @@ describe('首页结构（PRDv1.2 P5）', () => {
     expect(page).toContain('<DashCarousel');
     expect(page).toContain('Dash');
     expect(page).toContain('Tasks');
-    expect(page).toContain('onlyTasks');
-    expect(page).toContain('checkShape="circle"');
+    expect(page).toContain('onlyTasksAndCourses');
+    expect(page).toContain('checkSize={20}');
+    expect(page).toContain('checkRadius={6}');
+    expect(page).toContain('courseVariant="home"');
+    expect(page).toContain('RefreshControl');
+    expect(page).toContain('<Animated.View style={contentTransform}>');
     expect(page).toContain('rowSpacing={16}');
   });
 
@@ -52,6 +60,27 @@ describe('首页结构（PRDv1.2 P5）', () => {
   it('首页与今日计划复用同一个混合列表组件', () => {
     expect(readApp('(tabs)/index.tsx')).toContain("from '@/components/today/today-list'");
     expect(readApp('(tabs)/today.tsx')).toContain("from '@/components/today/today-list'");
+  });
+
+  it('首页课程/待办行与添加任务弹窗使用新规格', () => {
+    const list = readSrc('components/today/today-list.tsx');
+    expect(list).toContain("return all.filter((item) => item.kind !== 'memo');");
+
+    const course = readSrc('components/today/course-row.tsx');
+    expect(course).toContain('home && styles.dotHome');
+    expect(course).toMatch(/dotHome:\s*{[^}]*width: 8[^}]*height: 8[^}]*borderRadius: 4/s);
+    expect(course).toContain("'#4CD964'");
+    expect(course).toContain('{!home ? (');
+
+    const task = readSrc('components/today/task-row.tsx');
+    expect(task).toContain('checkSize = 22');
+    expect(task).toContain('radius={checkRadius}');
+    expect(readSrc('components/ui/check-mark.tsx')).toContain('radius ?? 7');
+
+    const modal = readSrc('components/ui/modal-sheet.tsx');
+    expect(modal).toContain('KeyboardAvoidingView');
+    expect(modal).toContain("maxHeight: '100%'");
+    expect(modal).toContain('flexShrink: 1');
   });
 });
 

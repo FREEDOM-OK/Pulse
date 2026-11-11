@@ -6,10 +6,18 @@ import type { TaskRow } from '@/db/types';
 
 interface TaskRowItemProps {
   task: TaskRow;
-  /** 勾选框形状；首页 Tasks 用圆形。 */
+  /** 勾选框形状；首页 Tasks 用方形圆角。 */
   checkShape?: 'square' | 'circle';
+  /** 勾选框边长，默认 22；首页用 20。 */
+  checkSize?: number;
+  /** 方形勾选框圆角，默认 7；首页用 6。 */
+  checkRadius?: number;
   /** 未勾选时的描边色。 */
   checkBorderColor?: string;
+  /** 勾选后的填充色。 */
+  checkCheckedColor?: string;
+  /** 对勾颜色。 */
+  checkCheckColor?: string;
   /** 固定浅色页面（如首页）的标题色；不传则跟随主题。 */
   titleColor?: string;
   /** 固定浅色页面（如首页）的备注/时间色。 */
@@ -26,7 +34,11 @@ interface TaskRowItemProps {
 export function TaskRowItem({
   task,
   checkShape = 'square',
+  checkSize = 22,
+  checkRadius,
   checkBorderColor,
+  checkCheckedColor,
+  checkCheckColor,
   titleColor,
   metaColor,
   onToggle,
@@ -37,11 +49,15 @@ export function TaskRowItem({
 
   return (
     <View style={styles.row}>
-      <View style={styles.checkbox}>
+      <View style={[styles.checkbox, { width: checkSize, height: checkSize }]}>
         <CheckMark
           checked={done}
+          size={checkSize}
           shape={checkShape}
+          radius={checkRadius}
           uncheckedColor={checkBorderColor}
+          checkedColor={checkCheckedColor}
+          checkColor={checkCheckColor}
           onPress={onToggle}
           accessibilityLabel={done ? '标记为未完成' : '标记为完成'}
         />

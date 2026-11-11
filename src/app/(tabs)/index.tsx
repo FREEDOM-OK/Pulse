@@ -1,23 +1,28 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Image,
   PanResponder,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
 import { ThemedText } from '@/components/themed-text';
-import { DashCarousel, type DashCardModel } from '@/components/home/dash-carousel';
+import {
+  DASH_CARD_HEIGHT,
+  DASH_CARD_WIDTH,
+  DashCarousel,
+  type DashCardModel,
+} from '@/components/home/dash-carousel';
 import { DashStack } from '@/components/home/dash-stack';
 import { TodayList } from '@/components/today/today-list';
-import { DashCardSize, dashCardHeight } from '@/constants/theme';
 import { countRecordsInRange } from '@/db/repositories/calendar';
 import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
 import { getLatestPlayed, listWishlist } from '@/db/repositories/games';
@@ -33,7 +38,7 @@ import type {
   WishlistRow,
   PlayedGameRow,
 } from '@/db/types';
-import { useDataVersion } from '@/lib/data-version';
+import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
 import { formatMonthDay, parseDate, todayStr } from '@/lib/date';
 
 const WEEKDAY_CHARS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -43,7 +48,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const today = todayStr();
   const dataVersion = useDataVersion();
-  const { width: windowWidth } = useWindowDimensions();
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -63,6 +67,8 @@ export default function HomeScreen() {
   const [todayCourses, setTodayCourses] = useState<CourseOnDate[]>([]);
   /** 底栏第三格放的是谁：决定健身/日历卡片是切到第 3 页还是开二级页。 */
   const [middle, setMiddle] = useState<MiddleTab>('fitness');
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
 
   const load = useCallback(async () => {
     const monthStart = `${today.slice(0, 7)}-01`;
@@ -109,6 +115,20 @@ export default function HomeScreen() {
     setTodayCourses(courseList);
     setMiddle(middleTab);
   }, [today]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
+    try {
+      await load();
+      // 让首页 Tasks / 计划页共享的 SQLite 数据一起重新读取。
+      bumpDataVersion();
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     load().catch(() => undefined);
@@ -189,9 +209,10 @@ export default function HomeScreen() {
   // 这里只在「列表已经在顶部 + 向下拉」时用 PanResponder 接手，其余情况一律不拦截，避免抢走 Tasks 的滚动。
   const atTopRef = useRef(true);
   const pull = useRef(new Animated.Value(0)).current;
+  const pullValueRef = useRef(0);
   const pullScale = pull.interpolate({
     inputRange: [0, 120],
-    outputRange: [1, 1.18],
+    outputRange: [1, 1.2],
     extrapolate: 'clamp',
   });
   const pullResponder = useMemo(
@@ -203,29 +224,49 @@ export default function HomeScreen() {
           gesture.dy > 6 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderMove: (_event, gesture) => {
-          pull.setValue(Math.min(gesture.dy * 0.5, 120));
+          const next = Math.min(Math.max(gesture.dy * 0.5, 0), 120);
+          pullValueRef.current = next;
+          pull.setValue(next);
         },
         onPanResponderRelease: () => {
-          Animated.spring(pull, { toValue: 0, useNativeDriver: true, bounciness: 8 }).start();
+          const shouldRefresh = pullValueRef.current >= 64;
+          pullValueRef.current = 0;
+          Animated.spring(pull, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 6,
+            speed: 18,
+          }).start();
+          if (shouldRefresh) handleRefresh().catch(() => undefined);
         },
         onPanResponderTerminate: () => {
+          pullValueRef.current = 0;
           Animated.spring(pull, { toValue: 0, useNativeDriver: true }).start();
         },
       }),
-    [pull]
+    [handleRefresh, pull]
   );
 
-  // Android 用下拉位移驱动标题，iOS 用 scrollY 驱动；两者都只影响顶部标题区。
-  const titleScale = scrollY.interpolate({
-    inputRange: [-240, 0],
-    outputRange: [1.18, 1],
+  // Android 用 pull 驱动标题与整页内容，iOS 用原生 scrollY 驱动标题（内容由 ScrollView 自己整体位移）。
+  const iosTitleScale = scrollY.interpolate({
+    inputRange: [-180, 0],
+    outputRange: [1.2, 1],
     extrapolate: 'clamp',
   });
-  const titleTransform =
-    Platform.OS === 'android' ? [{ translateY: pull }, { scale: pullScale }] : [{ scale: titleScale }];
+  const titleScale: Animated.AnimatedInterpolation<number> =
+    Platform.OS === 'android' ? pullScale : iosTitleScale;
+  const titleLift = titleScale.interpolate({
+    inputRange: [1, 1.2],
+    outputRange: [0, -6],
+    extrapolate: 'clamp',
+  });
+  const titleTransform = [{ translateY: titleLift }, { scale: titleScale }];
+  // 安卓把位移加到包裹全部内容的容器上，Search / Dash / Tasks 与标题一起下移，避免标题压住卡片。
+  const contentTransform =
+    Platform.OS === 'android' ? { transform: [{ translateY: pull }] } : undefined;
 
-  const stackWidth = Math.min(DashCardSize.width, Math.max(200, windowWidth - 96));
-  const stackHeight = dashCardHeight(stackWidth);
+  const stackWidth = DASH_CARD_WIDTH;
+  const stackHeight = DASH_CARD_HEIGHT;
 
   const dashBlock = useMemo(() => {
     if (dashMode === 'stack') {
@@ -251,12 +292,30 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      {Platform.OS === 'android' && refreshing ? (
+        <ActivityIndicator
+          pointerEvents="none"
+          color="#8E8E93"
+          style={[styles.refreshSpinner, { top: insets.top + 8 }]}
+        />
+      ) : null}
       <View style={styles.pullWrap} {...pullResponder.panHandlers}>
         <Animated.ScrollView
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            Platform.OS === 'ios' ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  handleRefresh().catch(() => undefined);
+                }}
+                tintColor="#8E8E93"
+              />
+            ) : undefined
+          }
           scrollEventThrottle={16}
           onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
             useNativeDriver: true,
@@ -265,6 +324,7 @@ export default function HomeScreen() {
               atTopRef.current = event.nativeEvent.contentOffset.y <= 0;
             },
           })}>
+          <Animated.View style={contentTransform}>
           <Animated.View
             style={[
               styles.titleZone,
@@ -349,9 +409,13 @@ export default function HomeScreen() {
             <TodayList
               date={today}
               emptyText="今天还没有安排"
-              onlyTasks
-              checkShape="circle"
-              checkBorderColor="#CCCCCC"
+              onlyTasksAndCourses
+              checkSize={20}
+              checkRadius={6}
+              checkBorderColor="#8E8E93"
+              checkCheckedColor="#000000"
+              checkCheckColor="#FFFFFF"
+              courseVariant="home"
               textColor="#000000"
               secondaryTextColor="#8E8E93"
               rowSpacing={16}
@@ -359,6 +423,7 @@ export default function HomeScreen() {
               showAddRow={false}
             />
           </View>
+          </Animated.View>
         </Animated.ScrollView>
       </View>
     </View>
@@ -376,6 +441,12 @@ const styles = StyleSheet.create({
   },
   pullWrap: {
     flex: 1,
+  },
+  refreshSpinner: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   titleZone: {
     paddingHorizontal: 20,

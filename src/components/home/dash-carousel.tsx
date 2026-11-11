@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
@@ -28,24 +27,26 @@ export interface DashCarouselProps {
   onManage: () => void;
 }
 
-/** 卡片高度固定 200，宽度按屏幕的 72% 计算。 */
-const CARD_HEIGHT = 200;
+/** 竖版卡片固定 150×190，圆角由 DashCard 的 22 控制。 */
+export const DASH_CARD_WIDTH = 150;
+export const DASH_CARD_HEIGHT = 190;
+const CARD_WIDTH = DASH_CARD_WIDTH;
+const CARD_HEIGHT = DASH_CARD_HEIGHT;
 /** 卡片之间的水平间距。 */
-const SPACING = 16;
+const SPACING = 10;
 /** 首卡左侧 / 末卡右侧与屏幕边缘的距离。 */
 const SIDE_PADDING = 20;
+/** 候场卡缩到 0.9，视觉高度 171，接近 170。 */
+const IDLE_SCALE = 0.9;
 
 /**
  * Dash 横滑卡片：左侧吸附 + 视差缩放。
  *
  * 每一张卡都占满 snapToInterval，松手后由原生滚动吸附到左侧；
- * scrollX 同时驱动当前卡 1.0、左右邻卡 0.85 的缩放。
+ * scrollX 同时驱动当前卡 1.0、左右候场卡 0.9 的缩放。
  */
 export function DashCarousel({ cards, style, color, onManage }: DashCarouselProps) {
-  const { width: screenWidth } = useWindowDimensions();
   const scrollX = useRef(new Animated.Value(0)).current;
-
-  const CARD_WIDTH = Math.round(screenWidth * 0.72);
   const SNAP_INTERVAL = CARD_WIDTH + SPACING;
 
   const handleScroll = useMemo(
@@ -93,7 +94,7 @@ export function DashCarousel({ cards, style, color, onManage }: DashCarouselProp
             index * SNAP_INTERVAL,
             (index + 1) * SNAP_INTERVAL,
           ],
-          outputRange: [0.85, 1, 0.85],
+          outputRange: [IDLE_SCALE, 1, IDLE_SCALE],
           extrapolate: 'clamp',
         });
 
@@ -131,8 +132,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIDE_PADDING,
   },
   emptyCard: {
-    height: 132,
-    borderRadius: 24,
+    height: CARD_HEIGHT,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#E2E2E6',
     borderStyle: 'dashed',

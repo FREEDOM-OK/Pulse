@@ -28,18 +28,30 @@ export interface TodayListProps {
   date: string;
   emptyText?: string;
   emptyHint?: string;
-  /** 首页 Tasks 只列任务，不混入备忘 / 课表。 */
+  /** 只列任务，不混入备忘 / 课表。 */
   onlyTasks?: boolean;
+  /** 首页 Tasks：课程 + 任务，不混入备忘。 */
+  onlyTasksAndCourses?: boolean;
   /** 每行底部留白；首页用 16。 */
   rowSpacing?: number;
   /** 是否显示行间分隔线。 */
   showSeparators?: boolean;
   /** 是否显示底部「＋ 新建」入口。 */
   showAddRow?: boolean;
-  /** 勾选框形状；首页 Tasks 用圆形。 */
+  /** 勾选框形状；首页 Tasks 用方形圆角。 */
   checkShape?: 'square' | 'circle';
+  /** 勾选框边长，默认 22；首页用 20。 */
+  checkSize?: number;
+  /** 方形勾选框圆角，默认 7；首页用 6。 */
+  checkRadius?: number;
   /** 未勾选时的描边色。 */
   checkBorderColor?: string;
+  /** 勾选后的填充色。 */
+  checkCheckedColor?: string;
+  /** 对勾颜色。 */
+  checkCheckColor?: string;
+  /** 首页课程行：绿色圆点、无右箭头、固定文字色。 */
+  courseVariant?: 'default' | 'home';
   /** 固定浅色页面（首页）的标题色；不传则跟随主题。 */
   textColor?: string;
   /** 固定浅色页面（首页）的备注/时间/空态文字色。 */
@@ -57,11 +69,17 @@ export function TodayList({
   emptyText,
   emptyHint,
   onlyTasks = false,
+  onlyTasksAndCourses = false,
   rowSpacing = 0,
   showSeparators = true,
   showAddRow = true,
   checkShape = 'square',
+  checkSize = 22,
+  checkRadius,
   checkBorderColor,
+  checkCheckedColor,
+  checkCheckColor,
+  courseVariant = 'default',
   textColor,
   secondaryTextColor,
   onStats,
@@ -125,8 +143,10 @@ export function TodayList({
 
   const items = useMemo(() => {
     const all = buildTodayItems(date, sortingTasks, memos, courses);
-    return onlyTasks ? all.filter((item) => item.kind === 'task') : all;
-  }, [date, sortingTasks, memos, courses, onlyTasks]);
+    if (onlyTasks) return all.filter((item) => item.kind === 'task');
+    if (onlyTasksAndCourses) return all.filter((item) => item.kind !== 'memo');
+    return all;
+  }, [date, sortingTasks, memos, courses, onlyTasks, onlyTasksAndCourses]);
   const sorted = useMemo(() => sortTodayItems(items, mode), [items, mode]);
 
   const taskByKey = useMemo(() => new Map(tasks.map((task) => [`task-${task.id}`, task])), [tasks]);
@@ -179,7 +199,11 @@ export function TodayList({
         <TaskRowItem
           task={task}
           checkShape={checkShape}
+          checkSize={checkSize}
+          checkRadius={checkRadius}
           checkBorderColor={checkBorderColor}
+          checkCheckedColor={checkCheckedColor}
+          checkCheckColor={checkCheckColor}
           titleColor={textColor}
           metaColor={secondaryTextColor}
           onToggle={() => handleToggleTask(task).catch(() => undefined)}
@@ -201,6 +225,9 @@ export function TodayList({
     return (
       <CourseRowItem
         course={course}
+        variant={courseVariant}
+        titleColor={textColor}
+        metaColor={secondaryTextColor}
         onPress={() =>
           router.push({ pathname: '/timetable', params: { courseId: String(course.courseId) } })
         }

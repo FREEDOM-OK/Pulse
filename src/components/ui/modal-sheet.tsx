@@ -1,5 +1,13 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -19,25 +27,31 @@ export function ModalSheet({ visible, title, onClose, children, footer }: ModalS
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
-        <ThemedView style={styles.card}>
-          <View style={styles.header}>
-            <ThemedText type="smallBold" style={styles.title}>
-              {title}
-            </ThemedText>
-          </View>
-          <ScrollView
-            style={styles.body}
-            contentContainerStyle={styles.bodyContent}
-            keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
-          {footer ? (
-            <View style={[styles.footer, { borderTopColor: theme.backgroundElement }]}>{footer}</View>
-          ) : null}
-        </ThemedView>
-      </View>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
+        <View style={styles.root}>
+          <Pressable style={styles.backdrop} onPress={onClose} />
+          <ThemedView style={styles.card}>
+            <View style={styles.header}>
+              <ThemedText type="smallBold" style={styles.title}>
+                {title}
+              </ThemedText>
+            </View>
+            <ScrollView
+              style={styles.body}
+              contentContainerStyle={styles.bodyContent}
+              keyboardShouldPersistTaps="handled">
+              {children}
+            </ScrollView>
+            {footer ? (
+              <View style={[styles.footer, { borderTopColor: theme.backgroundElement }]}>
+                {footer}
+              </View>
+            ) : null}
+          </ThemedView>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -64,6 +78,9 @@ export const modalStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   root: {
     flex: 1,
     alignItems: 'center',
@@ -81,11 +98,13 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 480,
-    maxHeight: '85%',
+    maxHeight: '100%',
+    minHeight: 0,
     borderRadius: Spacing.four,
     overflow: 'hidden',
   },
   header: {
+    flexShrink: 0,
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
     paddingBottom: Spacing.two,
@@ -95,12 +114,14 @@ const styles = StyleSheet.create({
   },
   body: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   bodyContent: {
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.three,
   },
   footer: {
+    flexShrink: 0,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
