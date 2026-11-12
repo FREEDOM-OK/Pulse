@@ -16,17 +16,44 @@ function readSource(relative: string) {
 describe('M1 日期条 / 健身已完成卡 / 滚轮高亮', () => {
   const dateStrip = readSource('components/ui/date-strip.tsx');
 
-  it('日期条按自然周整页翻动，屏幕固定显示周一到周日', () => {
+  it('日期条按自然周分页，一次滑动翻整周并立即同步选中日期', () => {
+    expect(dateStrip).toContain('const WEEKS_EACH_SIDE = 50;');
+    expect(dateStrip).toContain('WEEKS_EACH_SIDE * 2 + 1');
     expect(dateStrip).toContain('pagingEnabled');
     expect(dateStrip).toContain('onMomentumScrollEnd');
-    expect(dateStrip).toContain('onScroll={');
-    expect(dateStrip).toContain('settleTimer');
-    expect(dateStrip).toContain('handledPage');
-    expect(dateStrip).toContain('[addDays(weekStart, -7), weekStart, addDays(weekStart, 7)]');
-    expect(dateStrip).toContain('const delta = page === 0 ? -7 : 7;');
-    expect(dateStrip).toContain('onChange(addDays(value, delta));');
-    expect(dateStrip).toContain('scrollTo({ x: pageWidth, animated: false })');
+    expect(dateStrip).toContain('Math.round(offsetX / pageWidth)');
+    expect(dateStrip).toContain('const nextDate = week.days.some((day) => day.date === today)');
+    expect(dateStrip).toContain('week.days[weekdayIndex].date');
+    expect(dateStrip).toContain('onChange(nextDate)');
+    expect(dateStrip).toContain('settleTimerRef');
     expect(dateStrip).not.toContain('RANGE_DAYS');
+    expect(dateStrip).not.toContain('ScrollViewInstance');
+    expect(dateStrip).not.toContain('<ScrollView');
+    expect(dateStrip).not.toContain('onOpenCalendar');
+  });
+
+  it('日期条使用 40×60 日期格与 38×56 黑色胶囊，选中态 150ms 渐显', () => {
+    expect(dateStrip).toContain('const CELL_WIDTH = 40;');
+    expect(dateStrip).toContain('const CELL_HEIGHT = 60;');
+    expect(dateStrip).toContain('const PILL_WIDTH = 38;');
+    expect(dateStrip).toContain('const PILL_HEIGHT = 56;');
+    expect(dateStrip).toContain('const PILL_RADIUS = 19;');
+    expect(dateStrip).toContain('duration: 150');
+    expect(dateStrip).toContain('justifyContent: \'space-between\'');
+    expect(dateStrip).toContain('paddingHorizontal: 16');
+    expect(dateStrip).toContain('outlineWidth: 0');
+    expect(dateStrip).not.toContain('borderWidth: 1.5');
+    expect(dateStrip).toContain('memo(');
+  });
+
+  it('计划页在日期文字右侧提供按需显示的“回今天”胶囊', () => {
+    const today = readSource('app/(tabs)/today.tsx');
+    expect(today).toContain("date !== todayStr()");
+    expect(today).toContain('marginLeft: 8');
+    expect(today).toContain('borderRadius: 11');
+    expect(today).toContain("backgroundColor: '#F2F2F7'");
+    expect(today).toContain('回今天');
+    expect(today).toContain('setDate(todayStr())');
   });
 
   it('健身已完成记录比待训练卡高：16pt 内边距 + 70 最小高度', () => {

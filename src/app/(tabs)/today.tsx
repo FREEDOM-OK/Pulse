@@ -1,7 +1,7 @@
 import { SymbolView } from 'expo-symbols';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -92,9 +92,21 @@ export default function TodayScreen() {
             styles.dateRow,
             { opacity: headerOpacity, transform: [{ translateX: headerShift }] },
           ]}>
-          <ThemedText type="small" themeColor="textSecondary">
-            {dateLabel(date)}
-          </ThemedText>
+          <View style={styles.dateLeft}>
+            <ThemedText type="small" themeColor="textSecondary" style={styles.dateText}>
+              {dateLabel(date)}
+            </ThemedText>
+            {date !== todayStr() ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="回到今天"
+                onPress={() => setDate(todayStr())}
+                hitSlop={6}
+                style={({ pressed }) => [styles.goToday, pressed && styles.pressed]}>
+                <ThemedText style={styles.goTodayText}>回今天</ThemedText>
+              </Pressable>
+            ) : null}
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="打开日历"
@@ -166,6 +178,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
+    gap: 8,
+  },
+  dateLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+  },
+  dateText: {
+    flexShrink: 1,
+  },
+  goToday: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 11,
+    backgroundColor: '#F2F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goTodayText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   calendarButton: {
     width: 36,

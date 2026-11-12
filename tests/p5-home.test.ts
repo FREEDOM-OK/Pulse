@@ -40,20 +40,44 @@ describe('首页结构（PRDv1.2 P5）', () => {
     expect(page).toContain('courseVariant="home"');
     expect(page).not.toContain('RefreshControl');
     expect(page).toContain('bounces={false}');
-    expect(page).toContain('.finally(() => {');
+    expect(page).toContain('pullDistance');
+    expect(page).toContain('Math.min(Math.max(gesture.dy * 0.5, 0), 120)');
+    expect(page).toContain('damping: 18, stiffness: 180');
     expect(page).toContain("userSelect: 'none'");
     expect(page).toContain("transformOrigin: 'left center'");
-    expect(page).toContain('<Animated.View style={contentTransform}>');
+    expect(page).toContain('style={contentAnimatedStyle}');
     expect(page).toContain('rowSpacing={16}');
-    expect(page).toContain('onFocus={handleSearchFocus}');
-    expect(page).toContain('onBlur={handleSearchBlur}');
-    expect(page).toContain('searchTranslateY');
-    expect(page).toContain('searchBackgroundOpacity');
-    expect(page).toContain('searchPanel');
-    expect(page).toContain('filterButtonClose');
-    expect(page).toContain('关闭搜索');
-    expect(page).toContain('duration: 250');
-    expect(page).toContain('Easing.bezier(0.25, 0.1, 0.25, 1)');
+    expect(page).toContain('<SearchOverlay');
+    expect(page).toContain('searchOpen');
+    expect(page).toContain('setSearchOpen(true)');
+  });
+
+  it('沉浸搜索结果可带日期跳到对应详情', () => {
+    const page = readApp('(tabs)/index.tsx');
+    expect(page).toContain("from '@/components/home/search-overlay'");
+    expect(page).toContain('pathname: \'/fitness\', params: { date: result.date }');
+    expect(page).toContain("pathname: '/day/[date]'");
+
+    const overlay = readSrc('components/home/search-overlay.tsx');
+    expect(overlay).toContain('searchRecords(trimmed)');
+    expect(overlay).toContain('recordSearchQuery(trimmed)');
+    expect(overlay).toContain('onSubmitEditing');
+    expect(overlay).toContain('Keyboard.dismiss()');
+    expect(overlay).toContain('listSearchHistory()');
+    expect(overlay).toContain('清空历史');
+    expect(overlay).toContain('CLOSE_DURATION = 200');
+
+    const results = readSrc('components/home/search-results.tsx');
+    expect(results).toContain('height: 72');
+    expect(results).toContain('borderRadius: 16');
+    expect(results).toContain('formatMonthDay(item.date)');
+    expect(results).toContain('task: { label: \'计划\'');
+    expect(results).toContain('memo: { label: \'备忘\'');
+    expect(results).toContain('fitness: { label: \'健身\'');
+    expect(readSrc('app/day/[date].tsx')).toContain('<DateStrip value={date} onChange={setDate} />');
+
+    expect(fs.existsSync(path.join(ROOT, 'src', 'app', 'day', '[date].tsx'))).toBe(true);
+    expect(readApp('_layout.tsx')).toContain('name="day/[date]"');
   });
 
   it('首页勾选任务后广播数据版本，计划页与首页保持同步', () => {

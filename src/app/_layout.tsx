@@ -52,6 +52,7 @@ function AppStack() {
       <Stack screenOptions={{ headerShown: false, headerShadowVisible: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="calendar" options={{ headerShown: false }} />
+        <Stack.Screen name="day/[date]" options={{ headerShown: false }} />
         <Stack.Screen name="fitness" options={{ headerShown: false }} />
         <Stack.Screen
           name="profile"

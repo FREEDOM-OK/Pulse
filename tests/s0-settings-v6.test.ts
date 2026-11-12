@@ -25,7 +25,7 @@ afterEach(() => {
 describe('S0 数据层 v6 设置', () => {
   it('schema 与备份版本都已升到当前值', async () => {
     await createTestContext();
-    expect(SCHEMA_VERSION).toBe(8);
+    expect(SCHEMA_VERSION).toBe(9);
     expect(BACKUP_VERSION).toBe(SCHEMA_VERSION);
   });
 

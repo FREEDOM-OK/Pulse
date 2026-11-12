@@ -10,7 +10,6 @@
  */
 
 import { SymbolView } from 'expo-symbols';
-import { usePathname, useRouter } from 'expo-router';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
@@ -80,8 +79,6 @@ interface AppTabBarProps extends BottomTabBarProps {
 
 export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarProps) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  const pathname = usePathname();
   const reduced = useReducedMotion();
   const [menuOpen, setMenuOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
@@ -92,13 +89,8 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
 
   const tabs = buildTabItems(middle);
   const activeName = state.routes[state.index]?.name;
-  const onTimetablePage = pathname.startsWith('/timetable');
 
-  /** 第三格是课表时，`/timetable` 也算它「选中」；其他情况按路由名判断。 */
-  const isActive = (tab: TabItem) => {
-    if (tab.name === 'middle' && middle === 'timetable') return onTimetablePage;
-    return tab.name === activeName;
-  };
+  const isActive = (tab: TabItem) => tab.name === activeName;
 
   const activeTabIndex = Math.max(
     0,
@@ -138,11 +130,6 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
   }));
 
   const handleTabPress = (tab: TabItem) => {
-    // 课表保持独立全屏页（用户要求课程表零改动），第三格选它时点底栏直接 push 进去。
-    if (tab.name === 'middle' && middle === 'timetable') {
-      router.push('/timetable');
-      return;
-    }
     const route = state.routes.find((item) => item.name === tab.name);
     if (!route) return;
     const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });

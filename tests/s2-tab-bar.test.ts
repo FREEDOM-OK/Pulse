@@ -98,9 +98,9 @@ describe('S2 悬浮胶囊底栏与第三标签（2026-11-11 第二版）', () =>
     expect(bar).toContain('fontSize: 10');
   });
 
-  it('第三格选课表时点击走 router.push，其余走 navigateToTab', () => {
-    expect(bar).toContain("tab.name === 'middle' && middle === 'timetable'");
-    expect(bar).toContain("router.push('/timetable')");
+  it('第三格选课表时也留在 Tab 内，统一走 navigateToTab', () => {
+    expect(bar).not.toContain("tab.name === 'middle' && middle === 'timetable'");
+    expect(bar).not.toContain("router.push('/timetable')");
     expect(bar).toContain('navigateToTab(route.key)');
   });
 

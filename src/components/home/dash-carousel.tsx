@@ -27,17 +27,21 @@ export interface DashCarouselProps {
   onManage: () => void;
 }
 
-/** 竖版卡片固定 150×190，圆角由 DashCard 的 22 控制。 */
-export const DASH_CARD_WIDTH = 150;
-export const DASH_CARD_HEIGHT = 190;
+/** 主卡固定 220×280，圆角由 DashCard 的 26 控制。 */
+export const DASH_CARD_WIDTH = 220;
+export const DASH_CARD_HEIGHT = 280;
 const CARD_WIDTH = DASH_CARD_WIDTH;
 const CARD_HEIGHT = DASH_CARD_HEIGHT;
 /** 卡片之间的水平间距。 */
-const SPACING = 10;
-/** 首卡左侧 / 末卡右侧与屏幕边缘的距离。 */
+const SPACING = 16;
+/** 首卡与屏幕左侧对齐 Header 的 20dp。 */
 const SIDE_PADDING = 20;
-/** 候场卡缩到 0.9，视觉高度 171，接近 170。 */
-const IDLE_SCALE = 0.9;
+/** 末卡右侧留出 135dp，保证最后一张仍能完整吸附。 */
+const END_PADDING = 135;
+/** 候场卡缩到 0.88，视觉高度约 246.4。 */
+const IDLE_SCALE = 0.88;
+/** 候场卡下移 14dp，缩小后底边仍与主卡大致对齐。 */
+const IDLE_OFFSET_Y = 14;
 
 /**
  * Dash 横滑卡片：左侧吸附 + 视差缩放。
@@ -97,9 +101,18 @@ export function DashCarousel({ cards, style, color, onManage }: DashCarouselProp
           outputRange: [IDLE_SCALE, 1, IDLE_SCALE],
           extrapolate: 'clamp',
         });
+        const translateY = scrollX.interpolate({
+          inputRange: [
+            (index - 1) * SNAP_INTERVAL,
+            index * SNAP_INTERVAL,
+            (index + 1) * SNAP_INTERVAL,
+          ],
+          outputRange: [IDLE_OFFSET_Y, 0, IDLE_OFFSET_Y],
+          extrapolate: 'clamp',
+        });
 
         return (
-          <Animated.View style={{ transform: [{ scale }] }}>
+          <Animated.View style={{ transform: [{ translateY }, { scale }] }}>
             <DashCard
               title={item.title}
               subtitle={item.subtitle}
@@ -123,7 +136,8 @@ const styles = StyleSheet.create({
     height: CARD_HEIGHT,
   },
   content: {
-    paddingHorizontal: SIDE_PADDING,
+    paddingLeft: SIDE_PADDING,
+    paddingRight: END_PADDING,
   },
   separator: {
     width: SPACING,
@@ -133,7 +147,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     height: CARD_HEIGHT,
-    borderRadius: 22,
+    borderRadius: 26,
     borderWidth: 1,
     borderColor: '#E2E2E6',
     borderStyle: 'dashed',

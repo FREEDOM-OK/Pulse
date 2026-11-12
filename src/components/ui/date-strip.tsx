@@ -1,25 +1,49 @@
-import { useEffect, useMemo, useRef } from 'react';
-import type { ScrollViewInstance } from 'react-native';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addDays, formatDay, parseDate, todayStr } from '@/lib/date';
 
-const CAPSULE_HEIGHT = 62;
-const CALENDAR_BUTTON_SPACE = 48;
-
-interface DateStripProps {
-  value: string;
-  onChange: (date: string) => void;
-  /** 传入则日期条尾部显示日历入口；今日计划把入口放在页头，不传。 */
-  onOpenCalendar?: () => void;
-  /** 有记录的日子：下面显示一个小圆点。 */
-  marked?: Record<string, boolean>;
-}
+/** 当前周前后各预加载 50 周，共 101 页。 */
+const WEEKS_EACH_SIDE = 50;
+const CENTER_INDEX = WEEKS_EACH_SIDE;
+const PAGE_HEIGHT = 80;
+const CELL_WIDTH = 40;
+const CELL_HEIGHT = 60;
+const PILL_WIDTH = 38;
+const PILL_HEIGHT = 56;
+const PILL_RADIUS = 19;
 
 const WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六'];
+
+interface WeekDay {
+  date: string;
+  dayNumber: number;
+  weekday: string;
+}
+
+interface WeekPage {
+  monday: string;
+  days: WeekDay[];
+}
+
+interface DateStripProps {
+  /** 页面全局 selectedDate，受控。 */
+  value: string;
+  /** 翻周/点日期后立即下发，页面据此重新查询当天数据。 */
+  onChange: (date: string) => void;
+  /** 有记录的日子：下方显示一个小圆点。 */
+  marked?: Record<string, boolean>;
+}
 
 /** 某天所在的自然周周一。 */
 function mondayOf(date: string): string {
@@ -27,155 +51,332 @@ function mondayOf(date: string): string {
   return addDays(date, day === 0 ? -6 : 1 - day);
 }
 
-function weekDates(monday: string): string[] {
-  return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
+function buildWeek(monday: string): WeekPage {
+  return {
+    monday,
+    days: Array.from({ length: 7 }, (_, index) => {
+      const date = addDays(monday, index);
+      const parsed = parseDate(date);
+      return {
+        date,
+        dayNumber: parsed.getDate(),
+        weekday: WEEKDAY_SHORT[parsed.getDay()],
+      };
+    }),
+  };
+}
+
+function buildWeeks(anchorMonday: string): WeekPage[] {
+  return Array.from({ length: WEEKS_EACH_SIDE * 2 + 1 }, (_, index) =>
+    buildWeek(addDays(anchorMonday, (index - CENTER_INDEX) * 7))
+  );
+}
+
+interface DayCellProps {
+  date: string;
+  dayNumber: number;
+  weekday: string;
+  isSelected: boolean;
+  isToday: boolean;
+  hasRecord: boolean;
+  dayColor: string;
+  onSelect: (date: string) => void;
+}
+
+function DayCellBase({
+  date,
+  dayNumber,
+  weekday,
+  isSelected,
+  isToday,
+  hasRecord,
+  dayColor,
+  onSelect,
+}: DayCellProps) {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isSelected) {
+      progress.setValue(0);
+      return;
+    }
+    progress.setValue(0);
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [isSelected, progress]);
+
+  const pillScale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.92, 1],
+  });
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`日期 ${date}${hasRecord ? ' 有记录' : ''}`}
+      accessibilityHint={isToday ? '今天' : undefined}
+      accessibilityState={{ selected: isSelected }}
+      onPress={() => onSelect(date)}
+      style={({ pressed }) => [styles.cell, pressed && styles.pressed]}>
+      {isSelected ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.pill,
+            {
+              opacity: progress,
+              transform: [{ scale: pillScale }],
+            },
+          ]}
+        />
+      ) : null}
+      <View style={styles.cellContent}>
+        <ThemedText
+          style={[
+            styles.dayNumber,
+            {
+              color: isSelected ? '#FFFFFF' : dayColor,
+              fontWeight: isToday ? '700' : '600',
+            },
+          ]}>
+          {dayNumber}
+        </ThemedText>
+        <ThemedText
+          style={[styles.weekday, { color: isSelected ? '#FFFFFF' : '#8E8E93' }]}>
+          {weekday}
+        </ThemedText>
+        <View
+          style={[
+            styles.recordDot,
+            {
+              backgroundColor:
+                !isSelected && (hasRecord || isToday)
+                  ? isToday
+                    ? '#1C1C1E'
+                    : '#8E8E93'
+                  : 'transparent',
+            },
+          ]}
+        />
+      </View>
+    </Pressable>
+  );
 }
 
 /**
- * 日期条：固定一整个自然周（周一 → 周日），而不是一条可以无限滚动的日期流。
- * 左右滑动按整页吸附，一次翻一周；翻页后保持当前选中的星期几，
- * 因此「周三」滑到下一周仍然是「周三」。
+ * DayCell 只依赖选中态、记录点和主题色。翻周时日期/星期不变，
+ * 因此 7 个格子不会因为父级页重渲染而重新渲染。
  */
-export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStripProps) {
+const DayCell = memo(
+  DayCellBase,
+  (prev, next) =>
+    prev.isSelected === next.isSelected &&
+    prev.hasRecord === next.hasRecord &&
+    prev.isToday === next.isToday &&
+    prev.dayColor === next.dayColor
+);
+DayCell.displayName = 'DayCell';
+
+/**
+ * 计划/健身页顶部日期条。
+ *
+ * 架构：101 个自然周分页，每页固定一整屏宽；FlatList 只做横向分页，
+ * selectedDate 由页面受控。翻页结束后直接 onChange(新日期)，
+ * 页面 useEffect 会重新查询当天数据，不需要用户再点一次。
+ */
+export function DateStrip({ value, onChange, marked }: DateStripProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const scrollRef = useRef<ScrollViewInstance>(null);
-  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const handledPage = useRef<number | null>(null);
-  const pageWidth = Math.max(1, width - (onOpenCalendar ? CALENDAR_BUTTON_SPACE : 0));
-  const weekStart = mondayOf(value);
+  const pageWidth = Math.max(1, Math.round(width));
+  const today = todayStr();
 
-  const pages = useMemo(
-    () => [addDays(weekStart, -7), weekStart, addDays(weekStart, 7)],
-    [weekStart]
+  const [anchorMonday, setAnchorMonday] = useState(() => mondayOf(value));
+  const weeks = useMemo(() => buildWeeks(anchorMonday), [anchorMonday]);
+
+  const listRef = useRef<FlatList<WeekPage>>(null);
+  const valueRef = useRef(value);
+  const currentPageRef = useRef(-1);
+  const lastWidthRef = useRef(pageWidth);
+  const scrollFrameRef = useRef<number | null>(null);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const rangeStart = weeks[0].monday;
+  const rangeEnd = weeks[weeks.length - 1].days[6].date;
+
+  const selectedIndex = useMemo(
+    () => weeks.findIndex((week) => week.days.some((day) => day.date === value)),
+    [value, weeks]
   );
 
-  const clearSettleTimer = () => {
-    if (settleTimer.current) {
-      clearTimeout(settleTimer.current);
-      settleTimer.current = null;
-    }
-  };
-
-  // Web 的 ScrollView 不会派发 onMomentumScrollEnd，所以额外用 onScroll + 短延迟兜底；
-  // handledPage 防止原生端 onScroll 与 onMomentumScrollEnd 对同一次翻页重复触发。
-  const commitPage = (offsetX: number) => {
-    const page = Math.round(offsetX / pageWidth);
-    if (page === 1 || page === handledPage.current) return;
-    handledPage.current = page;
-    clearSettleTimer();
-    const delta = page === 0 ? -7 : 7;
-    onChange(addDays(value, delta));
-  };
-
-  // 本周始终放在中间页。用户翻到前后页后，onChange 会换周，
-  // 随后这里把内容无动画地放回中间页；因为新一周的内容和刚才停留的页完全一致。
   useEffect(() => {
-    handledPage.current = null;
-    clearSettleTimer();
-    const frame = requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ x: pageWidth, animated: false });
+    valueRef.current = value;
+  }, [value]);
+
+  // 日历跳到预加载窗口外时，围绕新日期重建 101 周窗口；普通翻周不会走这里。
+  useEffect(() => {
+    if (value < rangeStart || value > rangeEnd) {
+      setAnchorMonday(mondayOf(value));
+      currentPageRef.current = -1;
+    }
+  }, [rangeEnd, rangeStart, value]);
+
+  // 页面外部的 selectedDate 变化（点日期、日历跳转、重新聚焦回到今天）时同步列表位置。
+  useEffect(() => {
+    if (selectedIndex < 0) return;
+    const widthChanged = lastWidthRef.current !== pageWidth;
+    lastWidthRef.current = pageWidth;
+
+    if (!widthChanged && selectedIndex === currentPageRef.current) return;
+    currentPageRef.current = selectedIndex;
+
+    if (scrollFrameRef.current != null) cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({
+        offset: selectedIndex * pageWidth,
+        animated: false,
+      });
     });
-    return () => {
-      cancelAnimationFrame(frame);
-      clearSettleTimer();
-    };
-  }, [weekStart, pageWidth]);
+  }, [pageWidth, selectedIndex]);
 
-  const handleScroll = (offsetX: number) => {
-    clearSettleTimer();
-    settleTimer.current = setTimeout(() => commitPage(offsetX), 140);
-  };
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      if (scrollFrameRef.current != null) cancelAnimationFrame(scrollFrameRef.current);
+    },
+    []
+  );
 
-  const handlePageEnd = (offsetX: number) => {
-    clearSettleTimer();
-    commitPage(offsetX);
-  };
+  const selectWeekPage = useCallback(
+    (rawIndex: number, snapToPage: boolean, offsetX?: number) => {
+      const index = Math.min(weeks.length - 1, Math.max(0, rawIndex));
+      const week = weeks[index];
+      // 当前周自动回到今天；其他周保持原先的星期几（例如周三 -> 下周三）。
+      const weekdayIndex = (parseDate(valueRef.current).getDay() + 6) % 7;
+      const nextDate = week.days.some((day) => day.date === today)
+        ? today
+        : week.days[weekdayIndex].date;
+
+      // 同一个页面、同一个日期时不再重复 onChange/滚动，避免 Web 兜底监听自触发循环。
+      if (index === currentPageRef.current && nextDate === valueRef.current) {
+        if (snapToPage && offsetX != null && Math.abs(offsetX - index * pageWidth) > 1) {
+          listRef.current?.scrollToOffset({ offset: index * pageWidth, animated: true });
+        }
+        return;
+      }
+
+      currentPageRef.current = index;
+      if (nextDate !== valueRef.current) {
+        valueRef.current = nextDate;
+        onChange(nextDate);
+      }
+      if (snapToPage) {
+        listRef.current?.scrollToOffset({ offset: index * pageWidth, animated: true });
+      }
+    },
+    [onChange, pageWidth, today, weeks]
+  );
+
+  const handleMomentumEnd = useCallback(
+    (offsetX: number) => {
+      selectWeekPage(Math.round(offsetX / pageWidth), false);
+    },
+    [pageWidth, selectWeekPage]
+  );
+
+  // RNW 的部分环境不派发 onMomentumScrollEnd，用滚动停止后的兜底监听补齐。
+  const handleWebScroll = useCallback(
+    (offsetX: number) => {
+      if (Platform.OS !== 'web') return;
+      if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = setTimeout(() => {
+        settleTimerRef.current = null;
+        selectWeekPage(Math.round(offsetX / pageWidth), true, offsetX);
+      }, 140);
+    },
+    [pageWidth, selectWeekPage]
+  );
+
+  const handleSelectDate = useCallback(
+    (date: string) => {
+      onChange(date);
+    },
+    [onChange]
+  );
+
+  const extraData = useMemo(() => ({ value, marked }), [marked, value]);
+
+  const renderWeek = useCallback(
+    ({ item }: { item: WeekPage }) => (
+      <View style={[styles.page, { width: pageWidth }]}>
+        {item.days.map((day) => (
+          <DayCell
+            key={day.date}
+            date={day.date}
+            dayNumber={day.dayNumber}
+            weekday={day.weekday}
+            isSelected={day.date === value}
+            isToday={day.date === today}
+            hasRecord={Boolean(marked?.[day.date])}
+            dayColor={theme.text}
+            onSelect={handleSelectDate}
+          />
+        ))}
+      </View>
+    ),
+    [handleSelectDate, marked, pageWidth, theme.text, today, value]
+  );
+
+  const getItemLayout = useCallback(
+    (_data: ArrayLike<WeekPage> | null | undefined, index: number) => ({
+      length: pageWidth,
+      offset: pageWidth * index,
+      index,
+    }),
+    [pageWidth]
+  );
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        ref={scrollRef}
+      <FlatList
+        key={anchorMonday}
+        ref={listRef}
+        data={weeks}
+        extraData={extraData}
         horizontal
         pagingEnabled
         bounces={false}
-        style={styles.scroll}
+        overScrollMode="never"
         showsHorizontalScrollIndicator={false}
-        contentOffset={{ x: pageWidth, y: 0 }}
+        decelerationRate="fast"
+        initialScrollIndex={CENTER_INDEX}
+        getItemLayout={getItemLayout}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={5}
         scrollEventThrottle={16}
-        onScroll={(event) => handleScroll(event.nativeEvent.contentOffset.x)}
-        onScrollBeginDrag={clearSettleTimer}
-        onMomentumScrollEnd={(event) => handlePageEnd(event.nativeEvent.contentOffset.x)}
-        contentContainerStyle={styles.scrollContent}>
-        {pages.map((monday) => (
-          <View key={monday} style={[styles.page, { width: pageWidth }]}>
-            {weekDates(monday).map((date) => {
-              const selected = date === value;
-              const isToday = date === todayStr();
-              const weekday = WEEKDAY_SHORT[parseDate(date).getDay()];
-              const hasRecord = Boolean(marked?.[date]);
-              return (
-                <Pressable
-                  key={date}
-                  accessibilityRole="button"
-                  accessibilityLabel={`日期 ${date}${hasRecord ? ' 有记录' : ''}`}
-                  accessibilityState={{ selected }}
-                  onPress={() => onChange(date)}
-                  style={({ pressed }) => [
-                    styles.item,
-                    selected && { backgroundColor: theme.text },
-                    // 今天用 1.5pt 描边标出（选中时不描边，避免双重边框）。
-                    isToday && !selected && { borderWidth: 1.5, borderColor: theme.text },
-                    pressed && styles.pressed,
-                  ]}>
-                  <ThemedText
-                    style={[styles.day, { color: selected ? theme.background : theme.text }]}>
-                    {parseDate(date).getDate()}
-                  </ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.weekday,
-                      { color: selected ? theme.background : theme.textSecondary },
-                    ]}>
-                    {weekday}
-                  </ThemedText>
-                  <View
-                    style={[
-                      styles.dot,
-                      {
-                        backgroundColor: selected
-                          ? theme.background
-                          : hasRecord
-                            ? theme.textSecondary
-                            : 'transparent',
-                      },
-                    ]}
-                  />
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </ScrollView>
-
-      {onOpenCalendar ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="打开日历"
-          onPress={onOpenCalendar}
-          hitSlop={8}
-          style={({ pressed }) => [
-            styles.calendarButton,
-            { backgroundColor: theme.backgroundElement },
-            pressed && styles.pressed,
-          ]}>
-          <SymbolView
-            name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
-            size={18}
-            tintColor={theme.text}
-          />
-        </Pressable>
-      ) : null}
+        keyExtractor={(item) => item.monday}
+        renderItem={renderWeek}
+        onScroll={Platform.OS === 'web' ? (event) => handleWebScroll(event.nativeEvent.contentOffset.x) : undefined}
+        onScrollBeginDrag={() => {
+          if (settleTimerRef.current) {
+            clearTimeout(settleTimerRef.current);
+            settleTimerRef.current = null;
+          }
+        }}
+        onMomentumScrollEnd={(event) => handleMomentumEnd(event.nativeEvent.contentOffset.x)}
+        onScrollToIndexFailed={({ index }) => {
+          listRef.current?.scrollToOffset({
+            offset: index * pageWidth,
+            animated: false,
+          });
+        }}
+      />
     </View>
   );
 }
@@ -187,50 +388,50 @@ export function dateLabel(date: string): string {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-  },
-  scroll: {
-    flex: 1,
-  },
-  calendarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.three,
-  },
-  scrollContent: {
-    flexDirection: 'row',
+    height: PAGE_HEIGHT,
+    width: '100%',
   },
   page: {
+    height: PAGE_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: Spacing.three,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
   },
-  item: {
-    flex: 1,
-    maxWidth: 44,
-    height: CAPSULE_HEIGHT,
-    borderRadius: 22,
+  cell: {
+    width: CELL_WIDTH,
+    height: CELL_HEIGHT,
+    borderWidth: 0,
+    // Web 点击日期后浏览器会画焦点外框，看起来像“今天描边残留”。
+    outlineWidth: 0,
+    outlineColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
   },
-  day: {
+  cellContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  pill: {
+    position: 'absolute',
+    width: PILL_WIDTH,
+    height: PILL_HEIGHT,
+    borderRadius: PILL_RADIUS,
+    backgroundColor: '#000000',
+    zIndex: 0,
+  },
+  dayNumber: {
     fontSize: 16,
     lineHeight: 20,
     fontWeight: '700',
   },
   weekday: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '500',
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '400',
   },
-  dot: {
+  recordDot: {
     width: 4,
     height: 4,
     borderRadius: 2,

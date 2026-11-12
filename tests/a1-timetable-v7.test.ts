@@ -77,8 +77,8 @@ async function addCourse(
 describe('A1 数据层 v8：课表接主库', () => {
   it('schema 升到 8，课表三表存在、旧三表已删除', async () => {
     await createTestContext();
-    expect(SCHEMA_VERSION).toBe(8);
-    expect(BACKUP_VERSION).toBe(8);
+    expect(SCHEMA_VERSION).toBe(9);
+    expect(BACKUP_VERSION).toBe(9);
     expect(ALL_TABLES).toContain('schedules');
 
     const rows = await getDriver().getAllAsync<{ name: string }>(
@@ -176,7 +176,7 @@ describe('A1 数据层 v8：课表接主库', () => {
     await addCourse(scheduleId, '数据结构', [{ day: 2, start: 1, end: 2, weeks: [1, 2] }]);
 
     const payload = await exportBackup();
-    expect(payload.schemaVersion).toBe(8);
+    expect(payload.schemaVersion).toBe(9);
     expect(payload.data.schedules).toHaveLength(1);
     expect(payload.data.schedCourses).toHaveLength(1);
     expect(payload.data.schedSessions).toHaveLength(1);

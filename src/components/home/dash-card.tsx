@@ -25,7 +25,7 @@ export interface DashCardProps {
 /**
  * Dash 卡片：无边框、无渐变、无纹理（PRDv1.2.2 第 3.2 / 3.7 节）。
  *
- * 所有卡片长一样，底色跟主题走；首页轮播使用 150×190 的竖卡。
+ * 所有卡片长一样，底色跟主题走；首页轮播使用 220×280 的竖卡。
  */
 export function DashCard({
   title,
@@ -47,8 +47,6 @@ export function DashCard({
       ? 'rgba(255,255,255,0.7)'
       : 'rgba(0,0,0,0.55)'
     : theme.textSecondary;
-  const chipBackground = isCustom ? (ink === '#FFFFFF' ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.06)') : theme.background;
-  const arrowBorder = isCustom ? (ink === '#FFFFFF' ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.18)') : theme.backgroundSelected;
   const showCartoon = style === 'cartoon';
 
   return (
@@ -59,19 +57,12 @@ export function DashCard({
       rippleColor={ink === '#FFFFFF' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'}
       accessibilityRole="button"
       accessibilityLabel={`${title}，${subtitle}`}>
-      <View style={styles.topRow}>
+      <View style={styles.iconCircle}>
         {showCartoon ? (
-          <View style={styles.artSlot}>
-            <CartoonArt kind={kind} size={54} color={ink} />
-          </View>
+          <CartoonArt kind={kind} size={26} color="#1C1C1E" />
         ) : (
-          <View style={[styles.iconChip, { backgroundColor: chipBackground }]}>
-            <SymbolView name={icon} tintColor={ink} size={20} />
-          </View>
+          <SymbolView name={icon} tintColor="#1C1C1E" size={24} />
         )}
-        <View style={[styles.arrow, { borderColor: arrowBorder }]}>
-          <ThemedText style={[styles.arrowText, { color: ink }]}>›</ThemedText>
-        </View>
       </View>
 
       <View style={styles.bottom}>
@@ -81,6 +72,10 @@ export function DashCard({
         <ThemedText style={[styles.subtitle, { color: subInk }]} numberOfLines={2}>
           {subtitle}
         </ThemedText>
+      </View>
+
+      <View style={styles.arrow}>
+        <ThemedText style={styles.arrowText}>›</ThemedText>
       </View>
     </RipplePressable>
   );
@@ -100,46 +95,26 @@ function inkFor(background: string): '#111111' | '#FFFFFF' {
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
+    borderRadius: 26,
     overflow: 'hidden',
   },
   content: {
-    padding: 14,
+    flex: 1,
+    padding: 16,
+    paddingBottom: 18,
     justifyContent: 'space-between',
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  iconChip: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  artSlot: {
-    width: 56,
-    height: 54,
-    alignItems: 'flex-start',
-    justifyContent: 'flex-start',
-  },
-  arrow: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  arrowText: {
-    fontSize: 16,
-    lineHeight: 18,
-    marginTop: -1,
   },
   bottom: {
     gap: 4,
+    paddingRight: 44,
   },
   title: {
     fontSize: 18,
@@ -150,5 +125,22 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 11,
     lineHeight: 15,
+  },
+  arrow: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowText: {
+    fontSize: 22,
+    lineHeight: 24,
+    color: '#1C1C1E',
+    marginTop: -2,
   },
 });

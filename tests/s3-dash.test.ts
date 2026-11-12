@@ -15,14 +15,14 @@ function readApp(relative: string) {
 
 
 describe('S3 Dash 卡片（PRDv1.2.2 第 3 节）', () => {
-  it('轮播卡片用 150×190 竖卡、10 间距，且没有边框/渐变/纹理', () => {
+  it('轮播卡片用 220×280 竖卡、16 间距，且没有边框/渐变/纹理', () => {
     const carousel = readComponent('home/dash-carousel.tsx');
-    expect(carousel).toContain('export const DASH_CARD_WIDTH = 150');
-    expect(carousel).toContain('export const DASH_CARD_HEIGHT = 190');
-    expect(carousel).toContain('const SPACING = 10');
-    expect(carousel).toContain('const IDLE_SCALE = 0.9');
+    expect(carousel).toContain('export const DASH_CARD_WIDTH = 220');
+    expect(carousel).toContain('export const DASH_CARD_HEIGHT = 280');
+    expect(carousel).toContain('const SPACING = 16');
+    expect(carousel).toContain('const IDLE_SCALE = 0.88');
     const card = readComponent('home/dash-card.tsx');
-    expect(card).toContain('borderRadius: 22');
+    expect(card).toContain('borderRadius: 26');
     expect(card).toContain('fontSize: 18');
     expect(card).toContain('fontSize: 11');
     expect(card).not.toContain('LinearGradient');
@@ -35,7 +35,7 @@ describe('S3 Dash 卡片（PRDv1.2.2 第 3 节）', () => {
     expect(card).toContain('CartoonArt');
   });
 
-  it('横滑用 FlatList 左侧吸附，按 scrollX 做 0.9 视差缩放', () => {
+  it('横滑用 FlatList 左侧吸附，按 scrollX 做 0.88 视差缩放', () => {
     const carousel = readComponent('home/dash-carousel.tsx');
     expect(carousel).toContain('Animated.FlatList');
     expect(carousel).toContain('snapToInterval={SNAP_INTERVAL}');
@@ -45,8 +45,9 @@ describe('S3 Dash 卡片（PRDv1.2.2 第 3 节）', () => {
     expect(carousel).toContain('index * SNAP_INTERVAL');
     expect(carousel).toContain('(index + 1) * SNAP_INTERVAL');
     expect(carousel).toContain('outputRange: [IDLE_SCALE, 1, IDLE_SCALE]');
-    expect(carousel).toContain('transform: [{ scale }]');
-    expect(carousel).toContain('paddingHorizontal: SIDE_PADDING');
+    expect(carousel).toContain('transform: [{ translateY }, { scale }]');
+    expect(carousel).toContain('paddingLeft: SIDE_PADDING');
+    expect(carousel).toContain('paddingRight: END_PADDING');
     expect(carousel).toContain('Dash 卡片都关掉了');
     expect(carousel).not.toContain('添加卡片');
   });

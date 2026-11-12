@@ -18,11 +18,20 @@ export interface SubPageHeaderProps {
   /** page = 二级页（带圆形返回）；tab = 第 3 页（无返回、标题左对齐）。 */
   mode?: 'page' | 'tab';
   subtitle?: string;
+  /** 紧跟在副标题右侧的轻量操作，例如「回今天」。 */
+  subtitleAccessory?: React.ReactNode;
   onBack?: () => void;
   right?: React.ReactNode;
 }
 
-export function SubPageHeader({ title, mode = 'page', subtitle, onBack, right }: SubPageHeaderProps) {
+export function SubPageHeader({
+  title,
+  mode = 'page',
+  subtitle,
+  subtitleAccessory,
+  onBack,
+  right,
+}: SubPageHeaderProps) {
   const theme = useTheme();
   return (
     <View style={styles.row}>
@@ -46,10 +55,15 @@ export function SubPageHeader({ title, mode = 'page', subtitle, onBack, right }:
 
       <View style={[styles.texts, mode === 'page' ? styles.textsShifted : null]}>
         <ThemedText style={styles.title}>{title}</ThemedText>
-        {subtitle ? (
-          <ThemedText type="small" themeColor="textSecondary">
-            {subtitle}
-          </ThemedText>
+        {subtitle || subtitleAccessory ? (
+          <View style={styles.subtitleRow}>
+            {subtitle ? (
+              <ThemedText type="small" themeColor="textSecondary">
+                {subtitle}
+              </ThemedText>
+            ) : null}
+            {subtitleAccessory}
+          </View>
         ) : null}
       </View>
 
@@ -78,6 +92,10 @@ const styles = StyleSheet.create({
   },
   texts: {
     gap: 2,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   textsShifted: {
     marginLeft: 4,

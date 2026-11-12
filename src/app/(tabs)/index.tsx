@@ -1,17 +1,23 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
-  Easing,
   Image,
   PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  type SharedValue,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import {
@@ -21,6 +27,7 @@ import {
   type DashCardModel,
 } from '@/components/home/dash-carousel';
 import { DashStack } from '@/components/home/dash-stack';
+import { SearchOverlay } from '@/components/home/search-overlay';
 import { TodayList } from '@/components/today/today-list';
 import { countRecordsInRange } from '@/db/repositories/calendar';
 import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
@@ -28,6 +35,7 @@ import { getLatestPlayed, listWishlist } from '@/db/repositories/games';
 import { getProfile } from '@/db/repositories/profile';
 import { getCardColor, getCardStyle, getDashMode, getHomeCards, getMiddleTab } from '@/db/repositories/settings';
 import { getTrainingSummary, type TrainingSummary } from '@/db/repositories/training';
+import type { SearchResult } from '@/db/repositories/search';
 import type {
   CardStyle,
   DashMode,
@@ -41,6 +49,14 @@ import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
 import { formatMonthDay, parseDate, todayStr } from '@/lib/date';
 
 const WEEKDAY_CHARS = ['日', '一', '二', '三', '四', '五', '六'];
+
+/**
+ * SharedValue 的可写封装。PanResponder 的回调由 useMemo 创建，
+ * 直接在这里赋值会触发 react-hooks/immutability；集中到纯函数里更清晰。
+ */
+function writePullDistance(shared: SharedValue<number>, value: number) {
+  shared.value = value;
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
@@ -66,17 +82,7 @@ export default function HomeScreen() {
   /** 底栏第三格放的是谁：决定健身/日历卡片是切到第 3 页还是开二级页。 */
   const [middle, setMiddle] = useState<MiddleTab>('fitness');
   const refreshingRef = useRef(false);
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const searchInputRef = useRef<ElementRef<typeof TextInput>>(null);
-  const searchTranslateY = useRef(new Animated.Value(0)).current;
-  /** 0 = 首页，1 = 沉浸搜索；用于背景淡出与搜索面板淡入。 */
-  const searchProgress = useRef(new Animated.Value(0)).current;
-  const searchBackgroundOpacity = searchProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-  });
-  const searchLayoutY = useRef(0);
+  const [searchOpen, setSearchOpen] = useState(false);
   const scrollOffsetRef = useRef(0);
 
   const load = useCallback(async () => {
@@ -193,11 +199,11 @@ export default function HomeScreen() {
 
   const cardActions: Record<HomeCardId, () => void> = {
     // 被选进底栏第三格的模块，点卡片直接切到那个 Tab（不叠一层返回）；
-    // 没被选中的只能开二级页。课表始终是独立全屏页，所以直接 push。
+    // 没被选中的只能开二级页。课表在第三格时也必须留在 Tab 内，不能跳全屏页。
     fitness: () => (middle === 'fitness' ? router.navigate('/middle') : router.push('/fitness')),
     games: () => router.push('/games'),
     calendar: () => (middle === 'calendar' ? router.navigate('/middle') : router.push('/calendar')),
-    timetable: () => router.push('/timetable'),
+    timetable: () => (middle === 'timetable' ? router.navigate('/middle') : router.push('/timetable')),
   };
 
   const cardModels: DashCardModel[] = cards.map((id) => ({
@@ -212,16 +218,11 @@ export default function HomeScreen() {
   const weekday = WEEKDAY_CHARS[parseDate(today).getDay()];
   const dateLabel = `今天是 ${formatMonthDay(today)} 星期${weekday}`;
 
-  // 两个平台统一用这套下拉拉伸，不再依赖原生刷新指示器 / iOS 原生 overscroll。
-  // 这里只在「列表已经在顶部 + 向下拉」时用 PanResponder 接手，其余情况一律不拦截，避免抢走 Tasks 的滚动。
+  // 只在「列表已经在顶部 + 向下拉」时接手，其余情况不拦截 Tasks 的纵向滚动。
+  // 用 Reanimated 的 pullDistance 驱动标题 scale 和整页 translateY，
+  // Android 原生 ScrollView 不会产生负数 scrollY，因此不再依赖原生 bounces。
   const atTopRef = useRef(true);
-  const pull = useRef(new Animated.Value(0)).current;
-  const pullValueRef = useRef(0);
-  const pullScale = pull.interpolate({
-    inputRange: [0, 120],
-    outputRange: [1, 1.2],
-    extrapolate: 'clamp',
-  });
+  const pullDistance = useSharedValue(0);
   const pullResponder = useMemo(
     () =>
       PanResponder.create({
@@ -230,86 +231,58 @@ export default function HomeScreen() {
           !refreshingRef.current &&
           gesture.dy > 6 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx),
-        // 搜索框是 TextInput，会先拿到触摸；这里在捕获阶段只接管「顶部向下」
-        // 的垂直手势，保证从搜索栏开始下拉时整页仍能联动，同时不抢横向手势。
         onMoveShouldSetPanResponderCapture: (_event, gesture) =>
           atTopRef.current &&
           !refreshingRef.current &&
           gesture.dy > 6 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderMove: (_event, gesture) => {
-          const next = Math.min(Math.max(gesture.dy * 0.5, 0), 120);
-          pullValueRef.current = next;
-          pull.setValue(next);
+          writePullDistance(pullDistance, Math.min(Math.max(gesture.dy * 0.5, 0), 120));
         },
         onPanResponderRelease: () => {
-          const shouldRefresh = pullValueRef.current >= 64;
-          if (!shouldRefresh) {
-            pullValueRef.current = 0;
-            Animated.spring(pull, {
-              toValue: 0,
-              useNativeDriver: true,
-              bounciness: 6,
-              speed: 18,
-            }).start();
-            return;
+          const settle = () => {
+            writePullDistance(pullDistance, withSpring(0, { damping: 18, stiffness: 180 }));
+          };
+          if (pullDistance.value > 60) {
+            handleRefresh()
+              .catch(() => undefined)
+              .finally(settle);
+          } else {
+            settle();
           }
-          // 刷新完成前保持标题拉伸；数据回来后直接弹回，原生转圈已经移除。
-          handleRefresh()
-            .catch(() => undefined)
-            .finally(() => {
-              pullValueRef.current = 0;
-              Animated.spring(pull, {
-                toValue: 0,
-                useNativeDriver: true,
-                bounciness: 6,
-                speed: 18,
-              }).start();
-            });
         },
         onPanResponderTerminate: () => {
-          pullValueRef.current = 0;
-          Animated.spring(pull, { toValue: 0, useNativeDriver: true }).start();
+          writePullDistance(pullDistance, withSpring(0, { damping: 18, stiffness: 180 }));
         },
       }),
-    [handleRefresh, pull]
+    [handleRefresh, pullDistance]
   );
 
-  const titleScale: Animated.AnimatedInterpolation<number> = pullScale;
-  const titleLift = titleScale.interpolate({
-    inputRange: [1, 1.2],
-    outputRange: [0, -6],
-    extrapolate: 'clamp',
-  });
-  const titleTransform = [{ translateY: titleLift }, { scale: titleScale }];
-  // 位移加到包裹全部内容的容器上，Search / Dash / Tasks 与标题一起下移，避免标题压住卡片。
-  const contentTransform = { transform: [{ translateY: pull }] };
+  const titleAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        scale: interpolate(
+          pullDistance.value,
+          [0, 100],
+          [1, 1.18],
+          Extrapolation.CLAMP
+        ),
+      },
+    ],
+  }));
+  const contentAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: pullDistance.value }],
+  }));
 
   const stackWidth = DASH_CARD_WIDTH;
   const stackHeight = DASH_CARD_HEIGHT;
 
-  const SEARCH_ANIMATION = {
-    duration: 250,
-    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-    useNativeDriver: true,
-  } as const;
-
-  const handleSearchFocus = () => {
-    setSearchFocused(true);
-    const currentTop = searchLayoutY.current - scrollOffsetRef.current;
-    const target = Math.min(0, insets.top + 8 - currentTop);
-    Animated.parallel([
-      Animated.timing(searchTranslateY, { ...SEARCH_ANIMATION, toValue: target }),
-      Animated.timing(searchProgress, { ...SEARCH_ANIMATION, toValue: 1 }),
-    ]).start();
-  };
-
-  const handleSearchBlur = () => {
-    setSearchFocused(false);
-    Animated.parallel([
-      Animated.timing(searchTranslateY, { ...SEARCH_ANIMATION, toValue: 0 }),
-      Animated.timing(searchProgress, { ...SEARCH_ANIMATION, toValue: 0 }),
-    ]).start();
+  const handleSearchResultPress = (result: SearchResult) => {
+    if (result.kind === 'fitness') {
+      router.push({ pathname: '/fitness', params: { date: result.date } });
+    } else {
+      router.push({ pathname: '/day/[date]', params: { date: result.date } });
+    }
   };
 
   const dashBlock = useMemo(() => {
@@ -336,166 +309,125 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.searchPanel, { opacity: searchProgress }]}
-      />
       <View style={styles.pullWrap} {...pullResponder.panHandlers}>
-        <Animated.ScrollView
+        <ScrollView
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
           bounces={false}
           alwaysBounceVertical={false}
           overScrollMode="never"
-          scrollEnabled={!searchFocused}
-          keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
           onScroll={(event) => {
             const offsetY = event.nativeEvent.contentOffset.y;
-            // 只有列表已经在最顶部时才允许下拉拉伸接手手势。
             scrollOffsetRef.current = offsetY;
             atTopRef.current = offsetY <= 0;
           }}>
-          <Animated.View style={contentTransform}>
-          <Animated.View
-            pointerEvents={searchFocused ? 'none' : 'auto'}
-            style={[
-              styles.titleZone,
-              {
-                paddingTop: insets.top + 20,
-                opacity: searchBackgroundOpacity,
-              },
-            ]}>
-            <View style={styles.headerRow}>
-              <Animated.View style={[styles.headerText, { transform: titleTransform }]}>
-                <ThemedText style={styles.hello}>Hey, {name}!</ThemedText>
-                <ThemedText style={styles.date}>{dateLabel}</ThemedText>
-              </Animated.View>
+          <Animated.View testID="home-content" style={contentAnimatedStyle}>
+            <Animated.View style={[styles.titleZone, { paddingTop: insets.top + 20 }]}>
+              <View style={styles.headerRow}>
+                <Animated.View testID="home-title-text" style={[styles.headerText, titleAnimatedStyle]}>
+                  <ThemedText style={styles.hello}>Hey, {name}!</ThemedText>
+                  <ThemedText style={styles.date}>{dateLabel}</ThemedText>
+                </Animated.View>
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="打开个人资料"
-                onPress={() => router.push('/profile')}
-                style={({ pressed }) => [pressed && styles.pressed]}>
-                <View style={styles.avatar}>
-                  {profile?.avatarUri ? (
-                    <Image
-                      key={profile.avatarUri}
-                      source={{ uri: profile.avatarUri }}
-                      style={styles.avatarImage}
-                    />
-                  ) : (
-                    <ThemedText style={styles.avatarText}>{name.slice(0, 1)}</ThemedText>
-                  )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="打开个人资料"
+                  onPress={() => router.push('/profile')}
+                  style={({ pressed }) => [pressed && styles.pressed]}>
+                  <View style={styles.avatar}>
+                    {profile?.avatarUri ? (
+                      <Image
+                        key={profile.avatarUri}
+                        source={{ uri: profile.avatarUri }}
+                        style={styles.avatarImage}
+                      />
+                    ) : (
+                      <ThemedText style={styles.avatarText}>{name.slice(0, 1)}</ThemedText>
+                    )}
+                  </View>
+                </Pressable>
+              </View>
+            </Animated.View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="搜索"
+              onPress={() => setSearchOpen(true)}
+              style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}>
+              <View style={styles.searchLeft}>
+                <SymbolView
+                  name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
+                  tintColor="#8E8E93"
+                  size={20}
+                />
+                <ThemedText style={styles.searchPlaceholder}>搜索</ThemedText>
+              </View>
+
+              <View style={styles.filterButton}>
+                <SymbolView
+                  name={{ ios: 'line.3.horizontal.decrease', android: 'tune', web: 'tune' }}
+                  tintColor="#000000"
+                  size={18}
+                />
+              </View>
+            </Pressable>
+
+            <View>
+              <View style={styles.sectionHeader}>
+                <ThemedText style={styles.sectionTitle}>Dash</ThemedText>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="管理首页卡片"
+                  onPress={() => router.push('/cards')}
+                  hitSlop={8}
+                  style={({ pressed }) => [pressed && styles.pressed]}>
+                  <ThemedText style={styles.sectionLink}>管理 &gt;</ThemedText>
+                </Pressable>
+              </View>
+
+              <View style={styles.dashBlock}>{dashBlock}</View>
+
+              <View style={styles.tasks}>
+                <View style={styles.tasksHeader}>
+                  <ThemedText style={styles.sectionTitle}>Tasks</ThemedText>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="查看今日全部"
+                    onPress={() => router.navigate('/today')}
+                    hitSlop={8}
+                    style={({ pressed }) => [pressed && styles.pressed]}>
+                    <ThemedText style={styles.sectionLink}>完成 &gt;</ThemedText>
+                  </Pressable>
                 </View>
-              </Pressable>
+
+                <TodayList
+                  date={today}
+                  emptyText="今天还没有安排"
+                  checkSize={20}
+                  checkRadius={6}
+                  checkBorderColor="#8E8E93"
+                  checkCheckedColor="#000000"
+                  checkCheckColor="#FFFFFF"
+                  courseVariant="home"
+                  textColor="#000000"
+                  secondaryTextColor="#8E8E93"
+                  rowSpacing={16}
+                  showSeparators={false}
+                  showAddRow={false}
+                />
+              </View>
             </View>
           </Animated.View>
-
-          <Animated.View
-            onLayout={(event) => {
-              searchLayoutY.current = event.nativeEvent.layout.y;
-            }}
-            style={[
-              styles.searchBar,
-              searchFocused && styles.searchBarFocused,
-              { transform: [{ translateY: searchTranslateY }] },
-            ]}>
-            <View style={styles.searchLeft}>
-              <SymbolView
-                name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-                tintColor="#8E8E93"
-                size={20}
-              />
-              <TextInput
-                ref={searchInputRef}
-                accessibilityLabel="搜索"
-                placeholder="搜索"
-                placeholderTextColor="#8E8E93"
-                value={searchText}
-                onChangeText={setSearchText}
-                onFocus={handleSearchFocus}
-                onBlur={handleSearchBlur}
-                style={styles.searchInput}
-                returnKeyType="search"
-                selectionColor="#000000"
-                underlineColorAndroid="transparent"
-              />
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={searchFocused ? '关闭搜索' : '筛选'}
-              hitSlop={6}
-              onPress={() => searchInputRef.current?.blur()}
-              style={({ pressed }) => [
-                styles.filterButton,
-                searchFocused && styles.filterButtonClose,
-                pressed && styles.pressed,
-              ]}>
-              <SymbolView
-                name={
-                  searchFocused
-                    ? { ios: 'xmark', android: 'close', web: 'close' }
-                    : { ios: 'line.3.horizontal.decrease', android: 'tune', web: 'tune' }
-                }
-                tintColor="#000000"
-                size={searchFocused ? 16 : 18}
-              />
-            </Pressable>
-          </Animated.View>
-
-          <Animated.View
-            pointerEvents={searchFocused ? 'none' : 'auto'}
-            style={{ opacity: searchBackgroundOpacity }}>
-            <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Dash</ThemedText>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="管理首页卡片"
-              onPress={() => router.push('/cards')}
-              hitSlop={8}
-              style={({ pressed }) => [pressed && styles.pressed]}>
-              <ThemedText style={styles.sectionLink}>管理 &gt;</ThemedText>
-            </Pressable>
-          </View>
-
-          <View style={styles.dashBlock}>{dashBlock}</View>
-
-          <View style={styles.tasks}>
-            <View style={styles.tasksHeader}>
-              <ThemedText style={styles.sectionTitle}>Tasks</ThemedText>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="查看今日全部"
-                onPress={() => router.navigate('/today')}
-                hitSlop={8}
-                style={({ pressed }) => [pressed && styles.pressed]}>
-                <ThemedText style={styles.sectionLink}>完成 &gt;</ThemedText>
-              </Pressable>
-            </View>
-
-            <TodayList
-              date={today}
-              emptyText="今天还没有安排"
-              checkSize={20}
-              checkRadius={6}
-              checkBorderColor="#8E8E93"
-              checkCheckedColor="#000000"
-              checkCheckColor="#FFFFFF"
-              courseVariant="home"
-              textColor="#000000"
-              secondaryTextColor="#8E8E93"
-              rowSpacing={16}
-              showSeparators={false}
-              showAddRow={false}
-            />
-          </View>
-          </Animated.View>
-          </Animated.View>
-        </Animated.ScrollView>
+        </ScrollView>
       </View>
+
+      <SearchOverlay
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelectResult={handleSearchResultPress}
+      />
     </View>
   );
 }
@@ -508,14 +440,6 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
     backgroundColor: 'transparent',
-  },
-  searchPanel: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#F7F7FA',
   },
   pullWrap: {
     flex: 1,
@@ -585,10 +509,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  searchBarFocused: {
-    zIndex: 20,
-    elevation: 20,
-  },
   searchLeft: {
     flex: 1,
     minWidth: 0,
@@ -596,16 +516,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  searchInput: {
-    flex: 1,
-    height: 50,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
+  searchPlaceholder: {
     fontSize: 15,
-    color: '#000000',
-    // Web 默认焦点描边会盖住胶囊圆角；原生端忽略这两个样式。
-    outlineColor: 'transparent',
-    outlineWidth: 0,
+    lineHeight: 20,
+    color: '#8E8E93',
   },
   filterButton: {
     width: 34,
@@ -614,10 +528,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  filterButtonClose: {
-    borderRadius: 17,
-    backgroundColor: '#E5E5EA',
   },
   sectionHeader: {
     marginTop: 32,

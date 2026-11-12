@@ -20,17 +20,17 @@ describe('S7 M3 底栏第三格 ↔ 二级页（PRD_module 第 8 节）', () => 
     expect(exists('app/(tabs)/middle.tsx')).toBe(true);
   });
 
-  it('middle 页按设置渲染健身/日历，课表保持独立全屏页', () => {
+  it('middle 页按设置渲染健身/日历/课表，全部留在 Tab 内', () => {
     const page = read('app/(tabs)/middle.tsx');
     expect(page).toContain('<FitnessScreen mode="tab" />');
     expect(page).toContain('<CalendarScreen mode="tab" />');
-    expect(page).toContain('<Redirect href="/timetable" />');
-    // 课表不抽 body 进底栏页：middle 里不应直接渲染课表组件。
+    expect(page).toContain('<TimetableScreen mode="tab" />');
+    expect(page).not.toContain('Redirect');
     expect(page).not.toContain('TimetableGrid');
   });
 
   it('健身与日历各有一个二级页，用 page 模式显示圆形返回', () => {
-    expect(read('app/fitness.tsx')).toContain('<FitnessScreen mode="page" />');
+    expect(read('app/fitness.tsx')).toMatch(/<FitnessScreen[\s\S]*mode="page"/);
     expect(read('app/calendar.tsx')).toContain('<CalendarScreen mode="page"');
     expect(read('components/nav/sub-page-header.tsx')).toContain('accessibilityLabel="返回"');
     expect(read('components/nav/sub-page-header.tsx')).toContain('borderRadius: 18');
@@ -42,12 +42,13 @@ describe('S7 M3 底栏第三格 ↔ 二级页（PRD_module 第 8 节）', () => 
     expect(root).toContain('<Stack.Screen name="fitness" options={{ headerShown: false }} />');
   });
 
-  it('底栏第三格选课表时仍然 push 全屏课表页，其他时按路由名判断选中', () => {
+  it('底栏第三格选课表时留在 Tab 内，不再 push 全屏课表页', () => {
     const bar = read('components/nav/app-tab-bar.tsx');
-    expect(bar).toContain("tab.name === 'middle' && middle === 'timetable'");
-    expect(bar).toContain("router.push('/timetable')");
-    // 不再有把 'timetable' 当成 Tab 路由名的旧判断。
+    expect(bar).not.toContain("router.push('/timetable')");
+    expect(bar).not.toContain('onTimetablePage');
     expect(bar).not.toContain("if (tab.name === 'timetable')");
+    const middle = read('app/(tabs)/middle.tsx');
+    expect(middle).toContain('<TimetableScreen mode="tab" />');
   });
 
   it('首页 Dash 卡片：第三格是自己就切 Tab，否则开二级页', () => {
@@ -56,7 +57,9 @@ describe('S7 M3 底栏第三格 ↔ 二级页（PRD_module 第 8 节）', () => 
     expect(page).toContain(
       "middle === 'calendar' ? router.navigate('/middle') : router.push('/calendar')"
     );
-    expect(page).toContain("timetable: () => router.push('/timetable')");
+    expect(page).toContain(
+      "middle === 'timetable' ? router.navigate('/middle') : router.push('/timetable')"
+    );
   });
 
   it('第三个标签支持日历', () => {

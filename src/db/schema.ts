@@ -270,6 +270,19 @@ CREATE INDEX IF NOT EXISTS idx_sched_sessions_course
   ON sched_sessions(course_id, day_of_week);
 `;
 
+/**
+ * v9：搜索历史。只存关键词与最近搜索时间，不存业务结果。
+ * query 作为主键，重复搜索时更新时间和命中次数。
+ */
+export const MIGRATION_V9 = `
+CREATE TABLE IF NOT EXISTS search_history (
+  query TEXT PRIMARY KEY,
+  searched_at TEXT NOT NULL,
+  hit_count INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_search_history_time ON search_history(searched_at);
+`;
+
 export const MIGRATIONS: string[] = [
   MIGRATION_V1,
   MIGRATION_V2,
@@ -279,12 +292,14 @@ export const MIGRATIONS: string[] = [
   MIGRATION_V6,
   MIGRATION_V7,
   MIGRATION_V8,
+  MIGRATION_V9,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
 
 /** 所有业务表（清空数据时按此顺序删除）。 */
 export const ALL_TABLES = [
+  'search_history',
   'set_records',
   'training_items',
   'played_games',

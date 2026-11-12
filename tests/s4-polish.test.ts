@@ -9,10 +9,13 @@ function read(relative: string) {
 }
 
 describe('S4 今日/健身/资料/个性化细节（PRDv1.2.2 第 4–7 节）', () => {
-  it('日期条的今天用 1.5pt 描边而不是第二颗圆点', () => {
+  it('日期条选中态使用黑色胶囊，不再用描边标记今天', () => {
     const strip = read('components/ui/date-strip.tsx');
-    expect(strip).toContain('isToday && !selected');
-    expect(strip).toContain('borderWidth: 1.5');
+    expect(strip).toContain('const PILL_WIDTH = 38;');
+    expect(strip).toContain('const PILL_HEIGHT = 56;');
+    expect(strip).toContain('borderRadius: PILL_RADIUS');
+    expect(strip).toContain("backgroundColor: '#000000'");
+    expect(strip).not.toContain('borderWidth: 1.5');
   });
 
   it('健身页显示组数，日历按钮在添加左侧且同高 48', () => {

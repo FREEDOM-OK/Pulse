@@ -35,12 +35,16 @@ import { useTheme } from '@/hooks/use-theme';
 export interface FitnessScreenProps {
   /** tab = 底栏第三格（无返回、带底栏）；page = 二级页（圆形返回）。 */
   mode?: 'tab' | 'page';
+  /** 二级页从搜索结果进入时，直接定位到记录所属日期。 */
+  initialDate?: string;
 }
 
-export function FitnessScreen({ mode = 'tab' }: FitnessScreenProps) {
+export function FitnessScreen({ mode = 'tab', initialDate }: FitnessScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [date, setDate] = useState(todayStr());
+  const [date, setDate] = useState(
+    initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : todayStr()
+  );
   const [items, setItems] = useState<TrainingItemRow[]>([]);
   const [records, setRecords] = useState<SetRecordRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -81,10 +85,11 @@ export function FitnessScreen({ mode = 'tab' }: FitnessScreenProps) {
 
   useFocusEffect(
     useCallback(() => {
-      // 每次进入健身都回到今天，避免停留在上次翻到的日期。
-      // 注意不要依赖 load（它跟着 date 变），否则切日期会被立刻重置回今天。
-      setDate((current) => (current === todayStr() ? current : todayStr()));
-    }, [])
+      // 从搜索进来时保留目标日期；普通进入仍回到今天，避免停留在上次翻到的日期。
+      if (!initialDate) {
+        setDate((current) => (current === todayStr() ? current : todayStr()));
+      }
+    }, [initialDate])
   );
 
   const setsByItem = useMemo(() => {
@@ -133,6 +138,18 @@ export function FitnessScreen({ mode = 'tab' }: FitnessScreenProps) {
           title="健身"
           mode={mode}
           subtitle={`${formatDay(date)} · ${isToday(date) ? `今日 ${totalSets} 组` : `${totalSets} 组`}`}
+          subtitleAccessory={
+            date !== todayStr() ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="回到今天"
+                onPress={() => setDate(todayStr())}
+                hitSlop={6}
+                style={({ pressed }) => [styles.goToday, pressed && styles.pressed]}>
+                <ThemedText style={styles.goTodayText}>回今天</ThemedText>
+              </Pressable>
+            ) : undefined
+          }
           right={
             <View style={styles.headerActions}>
               <Pressable
@@ -336,6 +353,21 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.five,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  goToday: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 11,
+    backgroundColor: '#F2F2F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goTodayText: {
+    fontSize: 12,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
   },
   content: {
     paddingHorizontal: Spacing.three,

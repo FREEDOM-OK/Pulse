@@ -26,7 +26,7 @@ export async function run(page, baseUrl) {
   // 课表卡默认关闭
   if (await page.has('看课表')) throw new Error('课表卡默认应为关闭状态');
 
-  // 搜索框聚焦后吸到安全区下方，失焦后回到原位。
+  // 搜索是根级 Modal：全屏盖住底栏；空输入只显示历史，不触发业务查询。
   const searchBefore = await page.rectOfLabel('搜索');
   if (!searchBefore) throw new Error('找不到搜索框');
   const searchX = searchBefore.x + searchBefore.width / 2;
@@ -34,31 +34,33 @@ export async function run(page, baseUrl) {
   await page.mouseDown(searchX, searchY);
   await page.mouseUp(searchX, searchY);
   await sleep(500);
-  const searchFocused = await page.rectOfLabel('搜索');
-  if (!searchFocused || Math.abs(searchFocused.y - 8) > 1) {
-    throw new Error(`搜索框聚焦后未吸顶：${JSON.stringify(searchFocused)}`);
+  const overlay = await page.evaluate(`(() => {
+    const input = document.querySelector('input[placeholder="搜索任务、备忘或训练"]');
+    if (!input) return null;
+    const r = input.getBoundingClientRect();
+    const tab = document.querySelector('[aria-label="首页"]');
+    const tr = tab ? tab.getBoundingClientRect() : null;
+    const hit = tr ? document.elementFromPoint(tr.x + tr.width / 2, tr.y + tr.height / 2) : null;
+    return {
+      input: { x: r.x, y: r.y, width: r.width, height: r.height },
+      history: document.body.innerText.includes('最近搜索'),
+      tabCovered: !!hit && !tab.contains(hit),
+    };
+  })()`);
+  if (!overlay) throw new Error('搜索聚焦后没有全屏输入层');
+  if (Math.abs(overlay.input.y - 8) > 1) {
+    throw new Error(`搜索输入框未吸顶：${JSON.stringify(overlay.input)}`);
   }
+  if (!overlay.history) throw new Error('搜索空态没有显示最近搜索');
+  if (!overlay.tabCovered) throw new Error('搜索层没有盖住底栏');
   if (!(await page.rectOfLabel('关闭搜索'))) {
     throw new Error('搜索聚焦后缺少关闭按钮');
   }
-  const homeFaded = await page.evaluate(`(() => {
-    const el = Array.from(document.querySelectorAll('div,span'))
-      .filter((node) => node.textContent.trim() === 'Hey, 用户!')
-      .filter((node) => node.children.length === 0)[0];
-    if (!el) return false;
-    let node = el;
-    while (node && node !== document.body) {
-      if (Number(getComputedStyle(node).opacity) < 0.01) return true;
-      node = node.parentElement;
-    }
-    return false;
-  })()`);
-  if (!homeFaded) throw new Error('搜索聚焦后首页内容没有淡出');
   await page.clickLabel('关闭搜索');
   await sleep(500);
   const searchBlurred = await page.rectOfLabel('搜索');
   if (!searchBlurred || Math.abs(searchBlurred.y - searchBefore.y) > 1) {
-    throw new Error(`搜索框失焦后未复位：${JSON.stringify(searchBlurred)}`);
+    throw new Error(`搜索关闭后未复位：${JSON.stringify(searchBlurred)}`);
   }
 
   // 凸起 + → 记重大消费，首页日历卡立刻更新

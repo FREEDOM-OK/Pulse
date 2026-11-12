@@ -4,6 +4,92 @@
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
 > - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
 
+## v1.2.14 — 2026-11-12
+
+### 搜索：根级全屏 Overlay + 历史表
+
+- 新增 SQLite V9 `search_history(query, searched_at, hit_count)` 与索引；搜索历史最多显示 10 条，支持“清空历史”，重复关键词会更新时间与命中次数。
+- 首页搜索改为 Root 级 `Modal` 全屏层，`statusBarTranslucent` / `navigationBarTranslucent`，打开 220ms、关闭 200ms；Overlay 完全盖住底部悬浮 TabBar。
+- 聚焦且输入为空时只读取 `search_history` 并渲染历史 Chip / “暂无搜索历史”，不再调用 `searchRecords('')` 查业务表。
+- 只有 `onSubmitEditing` 且 `query.trim().length > 0` 时才写入历史并查询 tasks / memos / set_records；结果卡固定 72 高、圆角 16，左侧彩色标签，右侧日期。
+- 结果点击先 `Keyboard.dismiss()` 并执行 200ms 收起，再 `router.push`：fitness 带 `date` 进 `/fitness`；计划/备忘进带 `DateStrip` 的 `/day/[date]` 并高亮该日期。
+
+### Dash：220×280 竖卡
+
+- `DASH_CARD_WIDTH=220`、`DASH_CARD_HEIGHT=280`、`SPACING=16`、`SNAP_INTERVAL=236`、左侧 20、右侧留白 135、圆角 26；`contentContainerStyle` 为 `paddingLeft: 20, paddingRight: 135`。
+- 视差缩放 `0.88/1/0.88`，并叠加 `translateY: 14/0/14`；375 宽实测首卡右侧第二张可见约 105.8dp，Tasks 标题在首屏 y≈536 可见。
+- 卡片左上图标改为 48×48 纯白圆底、24dp 图标；右上箭头移到右下 `right:16/bottom:16` 的 36×36 白圆；文字块右下留出 44dp 避让。
+
+### 日期条 / 课表 / 下拉
+
+- DateStrip 删除内部“本周”按钮与 `handleGoToday`，页面恢复 `paddingHorizontal:16`；选中态只保留 38×56、radius 19 的纯黑胶囊，今天未选中不再有任何边框/描边，仅通过数字加粗与底部小圆点标识。
+- 计划页与健身页在日期副标题右侧新增“回今天”胶囊（`#F2F2F7`、12sp/600、`#1C1C1E`、radius 11），仅当 `date !== today` 时显示，点击复位日期；右上角日历图标保持原位。
+- 课表拆出 `TimetableScreen({ mode })`：`(tabs)/middle` 在第三格为课表时直接渲染 `mode="tab"`，保留底栏、无返回按钮；只有非 Tab 场景才走 `/timetable` 二级页并显示 36×36 圆形返回。
+- 首页移除 `RefreshControl`，所有平台统一 PanResponder + Reanimated `pullDistance`：位移 `Math.min(Math.max(dy * 0.5, 0), 120)`，标题 `[0,100]→[1,1.18]`，松手 `>60` 刷新，完成后 `withSpring(0,{damping:18,stiffness:180})`；内容整体 `translateY` 与标题联动，无转圈图标。
+- 课程行地点继续按 `periodLabel · time · room` 拼接；`listCoursesForDate` 已从 `sched_courses.location` 映射 `room`，空地点自动省略最后一段。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts`、`tests/s0-settings-v6.test.ts`、`tests/a1-timetable-v7.test.ts`、`tests/s2-tab-bar.test.ts`、`tests/s3-dash.test.ts`、`tests/s5-module-m1.test.ts`、`tests/s7-module-m3.test.ts`、`tests/s8-module-m5.test.ts`；新增 `tests/p9-search.test.ts`。
+- `npm run verify` 通过：38 个测试文件 / 258 条用例、`tsc --noEmit`、`expo lint`；E2E 9 个场景全部通过。
+- 375×812 Web 实测：搜索覆盖底栏、空态只显示历史、回车出结果、结果带日期跳转；Dash 220×280；计划/健身“回今天”；middle 课表无返回；下拉内容 `translateY=45`、标题 `scale=1.081` 后回弹。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
+## v1.2.13 — 2026-11-12
+
+### 日期条快捷回到今天 / 去残留描边
+
+- `DateStrip` 保留 101 周 `FlatList` 分页与 40×60 日期格；清除 Web 端日期格点击后的 `outline` 焦点外框（`borderWidth: 0`、`outlineWidth: 0`、透明 outline），选中态只剩 38×56 / 圆角 19 的黑色胶囊，不再叠加任何“今天”描边。
+- 日期条右侧新增轻量“本周”按钮：`#F2F2F7` 胶囊、12sp 文字、36×28、右侧 16、垂直居中，`accessibilityLabel="回到今天"`。日期页 `paddingRight: 58` 给按钮留位，7 天仍保持 `space-between`。
+- 点击“本周”会立即把 `selectedDate` 重置为今天；若今天在当前 101 周窗口内，直接 `scrollToOffset` 到对应周页，否则以今天重建窗口。计划页和健身页共用同一组件，按钮同时生效，右上角日历图标保持不变。
+
+### Dash 卡片放大
+
+- `DASH_CARD_WIDTH` 150 → 175，`DASH_CARD_HEIGHT` 190 → 235，圆角保持 22；卡片改为更明显的竖长方形，`SPACING=16`、左侧 20、右侧候场第二张继续按 0.9 视差缩放并在屏幕右侧露出。
+- 首页 `contentContainerStyle` 仍为 `paddingBottom: 120`；390×844 实测 Tasks 标题在首屏 y≈504 可见。
+
+### 沉浸搜索与结果跳转
+
+- 新增 `src/db/repositories/search.ts`：统一搜索计划任务（标题/备注）、备忘正文、健身记录（按日期 + 动作聚合组数）；空关键词返回最近记录，每源 24 条、总 30 条。
+- 新增 `SearchResults`：全屏搜索面板内 `FlatList`，每条固定 72 高、圆角 16 白卡；左侧计划/备忘/健身彩色标签，中间标题与副标题，右侧所属日期；空结果显示“没有找到相关内容”。
+- 首页搜索聚焦后输入 120ms 防抖调用 `searchRecords`，结果面板渐显；点击结果先执行收起动画，再按类型跳转：计划/备忘 → `/day/[date]`，健身 → `/fitness?date=YYYY-MM-DD`。
+- 新增 `src/app/day/[date].tsx` 二级详情页（`SubPageHeader` + 该日 `TodayList`）；`fitness.tsx` 接收 `date` 并传给 `FitnessScreen initialDate`，从搜索进入时不会被聚焦逻辑拉回今天。
+- `src/app/_layout.tsx` 注册 `day/[date]` 路由。
+
+### 下拉标题放大
+
+- iOS 恢复原生负 overscroll：`scrollY` 经 `[-100, 0] → [1.2, 1]` 驱动标题 `scale`，整页由 ScrollView 原生位移；`onScrollEndDrag` 越过 `-64` 触发 `handleRefresh()`，无 `RefreshControl` 转圈。
+- Android/Web 保留 `PanResponder`：顶部向下拉时 `pull` 0..120，整块内容 `translateY`，标题 `1 → 1.2`；未过 64 立即 spring 回位，过阈值等 `handleRefresh().finally()` 后再回弹。
+- 标题 transform 只作用于左侧文字列（`transformOrigin: 'left center'`），右侧头像不被裁切；`pullWrap` 设置 `userSelect: 'none'`，避免 Web 选中文字抢走手势。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts`、`tests/s3-dash.test.ts`、`tests/s4-polish.test.ts`、`tests/s5-module-m1.test.ts`、`tests/s7-module-m3.test.ts`、`tests/s8-module-m5.test.ts`；新增 `tests/p9-search.test.ts`。
+- `npm run verify` 通过：38 个测试文件 / 258 条用例、`tsc --noEmit`、`expo lint`。
+- E2E 9 个 UI 场景全部通过。Web 390×844 实测：日期条 7 天不溢出、左滑翻周后保持星期几、“本周”回到今天；Dash 175×235、Tasks 标题首屏可见；下拉整页联动、标题放大不裁切；搜索聚焦、结果卡片与 `/day/2026-11-12` 跳转均正常。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
+## v1.2.12 — 2026-11-12
+
+### DateStrip 按周分页重构
+
+- `DateStrip` 从「3 页 ScrollView + 翻周后强制回中间页」改为 `FlatList` 的 101 个自然周分页（当前周前后各 50 周），每页一整屏宽，一次滑动只翻一周；不再回写滚动位置，消除翻周黑框跳动。
+- 每页固定 7 天，`paddingHorizontal: 16`、`justifyContent: 'space-between'`，容器高 80；DayCell 固定 40×60，数字 16sp 粗体、星期 12sp，未选中 `#8E8E93`，选中白色。选中态为 38×56 / 圆角 19 的纯黑胶囊，150ms `Easing.out(Easing.cubic)` 淡入缩放，不做跨格平滑滑动。
+- DayCell 用 `React.memo` 包裹，只比较选中态、记录点、是否今天和主题文字色；翻周时未选中的格子不再重渲染。`FlatList` 使用 `windowSize=5`、`initialNumToRender=3`、`getItemLayout`，Web 实测常驻约 6 周（42 个格子），不是 101 周全量挂载。
+- `onMomentumScrollEnd` 用 `Math.round(offsetX / pageWidth)` 计算当前周：当前周自动选中今天；其他周保持原来的星期几（如周三 → 下周三）；立即 `onChange(newDate)` 驱动 Today/Fitness 重新查询，不需要再点一次日期。Web 端保留 140ms 滚动停止兜底，并用页面/日期去重避免兜底与吸附互相触发。
+- 日历跳到预加载窗口外时，围绕新日期重建 101 周窗口；窗口内跳转只滚动到对应页，不重建列表。
+- 文件：`src/components/ui/date-strip.tsx`、`tests/s5-module-m1.test.ts`、`tests/s4-polish.test.ts`。
+
+### 测试
+
+- 源码约束更新为 101 周、`pagingEnabled`、`onMomentumScrollEnd`、40×60 日期格、38×56 黑色胶囊、150ms 淡入、`React.memo`；移除旧的“今天 1.5pt 描边”和 3 页 ScrollView 断言。
+- `npm run verify` 通过：37 个测试文件 / 254 条用例、`tsc --noEmit`、`expo lint`。
+- E2E 9 个 UI 场景全部通过。Web 390×844 实测：7 个日期格 x=16…374、每格 40×60、胶囊 38×56/radius19；左滑从 11-09…11-15 到 11-16…11-22，标题立即变为 `11月19日 周四`；从周二 11-10 出发翻到下周会保持周二（11-17）。跨周建任务后翻回本周消失、再翻到下周重新出现。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
 ## v1.2.11 — 2026-11-12
 
 ### 自然周日期条 / 课程地点 / 统一下拉 / 课程颜色
