@@ -90,6 +90,7 @@ describe('buildTodayItems', () => {
       color: '#4C8DF6',
       startPeriod: 3,
       endPeriod: 4,
+      room: undefined,
     });
   });
 

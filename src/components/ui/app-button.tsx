@@ -46,12 +46,14 @@ export function AppButton({
 
 const styles = StyleSheet.create({
   button: {
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
+    height: 38,
+    flexGrow: 0,
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: Spacing.three,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 38,
   },
   fullWidth: {
     flex: 1,

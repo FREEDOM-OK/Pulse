@@ -34,19 +34,54 @@ describe('首页结构（PRDv1.2 P5）', () => {
     expect(page).toContain('<DashCarousel');
     expect(page).toContain('Dash');
     expect(page).toContain('Tasks');
-    expect(page).toContain('onlyTasksAndCourses');
+    expect(page).not.toContain('onlyTasksAndCourses');
     expect(page).toContain('checkSize={20}');
     expect(page).toContain('checkRadius={6}');
     expect(page).toContain('courseVariant="home"');
-    expect(page).toContain('RefreshControl');
+    expect(page).not.toContain('RefreshControl');
+    expect(page).toContain('bounces={false}');
+    expect(page).toContain('.finally(() => {');
+    expect(page).toContain("userSelect: 'none'");
+    expect(page).toContain("transformOrigin: 'left center'");
     expect(page).toContain('<Animated.View style={contentTransform}>');
     expect(page).toContain('rowSpacing={16}');
+    expect(page).toContain('onFocus={handleSearchFocus}');
+    expect(page).toContain('onBlur={handleSearchBlur}');
+    expect(page).toContain('searchTranslateY');
+    expect(page).toContain('searchBackgroundOpacity');
+    expect(page).toContain('searchPanel');
+    expect(page).toContain('filterButtonClose');
+    expect(page).toContain('关闭搜索');
+    expect(page).toContain('duration: 250');
+    expect(page).toContain('Easing.bezier(0.25, 0.1, 0.25, 1)');
+  });
+
+  it('首页勾选任务后广播数据版本，计划页与首页保持同步', () => {
+    const list = readSrc('components/today/today-list.tsx');
+    expect(list).toMatch(/await toggleTask\(task\.id\);[\s\S]{0,300}bumpDataVersion\(\);/);
+  });
+
+  it('新建菜单与表单按钮使用固定高度，不会被 flex 拉成长条', () => {
+    const menu = readSrc('components/ui/action-menu.tsx');
+    expect(menu).toMatch(/item:\s*{[^}]*height: 56/s);
+    expect(menu).toContain('justifyContent: \'flex-start\'');
+
+    const button = readSrc('components/ui/app-button.tsx');
+    expect(button).toContain('height: 38');
+    expect(button).toContain('paddingHorizontal: 16');
+    expect(button).toContain('paddingVertical: 8');
+    expect(button).toContain('flexGrow: 0');
+
+    const modal = readSrc('components/ui/modal-sheet.tsx');
+    expect(modal).toMatch(/actionsRow:\s*{[^}]*flexDirection: 'row'[^}]*alignItems: 'center'/s);
+    expect(modal).toContain("flexWrap: 'nowrap'");
   });
 
   it('首页不再有上下翻页、内嵌日历与悬浮 FAB', () => {
     const page = readApp('(tabs)/index.tsx');
-    // M5 起首页允许用 PanResponder 做「安卓下拉拉伸」，但不能再有横向翻页/滑动分页的响应者。
-    expect(page).not.toContain('onMoveShouldSetPanResponderCapture');
+    // M5 起首页允许用 PanResponder 做「安卓下拉拉伸」；捕获阶段只接管顶部向下手势。
+    expect(page).toContain('onMoveShouldSetPanResponderCapture');
+    expect(page).toContain('gesture.dy > 6');
     expect(page).not.toContain('pagingEnabled');
     expect(page).not.toContain('BackHandler');
     expect(page).not.toContain('CalendarPanel');
@@ -64,13 +99,19 @@ describe('首页结构（PRDv1.2 P5）', () => {
 
   it('首页课程/待办行与添加任务弹窗使用新规格', () => {
     const list = readSrc('components/today/today-list.tsx');
-    expect(list).toContain("return all.filter((item) => item.kind !== 'memo');");
+    expect(list).not.toContain("item.kind !== 'memo'");
+    expect(list).toContain('[...sorted.active, ...sorted.completed]');
+    expect(list).not.toContain('已完成');
 
     const course = readSrc('components/today/course-row.tsx');
     expect(course).toContain('home && styles.dotHome');
     expect(course).toMatch(/dotHome:\s*{[^}]*width: 8[^}]*height: 8[^}]*borderRadius: 4/s);
-    expect(course).toContain("'#4CD964'");
-    expect(course).toContain('{!home ? (');
+    expect(course).toContain('dotColor ?? course.color');
+    expect(course).toContain('course.room');
+    expect(course).toContain("{!home ? (");
+
+    expect(list).toContain('getTimetableSettings');
+    expect(list).toContain('softenColor(course.color, courseSaturation)');
 
     const task = readSrc('components/today/task-row.tsx');
     expect(task).toContain('checkSize = 22');

@@ -16,14 +16,17 @@ function readSource(relative: string) {
 describe('M1 日期条 / 健身已完成卡 / 滚轮高亮', () => {
   const dateStrip = readSource('components/ui/date-strip.tsx');
 
-  it('日期条不再靠 key 强制重挂来居中（点日期不该滚动）', () => {
-    expect(dateStrip).not.toContain('key={value}');
-    // 用 ref + scrollTo 手动控制，且只有窗口变化才滚
-    expect(dateStrip).toContain('ScrollViewInstance');
-    expect(dateStrip).toContain('centeredLength');
-    expect(dateStrip).toContain('scrollRef.current?.scrollTo');
-    // 点选时列表成员不变 → 直接 return（这条注释就是行为契约）
-    expect(dateStrip).toContain('days.length === centeredLength.current');
+  it('日期条按自然周整页翻动，屏幕固定显示周一到周日', () => {
+    expect(dateStrip).toContain('pagingEnabled');
+    expect(dateStrip).toContain('onMomentumScrollEnd');
+    expect(dateStrip).toContain('onScroll={');
+    expect(dateStrip).toContain('settleTimer');
+    expect(dateStrip).toContain('handledPage');
+    expect(dateStrip).toContain('[addDays(weekStart, -7), weekStart, addDays(weekStart, 7)]');
+    expect(dateStrip).toContain('const delta = page === 0 ? -7 : 7;');
+    expect(dateStrip).toContain('onChange(addDays(value, delta));');
+    expect(dateStrip).toContain('scrollTo({ x: pageWidth, animated: false })');
+    expect(dateStrip).not.toContain('RANGE_DAYS');
   });
 
   it('健身已完成记录比待训练卡高：16pt 内边距 + 70 最小高度', () => {

@@ -17,6 +17,8 @@ export interface TodayItemCourse {
   color: string;
   startPeriod: number;
   endPeriod: number;
+  /** 上课地点，来自课表时段。 */
+  room?: string;
 }
 
 export interface TodayItem {
@@ -39,7 +41,7 @@ export interface TodayItem {
 export interface TodaySorted {
   /** 未完成项，已按模式排好序。 */
   active: TodayItem[];
-  /** 已完成任务，按原始顺序沉底折叠。 */
+  /** 已完成任务，按原始顺序平铺沉底。 */
   completed: TodayItem[];
 }
 

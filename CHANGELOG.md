@@ -4,6 +4,58 @@
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
 > - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
 
+## v1.2.11 — 2026-11-12
+
+### 自然周日期条 / 课程地点 / 统一下拉 / 课程颜色
+
+- `DateStrip` 改为自然周整页翻动：固定显示周一到周日 7 天，横向 3 页（上周 / 本周 / 下周），`pagingEnabled` + `onMomentumScrollEnd` 一次翻一周；Web 端补充 `onScroll` 140ms 防抖兜底并由 `handledPage` 去重；翻页后保持当前星期几，选中态、今天描边、记录圆点与日历入口均保留。
+- 首页与计划页的课程行统一追加地点：`meta = [periodLabel, course.time, course.room].filter(Boolean).join(' · ')`，例如 `第 2-3 节 · 08:55 - 10:45 · w201`；`TodayItemCourse` 与 `courseToTodayItem` 同步补 `room`。
+- 首页移除原生 `RefreshControl`，iOS/Android 统一用 `PanResponder`：顶部向下拉动整页 `translateY`（0..120），标题仅左侧文字列按 `1 → 1.2` 放大并轻微上提，右侧头像不缩放；松手未过阈值立即 spring 回位，过 64 则刷新，数据加载完再弹回，全程无转圈。Web 端 `pullWrap` 加 `userSelect: 'none'`，避免选中文字抢走手势。
+- 课程圆点改为读取课表数据库 `course.color`，并通过 `getTimetableSettings().saturation` + `softenColor` 与课表卡片使用同一饱和度；首页 8dp、计划页 10dp，课程行不再硬编码 `#4CD964`。
+- 文件：`src/components/ui/date-strip.tsx`、`src/components/today/course-row.tsx`、`src/components/today/today-list.tsx`、`src/app/(tabs)/index.tsx`、`src/lib/today-sort.ts`、`src/lib/today-items.ts`。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts`（无 `RefreshControl`、`userSelect`、标题 `transformOrigin`、课程地点/颜色、下拉 `.finally`）、`tests/s5-module-m1.test.ts`（自然周三页、`onScroll` 兜底、`handledPage`）、`tests/s8-module-m5.test.ts`（两端统一下拉）、`tests/p3-today-items.test.ts`（`room`）。
+- `npm run verify` 通过：37 个测试文件 / 253 条用例、`tsc --noEmit`、`expo lint`。
+- E2E 9 个 UI 场景全部通过。Web 390×844 实测：日期条 7 天不溢出，左滑后从 11-09…11-15 翻到 11-16…11-22，标题变为 `11月19日 周四`；下拉整页下移、标题放大且不被裁切，无转圈。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
+## v1.2.10 — 2026-11-11
+
+### 首页数据镜像 / 完成项沉底 / 下拉刷新 / 沉浸搜索
+
+- 首页 Tasks 不再过滤备忘：移除 `onlyTasksAndCourses` 过滤，直接使用 `buildTodayItems` 的课程 + 任务 + 备忘。课程保持 8dp `#4CD964` 圆点、无复选框；任务使用 20×20 / 圆角 6 / `#8E8E93` 边框；备忘保持灰色圆点、无复选框。`MemoRowItem` 新增 `titleColor` / `metaColor` / `dotColor`，首页固定黑/灰配色，深色模式下也不会白字白底。
+- 删除“已完成 N 项”折叠：`flatItems = [...sorted.active, ...sorted.completed]` 后平铺渲染，完成项保留划线/变灰并自动沉到列表末尾；不再有折叠分组和 `completedOpen` 状态。设置里的“隐藏已完成”仍然生效。
+- 恢复下拉刷新与标题放大：`Animated.ScrollView` 在 iOS/Android 都挂 `RefreshControl`；iOS 用 `scrollY` 的 `[-180, 0] → [1.2, 1]` 驱动标题，Android 用 `pull` 的 `0..120 → 1..1.2` 驱动标题，同时把整页内容包在 `contentTransform` 里一起下移；松手 spring 归位，标题只额外放大，不会再压住 Search / Dash / Tasks。Android 在顶部捕获向下垂直手势，避免 TextInput 截断下拉。
+- 搜索栏改为完整沉浸式动画：聚焦时搜索条 250ms `Easing.bezier(0.25, 0.1, 0.25, 1)` 上移到 `insets.top + 8`，全屏 `#F7F7FA` 面板淡入，标题与 Dash/Tasks 整体淡出并禁用触摸；筛选按钮变成 34×34 圆形 X（`关闭搜索`），失焦后反向淡入归位、恢复滚动。搜索框保持白底、16 圆角和原阴影，不随背景一起淡出。
+- 文件：`src/app/(tabs)/index.tsx`、`src/components/today/today-list.tsx`、`src/components/today/memo-row.tsx`、`src/lib/today-sort.ts`。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts` 与 `tests/e2e/home.e2e.mjs`、`tests/e2e/today.e2e.mjs`：覆盖备忘镜像、完成项平铺沉底、无“已完成”分组、搜索吸顶/背景淡出/关闭复位、首页↔计划页双向同步。
+- `npm run verify` 通过：37 个测试文件 / 253 条用例、`tsc --noEmit`、`expo lint`。
+- E2E 9 个 UI 场景全部通过。Web 500×1000 实测：搜索框 y=100 → 8 → 100；首页同时显示任务 A、任务 B、备忘 C，勾选任务 A 后顺序为备忘 C → 任务 B → 任务 A，且无“已完成”分组。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
+## v1.2.9 — 2026-11-11
+
+### 首页紧急修复（任务同步 / 菜单排版 / 搜索吸顶）
+
+- 首页与计划页共用同一份任务数据：`TodayList.handleToggleTask` 在 `toggleTask` 落库后调用 `bumpDataVersion()`，两个 Tab 的列表都会重新读取 SQLite；首页勾选后计划页立即显示完成态，计划页取消后首页也同步恢复。
+- 新建菜单项固定 `height: 56`、左对齐、禁止 flex 拉伸；取消项固定 `height: 52`。菜单卡片增加 `maxHeight: 80%` 与 `flexGrow: 0`，不会再被内容撑成异常比例。
+- `AppButton` 改为固定 `height: 38` + `paddingHorizontal: 16` / `paddingVertical: 8`，取消 `minHeight` 的弹性空间；任务表单的 `actionsRow` 保持横向、右对齐、`nowrap`，取消/保存不再被纵向拉长。
+- 首页搜索框改为真实 `TextInput`，聚焦时用 250ms `Easing.bezier(0.25, 0.1, 0.25, 1)` 平滑上移到安全区下方（`insets.top + 8`），标题淡出；失焦弹回原位并恢复标题。聚焦期间禁用页面滚动，Web 端隐藏默认焦点描边。
+- 文件：`src/app/(tabs)/index.tsx`、`src/components/today/today-list.tsx`、`src/components/ui/action-menu.tsx`、`src/components/ui/app-button.tsx`、`src/components/ui/modal-sheet.tsx`。
+
+### 测试
+
+- 更新 `tests/p5-home.test.ts`（任务版本广播、菜单/按钮固定高度、搜索聚焦动画）与 `tests/e2e/home.e2e.mjs`（搜索吸顶/复位、首页↔计划页双向同步）。
+- `npm run verify` 通过：37 个测试文件 / 253 条用例、`tsc --noEmit`、`expo lint`。
+- E2E 9 个 UI 场景全部通过；Web 500×1000 实测搜索框 y=100→8→100，菜单项 56、取消 52，表单按钮恢复 38 高。
+
 ## v1.2.8 — 2026-11-11
 
 ### 首页下拉刷新 / 竖版卡片 / 课程+待办数据打通

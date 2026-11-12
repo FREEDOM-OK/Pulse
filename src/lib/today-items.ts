@@ -51,6 +51,7 @@ export function courseToTodayItem(date: string, course: CourseOnDate): TodayItem
       color: course.color,
       startPeriod: course.startPeriod,
       endPeriod: course.endPeriod,
+      room: course.room,
     },
   };
 }

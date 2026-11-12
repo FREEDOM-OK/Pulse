@@ -13,7 +13,12 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StaggeredAppear } from '@/components/ui/staggered-appear';
 import { Spacing } from '@/constants/theme';
 import { deleteMemo, listMemosByDate, toggleMemoPin } from '@/db/repositories/memos';
-import { getHideCompleted, getSortMode } from '@/db/repositories/settings';
+import {
+  DEFAULT_SATURATION,
+  getHideCompleted,
+  getSortMode,
+  getTimetableSettings,
+} from '@/db/repositories/settings';
 import { deleteTask, listTasksByDate, toggleTask } from '@/db/repositories/tasks';
 import type { MemoRow, SortMode, TaskRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
@@ -21,6 +26,7 @@ import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
 import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
 import { buildTodayItems } from '@/lib/today-items';
 import { sortTodayItems, type TodayItem } from '@/lib/today-sort';
+import { softenColor } from '@/lib/timetable-core';
 
 type DeleteTarget = { kind: 'task' | 'memo'; id: number; title: string } | null;
 
@@ -30,8 +36,6 @@ export interface TodayListProps {
   emptyHint?: string;
   /** 只列任务，不混入备忘 / 课表。 */
   onlyTasks?: boolean;
-  /** 首页 Tasks：课程 + 任务，不混入备忘。 */
-  onlyTasksAndCourses?: boolean;
   /** 每行底部留白；首页用 16。 */
   rowSpacing?: number;
   /** 是否显示行间分隔线。 */
@@ -69,7 +73,6 @@ export function TodayList({
   emptyText,
   emptyHint,
   onlyTasks = false,
-  onlyTasksAndCourses = false,
   rowSpacing = 0,
   showSeparators = true,
   showAddRow = true,
@@ -90,6 +93,8 @@ export function TodayList({
   const [memos, setMemos] = useState<MemoRow[]>([]);
   const [courses, setCourses] = useState<CourseOnDate[]>([]);
   const [mode, setMode] = useState<SortMode>('memo-first');
+  /** 与课表卡片同一套饱和度，保证课程圆点和课表里的颜色一致。 */
+  const [courseSaturation, setCourseSaturation] = useState(DEFAULT_SATURATION);
 
   const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
@@ -101,9 +106,8 @@ export function TodayList({
 
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState<DeleteTarget>(null);
-  const [completedOpen, setCompletedOpen] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
-  /** 刚勾选的条目先留在原位，300ms 后再沉到「已完成」（PRDv1.2.2 第 5.2 节）。 */
+  /** 刚勾选的条目先留在原位，300ms 后再沉到列表底部。 */
   const [justChecked, setJustChecked] = useState<Set<string>>(() => new Set());
 
   const dataVersion = useDataVersion();
@@ -111,18 +115,20 @@ export function TodayList({
   statsRef.current = onStats;
 
   const load = useCallback(async () => {
-    const [taskList, memoList, courseList, sortMode, hide] = await Promise.all([
+    const [taskList, memoList, courseList, sortMode, hide, timetable] = await Promise.all([
       listTasksByDate(date),
       listMemosByDate(date),
       listCoursesForDate(date),
       getSortMode(),
       getHideCompleted(),
+      getTimetableSettings(),
     ]);
     setTasks(taskList);
     setMemos(memoList);
     setCourses(courseList);
     setMode(sortMode);
     setHideCompleted(hide);
+    setCourseSaturation(timetable.saturation);
     statsRef.current?.({ total: taskList.length, done: taskList.filter((t) => t.done === 1).length });
   }, [date]);
 
@@ -144,10 +150,21 @@ export function TodayList({
   const items = useMemo(() => {
     const all = buildTodayItems(date, sortingTasks, memos, courses);
     if (onlyTasks) return all.filter((item) => item.kind === 'task');
-    if (onlyTasksAndCourses) return all.filter((item) => item.kind !== 'memo');
     return all;
-  }, [date, sortingTasks, memos, courses, onlyTasks, onlyTasksAndCourses]);
+  }, [date, sortingTasks, memos, courses, onlyTasks]);
+  // 完成项不再单独分组：排序后直接接在未完成项后面，整个列表保持平铺。
   const sorted = useMemo(() => sortTodayItems(items, mode), [items, mode]);
+  const flatItems = useMemo(
+    () => [...sorted.active, ...sorted.completed],
+    [sorted.active, sorted.completed]
+  );
+  const visibleItems = useMemo(
+    () =>
+      hideCompleted
+        ? flatItems.filter((item) => !(item.kind === 'task' && item.done))
+        : flatItems,
+    [flatItems, hideCompleted]
+  );
 
   const taskByKey = useMemo(() => new Map(tasks.map((task) => [`task-${task.id}`, task])), [tasks]);
   const memoByKey = useMemo(() => new Map(memos.map((memo) => [`memo-${memo.id}`, memo])), [memos]);
@@ -172,6 +189,9 @@ export function TodayList({
       return next;
     });
     await toggleTask(task.id);
+    // 首页与「计划」页各自挂着一个 TodayList；写库后必须广播版本，
+    // 否则另一个 Tab 保持挂载时不会重新读取，勾选状态就会不一致。
+    bumpDataVersion();
     setTimeout(() => {
       setJustChecked(new Set());
       load().catch(() => undefined);
@@ -218,7 +238,15 @@ export function TodayList({
     if (item.kind === 'memo') {
       const memo = memoByKey.get(item.key);
       if (!memo) return null;
-      return <MemoRowItem memo={memo} onMenu={() => setMenuMemo(memo)} />;
+      return (
+        <MemoRowItem
+          memo={memo}
+          titleColor={textColor}
+          metaColor={secondaryTextColor}
+          dotColor={secondaryTextColor}
+          onMenu={() => setMenuMemo(memo)}
+        />
+      );
     }
     const course = courseByKey.get(item.key);
     if (!course) return null;
@@ -228,6 +256,7 @@ export function TodayList({
         variant={courseVariant}
         titleColor={textColor}
         metaColor={secondaryTextColor}
+        dotColor={softenColor(course.color, courseSaturation)}
         onPress={() =>
           router.push({ pathname: '/timetable', params: { courseId: String(course.courseId) } })
         }
@@ -235,7 +264,7 @@ export function TodayList({
     );
   };
 
-  const isEmpty = sorted.active.length === 0 && (hideCompleted || sorted.completed.length === 0);
+  const isEmpty = visibleItems.length === 0;
 
   return (
     <View>
@@ -248,7 +277,7 @@ export function TodayList({
         />
       ) : null}
 
-      {sorted.active.map((item, index) => (
+      {visibleItems.map((item, index) => (
         <StaggeredAppear key={item.key} index={index}>
           <View style={rowSpacing > 0 ? { marginBottom: rowSpacing } : undefined}>
             {renderRow(item)}
@@ -258,39 +287,6 @@ export function TodayList({
           </View>
         </StaggeredAppear>
       ))}
-
-      {!hideCompleted && sorted.completed.length > 0 ? (
-        <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: completedOpen }}
-            onPress={() => setCompletedOpen((open) => !open)}
-            style={({ pressed }) => [styles.completedHeader, pressed && styles.pressed]}>
-            <ThemedText
-              type="small"
-              themeColor="textSecondary"
-              style={secondaryTextColor ? { color: secondaryTextColor } : undefined}>
-              已完成 {sorted.completed.length} 项
-            </ThemedText>
-            <ThemedText
-              type="small"
-              themeColor="textSecondary"
-              style={secondaryTextColor ? { color: secondaryTextColor } : undefined}>
-              {completedOpen ? '⌄' : '›'}
-            </ThemedText>
-          </Pressable>
-          {completedOpen
-            ? sorted.completed.map((item) => (
-                <View key={item.key} style={rowSpacing > 0 ? { marginBottom: rowSpacing } : undefined}>
-                  {renderRow(item)}
-                  {showSeparators ? (
-                    <View style={[styles.separator, { backgroundColor: theme.backgroundElement }]} />
-                  ) : null}
-                </View>
-              ))
-            : null}
-        </View>
-      ) : null}
 
       {showAddRow ? (
         <Pressable
@@ -426,12 +422,6 @@ export function TodayList({
 const styles = StyleSheet.create({
   separator: {
     height: StyleSheet.hairlineWidth,
-  },
-  completedHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing.three,
   },
   addRow: {
     paddingVertical: Spacing.four,

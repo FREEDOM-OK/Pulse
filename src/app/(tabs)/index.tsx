@@ -1,14 +1,13 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ElementRef } from 'react';
 import {
-  ActivityIndicator,
   Animated,
+  Easing,
   Image,
   PanResponder,
-  Platform,
   Pressable,
-  RefreshControl,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,7 +47,6 @@ export default function HomeScreen() {
   const router = useRouter();
   const today = todayStr();
   const dataVersion = useDataVersion();
-  const scrollY = useRef(new Animated.Value(0)).current;
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [cards, setCards] = useState<HomeCardId[]>([]);
@@ -67,8 +65,19 @@ export default function HomeScreen() {
   const [todayCourses, setTodayCourses] = useState<CourseOnDate[]>([]);
   /** 底栏第三格放的是谁：决定健身/日历卡片是切到第 3 页还是开二级页。 */
   const [middle, setMiddle] = useState<MiddleTab>('fitness');
-  const [refreshing, setRefreshing] = useState(false);
   const refreshingRef = useRef(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const searchInputRef = useRef<ElementRef<typeof TextInput>>(null);
+  const searchTranslateY = useRef(new Animated.Value(0)).current;
+  /** 0 = 首页，1 = 沉浸搜索；用于背景淡出与搜索面板淡入。 */
+  const searchProgress = useRef(new Animated.Value(0)).current;
+  const searchBackgroundOpacity = searchProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
+  const searchLayoutY = useRef(0);
+  const scrollOffsetRef = useRef(0);
 
   const load = useCallback(async () => {
     const monthStart = `${today.slice(0, 7)}-01`;
@@ -119,14 +128,12 @@ export default function HomeScreen() {
   const handleRefresh = useCallback(async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
-    setRefreshing(true);
     try {
       await load();
       // 让首页 Tasks / 计划页共享的 SQLite 数据一起重新读取。
       bumpDataVersion();
     } finally {
       refreshingRef.current = false;
-      setRefreshing(false);
     }
   }, [load]);
 
@@ -205,7 +212,7 @@ export default function HomeScreen() {
   const weekday = WEEKDAY_CHARS[parseDate(today).getDay()];
   const dateLabel = `今天是 ${formatMonthDay(today)} 星期${weekday}`;
 
-  // 安卓的下拉拉伸：ScrollView 到顶时 contentOffset 不会变成负数，iOS 那套 scrollY 插值在安卓永远不触发。
+  // 两个平台统一用这套下拉拉伸，不再依赖原生刷新指示器 / iOS 原生 overscroll。
   // 这里只在「列表已经在顶部 + 向下拉」时用 PanResponder 接手，其余情况一律不拦截，避免抢走 Tasks 的滚动。
   const atTopRef = useRef(true);
   const pull = useRef(new Animated.Value(0)).current;
@@ -219,8 +226,15 @@ export default function HomeScreen() {
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_event, gesture) =>
-          Platform.OS === 'android' &&
           atTopRef.current &&
+          !refreshingRef.current &&
+          gesture.dy > 6 &&
+          Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        // 搜索框是 TextInput，会先拿到触摸；这里在捕获阶段只接管「顶部向下」
+        // 的垂直手势，保证从搜索栏开始下拉时整页仍能联动，同时不抢横向手势。
+        onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+          atTopRef.current &&
+          !refreshingRef.current &&
           gesture.dy > 6 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx),
         onPanResponderMove: (_event, gesture) => {
@@ -230,14 +244,28 @@ export default function HomeScreen() {
         },
         onPanResponderRelease: () => {
           const shouldRefresh = pullValueRef.current >= 64;
-          pullValueRef.current = 0;
-          Animated.spring(pull, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 6,
-            speed: 18,
-          }).start();
-          if (shouldRefresh) handleRefresh().catch(() => undefined);
+          if (!shouldRefresh) {
+            pullValueRef.current = 0;
+            Animated.spring(pull, {
+              toValue: 0,
+              useNativeDriver: true,
+              bounciness: 6,
+              speed: 18,
+            }).start();
+            return;
+          }
+          // 刷新完成前保持标题拉伸；数据回来后直接弹回，原生转圈已经移除。
+          handleRefresh()
+            .catch(() => undefined)
+            .finally(() => {
+              pullValueRef.current = 0;
+              Animated.spring(pull, {
+                toValue: 0,
+                useNativeDriver: true,
+                bounciness: 6,
+                speed: 18,
+              }).start();
+            });
         },
         onPanResponderTerminate: () => {
           pullValueRef.current = 0;
@@ -247,26 +275,42 @@ export default function HomeScreen() {
     [handleRefresh, pull]
   );
 
-  // Android 用 pull 驱动标题与整页内容，iOS 用原生 scrollY 驱动标题（内容由 ScrollView 自己整体位移）。
-  const iosTitleScale = scrollY.interpolate({
-    inputRange: [-180, 0],
-    outputRange: [1.2, 1],
-    extrapolate: 'clamp',
-  });
-  const titleScale: Animated.AnimatedInterpolation<number> =
-    Platform.OS === 'android' ? pullScale : iosTitleScale;
+  const titleScale: Animated.AnimatedInterpolation<number> = pullScale;
   const titleLift = titleScale.interpolate({
     inputRange: [1, 1.2],
     outputRange: [0, -6],
     extrapolate: 'clamp',
   });
   const titleTransform = [{ translateY: titleLift }, { scale: titleScale }];
-  // 安卓把位移加到包裹全部内容的容器上，Search / Dash / Tasks 与标题一起下移，避免标题压住卡片。
-  const contentTransform =
-    Platform.OS === 'android' ? { transform: [{ translateY: pull }] } : undefined;
+  // 位移加到包裹全部内容的容器上，Search / Dash / Tasks 与标题一起下移，避免标题压住卡片。
+  const contentTransform = { transform: [{ translateY: pull }] };
 
   const stackWidth = DASH_CARD_WIDTH;
   const stackHeight = DASH_CARD_HEIGHT;
+
+  const SEARCH_ANIMATION = {
+    duration: 250,
+    easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    useNativeDriver: true,
+  } as const;
+
+  const handleSearchFocus = () => {
+    setSearchFocused(true);
+    const currentTop = searchLayoutY.current - scrollOffsetRef.current;
+    const target = Math.min(0, insets.top + 8 - currentTop);
+    Animated.parallel([
+      Animated.timing(searchTranslateY, { ...SEARCH_ANIMATION, toValue: target }),
+      Animated.timing(searchProgress, { ...SEARCH_ANIMATION, toValue: 1 }),
+    ]).start();
+  };
+
+  const handleSearchBlur = () => {
+    setSearchFocused(false);
+    Animated.parallel([
+      Animated.timing(searchTranslateY, { ...SEARCH_ANIMATION, toValue: 0 }),
+      Animated.timing(searchProgress, { ...SEARCH_ANIMATION, toValue: 0 }),
+    ]).start();
+  };
 
   const dashBlock = useMemo(() => {
     if (dashMode === 'stack') {
@@ -292,49 +336,42 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {Platform.OS === 'android' && refreshing ? (
-        <ActivityIndicator
-          pointerEvents="none"
-          color="#8E8E93"
-          style={[styles.refreshSpinner, { top: insets.top + 8 }]}
-        />
-      ) : null}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.searchPanel, { opacity: searchProgress }]}
+      />
       <View style={styles.pullWrap} {...pullResponder.panHandlers}>
         <Animated.ScrollView
           style={styles.scroll}
           contentContainerStyle={{ paddingBottom: 120 }}
           showsVerticalScrollIndicator={false}
+          bounces={false}
+          alwaysBounceVertical={false}
+          overScrollMode="never"
+          scrollEnabled={!searchFocused}
           keyboardShouldPersistTaps="handled"
-          refreshControl={
-            Platform.OS === 'ios' ? (
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => {
-                  handleRefresh().catch(() => undefined);
-                }}
-                tintColor="#8E8E93"
-              />
-            ) : undefined
-          }
           scrollEventThrottle={16}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-            useNativeDriver: true,
-            listener: (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-              // 只有列表已经在最顶部时才允许下拉拉伸接手手势。
-              atTopRef.current = event.nativeEvent.contentOffset.y <= 0;
-            },
-          })}>
+          onScroll={(event) => {
+            const offsetY = event.nativeEvent.contentOffset.y;
+            // 只有列表已经在最顶部时才允许下拉拉伸接手手势。
+            scrollOffsetRef.current = offsetY;
+            atTopRef.current = offsetY <= 0;
+          }}>
           <Animated.View style={contentTransform}>
           <Animated.View
+            pointerEvents={searchFocused ? 'none' : 'auto'}
             style={[
               styles.titleZone,
-              { paddingTop: insets.top + 20, transform: titleTransform },
+              {
+                paddingTop: insets.top + 20,
+                opacity: searchBackgroundOpacity,
+              },
             ]}>
             <View style={styles.headerRow}>
-              <View style={styles.headerText}>
+              <Animated.View style={[styles.headerText, { transform: titleTransform }]}>
                 <ThemedText style={styles.hello}>Hey, {name}!</ThemedText>
                 <ThemedText style={styles.date}>{dateLabel}</ThemedText>
-              </View>
+              </Animated.View>
 
               <Pressable
                 accessibilityRole="button"
@@ -356,30 +393,63 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          <View style={styles.searchBar}>
+          <Animated.View
+            onLayout={(event) => {
+              searchLayoutY.current = event.nativeEvent.layout.y;
+            }}
+            style={[
+              styles.searchBar,
+              searchFocused && styles.searchBarFocused,
+              { transform: [{ translateY: searchTranslateY }] },
+            ]}>
             <View style={styles.searchLeft}>
               <SymbolView
                 name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
                 tintColor="#8E8E93"
                 size={20}
               />
-              <ThemedText style={styles.searchPlaceholder}>搜索</ThemedText>
+              <TextInput
+                ref={searchInputRef}
+                accessibilityLabel="搜索"
+                placeholder="搜索"
+                placeholderTextColor="#8E8E93"
+                value={searchText}
+                onChangeText={setSearchText}
+                onFocus={handleSearchFocus}
+                onBlur={handleSearchBlur}
+                style={styles.searchInput}
+                returnKeyType="search"
+                selectionColor="#000000"
+                underlineColorAndroid="transparent"
+              />
             </View>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="筛选"
+              accessibilityLabel={searchFocused ? '关闭搜索' : '筛选'}
               hitSlop={6}
-              style={({ pressed }) => [styles.filterButton, pressed && styles.pressed]}>
+              onPress={() => searchInputRef.current?.blur()}
+              style={({ pressed }) => [
+                styles.filterButton,
+                searchFocused && styles.filterButtonClose,
+                pressed && styles.pressed,
+              ]}>
               <SymbolView
-                name={{ ios: 'line.3.horizontal.decrease', android: 'tune', web: 'tune' }}
+                name={
+                  searchFocused
+                    ? { ios: 'xmark', android: 'close', web: 'close' }
+                    : { ios: 'line.3.horizontal.decrease', android: 'tune', web: 'tune' }
+                }
                 tintColor="#000000"
-                size={18}
+                size={searchFocused ? 16 : 18}
               />
             </Pressable>
-          </View>
+          </Animated.View>
 
-          <View style={styles.sectionHeader}>
+          <Animated.View
+            pointerEvents={searchFocused ? 'none' : 'auto'}
+            style={{ opacity: searchBackgroundOpacity }}>
+            <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Dash</ThemedText>
             <Pressable
               accessibilityRole="button"
@@ -409,7 +479,6 @@ export default function HomeScreen() {
             <TodayList
               date={today}
               emptyText="今天还没有安排"
-              onlyTasksAndCourses
               checkSize={20}
               checkRadius={6}
               checkBorderColor="#8E8E93"
@@ -424,6 +493,7 @@ export default function HomeScreen() {
             />
           </View>
           </Animated.View>
+          </Animated.View>
         </Animated.ScrollView>
       </View>
     </View>
@@ -437,17 +507,22 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'transparent',
+  },
+  searchPanel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F7F7FA',
   },
   pullWrap: {
     flex: 1,
+    // Web 上下拉时不要选中文字：selectionchange 会抢走 PanResponder 的响应者。
+    userSelect: 'none',
   },
-  refreshSpinner: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
+
   titleZone: {
     paddingHorizontal: 20,
   },
@@ -459,6 +534,8 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+    // 从左侧放大，避免下拉时问候语与右侧头像被屏幕边缘裁掉。
+    transformOrigin: 'left center',
   },
   hello: {
     fontSize: 14,
@@ -508,14 +585,27 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
+  searchBarFocused: {
+    zIndex: 20,
+    elevation: 20,
+  },
   searchLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  searchPlaceholder: {
+  searchInput: {
+    flex: 1,
+    height: 50,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     fontSize: 15,
-    color: '#8E8E93',
+    color: '#000000',
+    // Web 默认焦点描边会盖住胶囊圆角；原生端忽略这两个样式。
+    outlineColor: 'transparent',
+    outlineWidth: 0,
   },
   filterButton: {
     width: 34,
@@ -524,6 +614,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  filterButtonClose: {
+    borderRadius: 17,
+    backgroundColor: '#E5E5EA',
   },
   sectionHeader: {
     marginTop: 32,

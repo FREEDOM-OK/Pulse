@@ -71,9 +71,10 @@ export const modalStyles = StyleSheet.create({
   },
   actionsRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'flex-end',
     gap: Spacing.two,
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
   },
 });
 

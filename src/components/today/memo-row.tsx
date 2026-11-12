@@ -6,11 +6,17 @@ import { useTheme } from '@/hooks/use-theme';
 
 interface MemoRowItemProps {
   memo: MemoRow;
+  /** 固定浅色页面（如首页）的正文色；不传则跟随主题。 */
+  titleColor?: string;
+  /** 时间 / 置顶标签颜色。 */
+  metaColor?: string;
+  /** 左侧空心圆点颜色。 */
+  dotColor?: string;
   onMenu: () => void;
 }
 
 /** 备忘条：空心圆点不可勾选，只能长按出菜单（置顶 / 编辑 / 删除）。 */
-export function MemoRowItem({ memo, onMenu }: MemoRowItemProps) {
+export function MemoRowItem({ memo, titleColor, metaColor, dotColor, onMenu }: MemoRowItemProps) {
   const theme = useTheme();
 
   return (
@@ -21,23 +27,33 @@ export function MemoRowItem({ memo, onMenu }: MemoRowItemProps) {
       delayLongPress={400}
       onLongPress={onMenu}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-      <View style={[styles.dot, { borderColor: theme.textSecondary }]} />
+      <View
+        style={[styles.dot, { borderColor: dotColor ?? theme.textSecondary }]}
+      />
 
       <View style={styles.body}>
         <View style={styles.titleRow}>
           {memo.pinned === 1 ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.pin}>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={[styles.pin, metaColor ? { color: metaColor } : undefined]}>
               置顶
             </ThemedText>
           ) : null}
-          <ThemedText style={styles.title} numberOfLines={3}>
+          <ThemedText
+            style={[styles.title, titleColor ? { color: titleColor } : undefined]}
+            numberOfLines={3}>
             {memo.content}
           </ThemedText>
         </View>
       </View>
 
       {memo.time ? (
-        <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          style={[styles.time, metaColor ? { color: metaColor } : undefined]}>
           {memo.time}
         </ThemedText>
       ) : null}

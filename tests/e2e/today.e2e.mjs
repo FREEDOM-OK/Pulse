@@ -34,14 +34,14 @@ export async function run(page, baseUrl) {
   await page.clickLabel(`选择日期 ${todayStr} 有记录`);
   await sleep(300);
 
-  // 勾选完成：任务沉到「已完成」折叠区
+  // 勾选完成：任务平铺沉到列表底部，不再进入折叠分组
   await page.clickLabel('标记为完成');
   await page.waitForText('完成 1/1');
-  await page.waitForText('已完成 1 项');
+  await page.waitForText('写周报');
+  await page.waitForLabel('标记为未完成');
+  if (await page.has('已完成 1 项')) throw new Error('不应再出现已完成折叠分组');
 
-  // 展开已完成并取消勾选
-  await page.clickText('已完成 1 项');
-  await sleep(200);
+  // 取消勾选后回到未完成区
   await page.clickLabel('标记为未完成');
   await page.waitForText('完成 0/1');
 

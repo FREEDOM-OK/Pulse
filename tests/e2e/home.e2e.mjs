@@ -26,6 +26,41 @@ export async function run(page, baseUrl) {
   // 课表卡默认关闭
   if (await page.has('看课表')) throw new Error('课表卡默认应为关闭状态');
 
+  // 搜索框聚焦后吸到安全区下方，失焦后回到原位。
+  const searchBefore = await page.rectOfLabel('搜索');
+  if (!searchBefore) throw new Error('找不到搜索框');
+  const searchX = searchBefore.x + searchBefore.width / 2;
+  const searchY = searchBefore.y + searchBefore.height / 2;
+  await page.mouseDown(searchX, searchY);
+  await page.mouseUp(searchX, searchY);
+  await sleep(500);
+  const searchFocused = await page.rectOfLabel('搜索');
+  if (!searchFocused || Math.abs(searchFocused.y - 8) > 1) {
+    throw new Error(`搜索框聚焦后未吸顶：${JSON.stringify(searchFocused)}`);
+  }
+  if (!(await page.rectOfLabel('关闭搜索'))) {
+    throw new Error('搜索聚焦后缺少关闭按钮');
+  }
+  const homeFaded = await page.evaluate(`(() => {
+    const el = Array.from(document.querySelectorAll('div,span'))
+      .filter((node) => node.textContent.trim() === 'Hey, 用户!')
+      .filter((node) => node.children.length === 0)[0];
+    if (!el) return false;
+    let node = el;
+    while (node && node !== document.body) {
+      if (Number(getComputedStyle(node).opacity) < 0.01) return true;
+      node = node.parentElement;
+    }
+    return false;
+  })()`);
+  if (!homeFaded) throw new Error('搜索聚焦后首页内容没有淡出');
+  await page.clickLabel('关闭搜索');
+  await sleep(500);
+  const searchBlurred = await page.rectOfLabel('搜索');
+  if (!searchBlurred || Math.abs(searchBlurred.y - searchBefore.y) > 1) {
+    throw new Error(`搜索框失焦后未复位：${JSON.stringify(searchBlurred)}`);
+  }
+
   // 凸起 + → 记重大消费，首页日历卡立刻更新
   await page.clickLabel('新建');
   await page.waitForText('记重大消费');
@@ -73,16 +108,39 @@ export async function run(page, baseUrl) {
   await page.clickLabel('首页');
   await page.waitForText('写周报');
   await page.clickLabel('标记为完成');
-  await page.waitForText('已完成 1 项');
-  await page.clickText('已完成 1 项');
-  await page.clickLabel('标记为未完成');
-  await sleep(400);
-  if (await page.has('已完成 1 项')) throw new Error('取消完成后「已完成」分组应消失');
-
-  // 刷新后事件仍在（日历卡统计含事件与任务：1 事件 + 1 任务）
-  await page.reload();
-  await page.waitForText('本月 2 条');
   await page.waitForText('写周报');
+  await page.waitForLabel('标记为未完成');
+  if (await page.has('已完成 1 项')) throw new Error('首页不应再有已完成折叠分组');
+
+  // 首页勾选必须立即同步到计划页；完成项平铺沉底，直接取消即可。
+  await page.clickLabel('计划');
+  await page.waitForText('Today');
+  await page.waitForText('写周报');
+  if (await page.has('已完成 1 项')) throw new Error('计划页不应再有已完成折叠分组');
+  await page.clickLabel('标记为未完成');
+  await sleep(600);
+
+  await page.clickLabel('首页');
+  await page.waitForText('写周报');
+  await page.waitForLabel('标记为完成');
+
+  // 计划页新建的备忘必须同样出现在首页，且保持圆点样式。
+  await page.clickLabel('计划');
+  await page.waitForText('Today');
+  await page.clickLabel('新建任务或备忘');
+  await page.clickText('新建备忘');
+  await page.waitForText('新建备忘');
+  await page.fill('例如：周五前交房租', '周五前交房租');
+  await page.clickText('保存');
+  await page.waitForText('周五前交房租');
+  await page.clickLabel('首页');
+  await page.waitForText('周五前交房租');
+
+  // 刷新后事件仍在（日历卡统计含事件、任务与备忘：1 + 1 + 1）
+  await page.reload();
+  await page.waitForText('本月 3 条');
+  await page.waitForText('写周报');
+  await page.waitForText('周五前交房租');
 
   // 问候语使用个人资料里的名字
   await page.clickLabel('我的');

@@ -6,7 +6,7 @@ import type { CourseOnDate } from '@/features/timetable/bridge';
 interface CourseRowItemProps {
   course: CourseOnDate;
   onPress: () => void;
-  /** 首页用 home：绿色 8dp 圆点、固定文字色、不显示右侧箭头。 */
+  /** 首页用 home：8dp 圆点、固定文字色、不显示右侧箭头。 */
   variant?: 'default' | 'home';
   titleColor?: string;
   metaColor?: string;
@@ -26,6 +26,8 @@ export function CourseRowItem({
     course.endPeriod > course.startPeriod
       ? `第 ${course.startPeriod}-${course.endPeriod} 节`
       : `第 ${course.startPeriod} 节`;
+  // 首页与计划页共用这段文案，地点直接取课表时段里的 room。
+  const meta = [periodLabel, course.time, course.room].filter(Boolean).join(' · ');
   const home = variant === 'home';
 
   return (
@@ -39,7 +41,7 @@ export function CourseRowItem({
           style={[
             styles.dot,
             home && styles.dotHome,
-            { backgroundColor: dotColor ?? (home ? '#4CD964' : course.color) },
+            { backgroundColor: dotColor ?? course.color },
           ]}
         />
       </View>
@@ -55,8 +57,7 @@ export function CourseRowItem({
           themeColor="textSecondary"
           style={metaColor ? { color: metaColor } : undefined}
           numberOfLines={1}>
-          {periodLabel}
-          {course.time ? ` · ${course.time}` : ''}
+          {meta}
         </ThemedText>
       </View>
 

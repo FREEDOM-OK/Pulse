@@ -7,10 +7,8 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { addDays, formatDay, parseDate, todayStr } from '@/lib/date';
 
-const ITEM_WIDTH = 44;
-const ITEM_GAP = 8;
 const CAPSULE_HEIGHT = 62;
-const RANGE_DAYS = 45;
+const CALENDAR_BUTTON_SPACE = 48;
 
 interface DateStripProps {
   value: string;
@@ -23,109 +21,141 @@ interface DateStripProps {
 
 const WEEKDAY_SHORT = ['日', '一', '二', '三', '四', '五', '六'];
 
+/** 某天所在的自然周周一。 */
+function mondayOf(date: string): string {
+  const day = parseDate(date).getDay();
+  return addDays(date, day === 0 ? -6 : 1 - day);
+}
+
+function weekDates(monday: string): string[] {
+  return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
+}
+
 /**
- * 日期条：数字在上、星期在下，选中项是黑色胶囊。
- * 45 天窗口以「今天」为中心；点选只换选中态，**不滚动**（用户要求：滑动位置保持不动）。
- * 只有窗口本身变化（从日历跳到 45 天以外的日期）才把选中项滚到中间。
- * 日历入口放在页面右上角，不在这里。
+ * 日期条：固定一整个自然周（周一 → 周日），而不是一条可以无限滚动的日期流。
+ * 左右滑动按整页吸附，一次翻一周；翻页后保持当前选中的星期几，
+ * 因此「周三」滑到下一周仍然是「周三」。
  */
 export function DateStrip({ value, onChange, onOpenCalendar, marked }: DateStripProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const today = todayStr();
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handledPage = useRef<number | null>(null);
+  const pageWidth = Math.max(1, width - (onOpenCalendar ? CALENDAR_BUTTON_SPACE : 0));
+  const weekStart = mondayOf(value);
 
-  const days = useMemo(() => {
-    const list: string[] = [];
-    for (let offset = -RANGE_DAYS; offset <= RANGE_DAYS; offset += 1) {
-      list.push(addDays(today, offset));
+  const pages = useMemo(
+    () => [addDays(weekStart, -7), weekStart, addDays(weekStart, 7)],
+    [weekStart]
+  );
+
+  const clearSettleTimer = () => {
+    if (settleTimer.current) {
+      clearTimeout(settleTimer.current);
+      settleTimer.current = null;
     }
-    if (!list.includes(value)) {
-      list.push(value);
-      list.sort();
-    }
-    return list;
-  }, [today, value]);
+  };
 
-  const centerOffsetOf = (index: number) =>
-    Math.max(0, index * (ITEM_WIDTH + ITEM_GAP) + ITEM_WIDTH / 2 - width / 2);
+  // Web 的 ScrollView 不会派发 onMomentumScrollEnd，所以额外用 onScroll + 短延迟兜底；
+  // handledPage 防止原生端 onScroll 与 onMomentumScrollEnd 对同一次翻页重复触发。
+  const commitPage = (offsetX: number) => {
+    const page = Math.round(offsetX / pageWidth);
+    if (page === 1 || page === handledPage.current) return;
+    handledPage.current = page;
+    clearSettleTimer();
+    const delta = page === 0 ? -7 : 7;
+    onChange(addDays(value, delta));
+  };
 
-  const selectedIndex = Math.max(0, days.indexOf(value));
-
-  // 首帧定位：挂载时直接把选中项放在中间，避免先渲染第一格再跳（会闪一下）。
-  // 用 ref 存住，之后 `value` 变了也不重算，这样 ScrollView 不会因为 prop 变化被拉回去。
-  const initialOffset = useRef({ x: centerOffsetOf(selectedIndex), y: 0 });
-  const centeredLength = useRef(days.length);
-
+  // 本周始终放在中间页。用户翻到前后页后，onChange 会换周，
+  // 随后这里把内容无动画地放回中间页；因为新一周的内容和刚才停留的页完全一致。
   useEffect(() => {
-    // 成员没变 = 用户点的是同一个 45 天窗口里的日期 → 什么都不做。
-    if (days.length === centeredLength.current) return;
-    centeredLength.current = days.length;
-    const index = days.indexOf(value);
-    if (index < 0) return;
-    scrollRef.current?.scrollTo({
-      x: Math.max(0, index * (ITEM_WIDTH + ITEM_GAP) + ITEM_WIDTH / 2 - width / 2),
-      animated: true,
+    handledPage.current = null;
+    clearSettleTimer();
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x: pageWidth, animated: false });
     });
-  }, [days, value, width]);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearSettleTimer();
+    };
+  }, [weekStart, pageWidth]);
+
+  const handleScroll = (offsetX: number) => {
+    clearSettleTimer();
+    settleTimer.current = setTimeout(() => commitPage(offsetX), 140);
+  };
+
+  const handlePageEnd = (offsetX: number) => {
+    clearSettleTimer();
+    commitPage(offsetX);
+  };
 
   return (
     <View style={styles.container}>
       <ScrollView
         ref={scrollRef}
         horizontal
+        pagingEnabled
+        bounces={false}
         style={styles.scroll}
         showsHorizontalScrollIndicator={false}
-        contentOffset={initialOffset.current}
+        contentOffset={{ x: pageWidth, y: 0 }}
+        scrollEventThrottle={16}
+        onScroll={(event) => handleScroll(event.nativeEvent.contentOffset.x)}
+        onScrollBeginDrag={clearSettleTimer}
+        onMomentumScrollEnd={(event) => handlePageEnd(event.nativeEvent.contentOffset.x)}
         contentContainerStyle={styles.scrollContent}>
-        {days.map((date) => {
-          const selected = date === value;
-          const isToday = date === todayStr();
-          const weekday = WEEKDAY_SHORT[parseDate(date).getDay()];
-          const hasRecord = Boolean(marked?.[date]);
-          return (
-            <Pressable
-              key={date}
-              accessibilityRole="button"
-              accessibilityLabel={`日期 ${date}${hasRecord ? ' 有记录' : ''}`}
-              accessibilityState={{ selected }}
-              onPress={() => onChange(date)}
-              style={({ pressed }) => [
-                styles.item,
-                selected && { backgroundColor: theme.text },
-                // 今天用 1.5pt 描边标出（选中时不描边，避免双重边框）。
-                isToday && !selected && { borderWidth: 1.5, borderColor: theme.text },
-                pressed && styles.pressed,
-              ]}>
-              <ThemedText
-                style={[
-                  styles.day,
-                  { color: selected ? theme.background : theme.text },
-                ]}>
-                {parseDate(date).getDate()}
-              </ThemedText>
-              <ThemedText
-                style={[
-                  styles.weekday,
-                  { color: selected ? theme.background : theme.textSecondary },
-                ]}>
-                {weekday}
-              </ThemedText>
-              <View
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: selected
-                      ? theme.background
-                      : hasRecord
-                        ? theme.textSecondary
-                        : 'transparent',
-                  },
-                ]}
-              />
-            </Pressable>
-          );
-        })}
+        {pages.map((monday) => (
+          <View key={monday} style={[styles.page, { width: pageWidth }]}>
+            {weekDates(monday).map((date) => {
+              const selected = date === value;
+              const isToday = date === todayStr();
+              const weekday = WEEKDAY_SHORT[parseDate(date).getDay()];
+              const hasRecord = Boolean(marked?.[date]);
+              return (
+                <Pressable
+                  key={date}
+                  accessibilityRole="button"
+                  accessibilityLabel={`日期 ${date}${hasRecord ? ' 有记录' : ''}`}
+                  accessibilityState={{ selected }}
+                  onPress={() => onChange(date)}
+                  style={({ pressed }) => [
+                    styles.item,
+                    selected && { backgroundColor: theme.text },
+                    // 今天用 1.5pt 描边标出（选中时不描边，避免双重边框）。
+                    isToday && !selected && { borderWidth: 1.5, borderColor: theme.text },
+                    pressed && styles.pressed,
+                  ]}>
+                  <ThemedText
+                    style={[styles.day, { color: selected ? theme.background : theme.text }]}>
+                    {parseDate(date).getDate()}
+                  </ThemedText>
+                  <ThemedText
+                    style={[
+                      styles.weekday,
+                      { color: selected ? theme.background : theme.textSecondary },
+                    ]}>
+                    {weekday}
+                  </ThemedText>
+                  <View
+                    style={[
+                      styles.dot,
+                      {
+                        backgroundColor: selected
+                          ? theme.background
+                          : hasRecord
+                            ? theme.textSecondary
+                            : 'transparent',
+                      },
+                    ]}
+                  />
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </ScrollView>
 
       {onOpenCalendar ? (
@@ -173,12 +203,17 @@ const styles = StyleSheet.create({
     marginRight: Spacing.three,
   },
   scrollContent: {
-    gap: ITEM_GAP,
-    paddingHorizontal: Spacing.four,
+    flexDirection: 'row',
+  },
+  page: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-evenly',
+    paddingHorizontal: Spacing.three,
   },
   item: {
-    width: ITEM_WIDTH,
+    flex: 1,
+    maxWidth: 44,
     height: CAPSULE_HEIGHT,
     borderRadius: 22,
     alignItems: 'center',
