@@ -4,6 +4,51 @@
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
 > - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
 
+## v1.2.17 — 2026-11-13
+
+### 课表：抽屉挂载时序、autoHeight 高度坍缩与翻周互相覆盖
+
+- `BottomSheet` 把 `visible` 与 `rendered` 拆成三段 effect：`visible` 变 true 时只复位 `progress` / 遮罩并清空 `openStartedRef`，下一段只负责 `setRendered(true)`，只有 `visible && rendered` 同时成立才通过 `requestAnimationFrame`、100ms 定时器与 `Modal.onShow` 幂等启动打开动画。修复 Modal 尚未挂载时动画空跑并锁死 `openStartedRef`、导致 Android 上「只变暗、抽屉不上来」的问题。
+- `BottomSheet` 的 `autoHeight` 与固定高度样式彻底隔离：固定高度用 `bodyFlex`（`flex: 1`），autoHeight 用 `bodyAutoHeight`（`width: '100%'`，不再挂任何 `flex: 1`），避免原生 Yoga 在未定高父级里把内容/底部按钮压成 0 高。
+- `TimetableScreen` 删除监听 `viewingWeek` 的滚动 effect，改为显式 `jumpToWeek(week, animated)`；抽屉滑条拖动调用 `jumpToWeek(week, false)` 实时跟手，不再由 state effect 反向滚回旧周。`onLayout` 通过 `viewingWeekRef` 读取最新周次，避免宽度测量与聚焦归位同轮提交时用旧闭包把周次冲掉；移除 `FlatList` 的 `initialScrollIndex`，偏移统一由聚焦重置与 `onLayout` 强制对齐。
+- 详情抽屉与 ⋯ 抽屉继续走原生 `Modal`，autoHeight 内容完整撑开，底部编辑/复制/删除与四个入口在 tab 模式下完整显示并被手势条避让。
+- 验证：`npx tsc --noEmit`、`npx expo lint` 通过；全量单测 38 文件 / 259 用例通过。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
+## v1.2.16 — 2026-11-13
+
+### 课表：底栏第三格抽屉层级、当前周归位与顶栏事件
+
+- 课程详情抽屉改用 `BottomSheet`（原生 `<Modal statusBarTranslucent transparent>`）：删除 Reanimated 共享值、`mounted`、页面内 `position:absolute` 遮罩与 zIndex 90/100，tab 模式可完整压暗并盖住 `AppTabBar`；底部按钮区按 `Math.max(insets.bottom, 20)` 避让系统手势条，退场期间用 `displayCourse` 缓存最后内容。
+- `BottomSheet` 打开动画改为挂载后启动：`requestAnimationFrame` + `Modal.onShow` + 160ms 定时兜底三路幂等触发，位移距离 `Math.max(600, 屏幕高)`，避免 Android 首帧只看到遮罩、抽屉本体不动；新增 `closeLabel` 供不同抽屉自定义遮罩无障碍标签。
+- 顶栏 ＋ 改为直接 `router.push('/timetable/course')`，不再带日期/节次参数、不弹任何遮罩；`course.tsx` 在无参数时默认今天，保持添加体验。导入仍直达 `/timetable/import`，⋯ 打开底部抽屉。
+- `TimetableScreen` 新增 `useFocusEffect`：每次进入（含底栏第 3 格切回、从二级页返回）都按真实日期重算当前周并夹到 `[1, totalWeeks]`，`setViewingWeek` 后立即 `scrollToOffset({ animated: false })`，标题、网格与横向分页同步归位。
+- 验证：`npx tsc --noEmit`、`npx expo lint` 通过；全量单测 38 文件 / 259 用例通过；`node tests/e2e/run.mjs P4` 课表场景通过。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
+## v1.2.15 — 2026-11-13
+
+### 课表：顶栏精简、网格修复与 ⋯ 抽屉
+
+- 顶栏拆出 `week-header.tsx`：左上只读展示「第 N 周 周X」+ 日期（20/700、12/#8E8E93），删除「我的课表 ▾」点击切换；右侧只保留 ＋（`/timetable/course`）、导入（`/timetable/import`）、⋯ 三个 36×36 按钮。删除 ‹ › 翻周胶囊、齿轮按钮、两个右上角 Popup Modal 及 `showScheduleMenu` / `showMoreMenu` 等 state 与旧样式。
+- 网格拆出 `week-grid.tsx`：左列每节三行垂直居中——序号 13/700/#1C1C1E、开始与结束时间 9.5/#8E8E93/lineHeight 11/tabular-nums；行高 58、午休 20。
+- 水平线统一按 `top(k) = (k-1)*ROW_H + (k > lunchAfter ? LUNCH_H : 0)` 绝对定位，第 k 节底线严格落在 `top(k)+ROW_H`；删除旧顺序流里 `hideBottomBorder` 的临时补丁，修复第 6 节（14:55）与第 7 节（16:00）之间缺线，午休条自身补下边界线。
+- 根容器固定 `#F5F5F7` 并铺到屏幕底部；网格 ScrollView `flex: 1`，避让留白移入 `contentContainerStyle`（tab 100 / page 32），去掉外层 `paddingBottom`，消除第三格底栏下方的白色断层。
+- 新增 `timetable-more-sheet.tsx`：全屏 `Modal`（`statusBarTranslucent`）上的双白卡抽屉。上卡为周数胶囊滑条（实时联动当前周）+「回到本周」+ 横向课表切换（新建课表 / 管理）；下卡为上课时间、课程设置、已添课程、上课提醒四个等分入口。tab / page 两种模式底部统一 `Math.max(insets.bottom, 16)`，不再为底栏额外留白。
+- 上课提醒落库：`TimetableSettings` 新增 `reminderEnabled`，播种 `timetable.reminderEnabled='0'`，抽屉内开关即时持久化。
+- 外观入口从主页迁入「课程设置」：新增「外观浏览」行 → `/timetable/appearance`；`schedules.tsx` 支持 `?create=1` 直达新建表单。
+- E2E 课表场景改为打开 ⋯ 抽屉，校验周数/课表/四个入口与「回到本周」。
+
+### 测试
+
+- 新增 `rowBottom(k) === rowTop(k)+ROW_H` 回归用例（覆盖午休 0/4/5 节后）。
+- `npm run verify`：38 个测试文件 / 259 条用例通过，`tsc --noEmit`、`expo lint` 零错误零警告。
+- `node tests/e2e/run.mjs P4`：课表场景通过（添加课程、详情抽屉、⋯ 抽屉与回到本周、深链、文本导入）。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
 ## v1.2.14 — 2026-11-12
 
 ### 搜索：根级全屏 Overlay + 历史表

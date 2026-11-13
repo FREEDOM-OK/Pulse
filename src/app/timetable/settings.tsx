@@ -145,7 +145,7 @@ export default function TimetableSettingsScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.row, { borderBottomWidth: 0 }]}
+            style={styles.row}
             accessibilityLabel="默认连堂节数"
             onPress={() => setShowSpanDrawer(true)}
           >
@@ -154,6 +154,15 @@ export default function TimetableSettingsScreen() {
               <Text style={styles.rowValue}>{settings.defaultSpan} 节</Text>
               <Text style={styles.rowArrow}>›</Text>
             </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.row, { borderBottomWidth: 0 }]}
+            accessibilityLabel="外观浏览"
+            onPress={() => router.push('/timetable/appearance')}
+          >
+            <Text style={styles.rowTitle}>外观浏览</Text>
+            <Text style={styles.rowArrow}>›</Text>
           </TouchableOpacity>
         </View>
 

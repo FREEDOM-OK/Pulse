@@ -57,6 +57,9 @@ export default function AddOrEditCourseScreen() {
 
   const initStartPeriod = params.period ? parseInt(params.period, 10) : 1;
   const initEndPeriod = Math.min(initStartPeriod + defaultSpan - 1, totalPeriods);
+  // 顶栏 ＋ 现在直接 push 本页、不带 day 参数；默认仍落在今天，
+  // 保持「点 ＋ 就能录入今天这节」的旧习惯（编辑已有课程时走 existingCourse）。
+  const todayDayOfWeek = new Date().getDay() || 7;
 
   const [courseId] = useState(existingCourse?.id || newLocalId('c'));
   const [name, setName] = useState(existingCourse?.name || '');
@@ -73,7 +76,7 @@ export default function AddOrEditCourseScreen() {
       {
         id: newLocalId('s'),
         courseId,
-        dayOfWeek: params.day ? parseInt(params.day, 10) : 1,
+        dayOfWeek: params.day ? parseInt(params.day, 10) : todayDayOfWeek,
         startPeriod: initStartPeriod,
         endPeriod: initEndPeriod,
         weeks: weeksFromRange(1, totalWeeks, 'all'),

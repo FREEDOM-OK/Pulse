@@ -59,6 +59,8 @@ export interface TimetableSettings {
   defaultSpan: number;
   lunchAfter: number;
   saturation: number;
+  /** 上课提醒总开关（`timetable.reminderEnabled`，'1' / '0'）。 */
+  reminderEnabled: boolean;
 }
 
 /** 课表设置键（节次时间复用主库的 `period.times`，其余用 `timetable.*`）。 */
@@ -116,6 +118,7 @@ export async function ensureTimetableSeed(driver: SqlDriver = getDriver()): Prom
     ['timetable.defaultSpan', '2'],
     ['timetable.lunchAfter', '4'],
     ['timetable.saturation', '0.8'],
+    ['timetable.reminderEnabled', '0'],
   ];
   for (const [key, value] of defaults) {
     await driver.runAsync('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?);', [

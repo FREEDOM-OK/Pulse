@@ -70,6 +70,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     defaultSpan: 2,
     lunchAfter: 4,
     saturation: 0.8,
+    reminderEnabled: false,
   });
 
   /** 只在首次加载时把查看周对齐到当前周；后续 reloadAll（增删改后）不能把用户翻到的周拽回去。 */
@@ -114,6 +115,7 @@ export const TimetableProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       defaultSpan: parseInt(map['timetable.defaultSpan'] || '2', 10),
       lunchAfter: parseInt(map['timetable.lunchAfter'] ?? '4', 10),
       saturation: parseFloat(map['timetable.saturation'] ?? '0.8'),
+      reminderEnabled: map['timetable.reminderEnabled'] === '1',
     };
 
     // 读取当前课表下的全部课程与时段

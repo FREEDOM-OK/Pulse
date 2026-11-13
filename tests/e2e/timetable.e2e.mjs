@@ -3,7 +3,8 @@ import { sleep } from './browser.mjs';
 /**
  * P4 课表（移植后新 UI）：
  * 设置页 → 课表管理 → 外观饱和度持久化 → 网格添加课程（含第二节时段）
- * → 详情抽屉 → 翻周/回到本周 → 今日计划点课程深链回课表并开抽屉 → 文本导入。
+ * → 详情抽屉 → ⋯ 抽屉（周数/课表/四个入口 + 回到本周）→ 今日计划点课程深链
+ * 回课表并开抽屉 → 文本导入。
  *
  * Web 端数据库存在 localStorage，场景开头清库，保证从「只有播种课表」的干净状态开始。
  * 所有交互都走 accessibilityLabel，文案与 src/app/timetable/* 保持一致。
@@ -42,8 +43,7 @@ export async function run(page, baseUrl) {
   // ---------- 2. 网格添加课程 ----------
   await page.goto(`${baseUrl}/timetable`);
   await page.waitForLabel('添加课程');
-  await page.waitForLabel('上一周');
-  await page.waitForText('我的课表');
+  await page.waitForLabel('导入课表');
   // 播种课表的开学日是「本周一」，当前周次由系统算，脚本读出来而不是写死
   const currentWeek = Number(/第 (\d+) 周/.exec(await page.text())[1]);
 
@@ -77,17 +77,25 @@ export async function run(page, baseUrl) {
   await page.clickLabel('关闭详情');
   await sleep(400);
 
-  // ---------- 4. 翻周与回到本周 ----------
-  // 保存后 viewingWeek 会跳到课程首周，这里只验证翻页与「回到本周」链路
-  for (let i = 0; i < 5; i++) {
-    const visible = await page.evaluate(
-      "Boolean(document.querySelector('[aria-label=\"回到本周\"]'))"
-    );
-    if (visible) break;
-    await page.clickLabel('下一周');
-    await sleep(250);
+  // ---------- 4. ⋯ 底部抽屉与回到本周 ----------
+  // 保存后 viewingWeek 会跳到课程首周；新的「回到本周」在 ⋯ 抽屉里（顶栏翻周胶囊已删除）
+  await page.clickLabel('更多操作');
+  await page.waitForText('周数');
+  await page.waitForLabel('上课时间');
+  await page.waitForLabel('课程设置');
+  await page.waitForLabel('已添课程');
+  await page.waitForLabel('上课提醒');
+  await page.waitForLabel('回到本周');
+  // 若保存后正好也在本周，「回到本周」会置灰；此时只需关掉抽屉即可。
+  const backDisabled = await page.evaluate(
+    "document.querySelector('[aria-label=\"回到本周\"]')?.getAttribute('aria-disabled') === 'true'"
+  );
+  if (backDisabled) {
+    await page.clickLabel('关闭抽屉');
+  } else {
+    await page.clickLabel('回到本周');
   }
-  await page.clickLabel('回到本周');
+  await sleep(500);
   await page.waitForText(`第 ${currentWeek} 周`);
   await page.waitForText(courseName);
 

@@ -46,6 +46,21 @@ describe('timetable-core unit tests', () => {
     expect(rowBottom(4, 58, 20, 4)).toBe(232);
   });
 
+  test('每节底线严格等于 top(k)+ROW_H（午休后不丢线）', () => {
+    const ROW_H = 58;
+    const LUNCH_H = 20;
+    for (const lunchAfter of [0, 4, 5]) {
+      for (let k = 1; k <= 11; k += 1) {
+        expect(rowBottom(k, ROW_H, LUNCH_H, lunchAfter)).toBe(
+          rowTop(k, ROW_H, LUNCH_H, lunchAfter) + ROW_H,
+        );
+      }
+    }
+    // 第 6 节 14:55 与第 7 节 16:00 的分界：top(7) 必须正好压在 bottom(6) 上
+    expect(rowBottom(6, ROW_H, LUNCH_H, 4)).toBe(368);
+    expect(rowTop(7, ROW_H, LUNCH_H, 4)).toBe(368);
+  });
+
   test('blocksOf(3,6,4) -> [[3,4],[5,6]]', () => {
     expect(blocksOf(3, 6, 4)).toEqual([
       [3, 4],

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -8,7 +8,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import { ScheduleEntity } from '@/features/timetable/repository';
@@ -18,6 +18,8 @@ import { SAFE_TOP_DP, SAFE_BOTTOM_DP } from '@/lib/timetable-core';
 export default function SchedulesManageScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // 从课表抽屉的「新建课表」进来时带 create=1，直接拉起新建表单。
+  const { create } = useLocalSearchParams<{ create?: string }>();
   const {
     schedules,
     activeSchedule,
@@ -32,6 +34,10 @@ export default function SchedulesManageScreen() {
   const [schedName, setSchedName] = useState('');
   const [startDate, setStartDate] = useState('2026-09-07');
   const [totalWeeks, setTotalWeeks] = useState('20');
+
+  useEffect(() => {
+    if (create === '1') setDrawerVisible(true);
+  }, [create]);
 
   const openForm = (sched?: ScheduleEntity) => {
     if (sched) {

@@ -1,21 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  Pressable,
-} from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-} from 'react-native-reanimated';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { CourseEntity, SessionEntity } from '@/features/timetable/repository';
 import { PeriodTime, formatWeeks } from '@/lib/timetable-core';
-
-const ABSOLUTE_FILL = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 };
 
 interface CourseDetailDrawerProps {
   visible: boolean;
@@ -30,6 +19,13 @@ interface CourseDetailDrawerProps {
 
 const DAYS_NAME = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
+/**
+ * 课程详情抽屉。
+ *
+ * 必须复用 BottomSheet 的原生 `<Modal>`：页面内的绝对定位 View 在 Tab 模式下
+ * 永远压在 AppTabBar（zIndex 999）下面，底部的编辑/删除按钮会被导航栏挡住。
+ * 统一走 Modal 后，遮罩和卡片处于系统最高层级，同时底部只需避让系统手势条。
+ */
 export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
   visible,
   course,
@@ -40,47 +36,23 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
   onCopy,
   onDelete,
 }) => {
-  const [mounted, setMounted] = useState(false);
-  const [scopeIsThisWeek, setScopeIsThisWeek] = useState(true);
-
-  // 遮罩 180ms 淡入，内容独立 240ms 升起（不使用 Modal animationType="slide"）
-  const backdropOpacity = useSharedValue(0);
-  const translateY = useSharedValue(420);
+  const insets = useSafeAreaInsets();
+  // 关闭时父组件会立刻把 course 置空。缓存最后一份数据，让退场动画期间
+  // 卡片仍然有内容，而不是「啪」一下变空白。
+  const [displayCourse, setDisplayCourse] = useState<CourseEntity | null>(course);
 
   useEffect(() => {
-    if (visible && course) {
-      setScopeIsThisWeek(true);
-      setMounted(true);
-      backdropOpacity.value = withTiming(1, { duration: 180 });
-      translateY.value = withTiming(0, { duration: 240 });
-    } else if (mounted) {
-      backdropOpacity.value = withTiming(0, { duration: 180 });
-      translateY.value = withTiming(420, { duration: 240 }, (finished) => {
-        if (finished) {
-          runOnJS(setMounted)(false);
-        }
-      });
-    }
-  // backdropOpacity/translateY 是共享值（稳定引用），mounted 只用于判断是否挂载完成，
-    // 都故意不放进依赖，否则打开动画会被自身状态更新重新触发。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, course]);
+    if (course) setDisplayCourse(course);
+  }, [course]);
 
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity: backdropOpacity.value,
-  }));
-
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-
-  if (!mounted || !course) return null;
+  const activeCourse = course ?? displayCourse;
+  if (!activeCourse) return null;
 
   const session: SessionEntity =
-    course.sessions[sessionIndex] ||
-    course.sessions[0] || {
+    activeCourse.sessions[sessionIndex] ||
+    activeCourse.sessions[0] || {
       id: '',
-      courseId: course.id,
+      courseId: activeCourse.id,
       dayOfWeek: 1,
       startPeriod: 1,
       endPeriod: 2,
@@ -103,141 +75,102 @@ export const CourseDetailDrawer: React.FC<CourseDetailDrawerProps> = ({
       : '每周';
 
   return (
-    <View style={ABSOLUTE_FILL} pointerEvents="box-none">
-      {/* 独立半透明遮罩 */}
-      <Animated.View style={[styles.backdropOverlay, backdropStyle]}>
-        <Pressable style={ABSOLUTE_FILL} onPress={onClose} accessibilityLabel="关闭详情" />
-      </Animated.View>
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      closeLabel="关闭详情"
+      autoHeight
+      showHandle={false}
+      sheetStyle={styles.sheet}
+      bodyStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+      {/* 顶部居中把手条（BottomSheet 的默认把手已关闭，避免出现两条） */}
+      <View style={styles.dragHandle} />
 
-      {/* 底部抽屉卡片 */}
-      <Animated.View style={[styles.drawerCard, cardStyle]}>
-        {/* 1. 顶部居中把手条 */}
-        <View style={styles.dragHandle} />
-
-        {/* 2. 课程名称与标志性竖色条 */}
-        <View style={styles.titleRow}>
-          <View style={styles.titleLeft}>
-            <View style={[styles.verticalColorBar, { backgroundColor: course.color }]} />
-            <Text style={styles.courseTitleText}>{course.name}</Text>
+      {/* 课程名称与标志性竖色条 */}
+      <View style={styles.titleRow}>
+        <View style={styles.titleLeft}>
+          <View style={[styles.verticalColorBar, { backgroundColor: activeCourse.color }]} />
+          <Text style={styles.courseTitleText}>{activeCourse.name}</Text>
+        </View>
+        {Boolean(activeCourse.credits && activeCourse.credits !== '选填') && (
+          <View style={styles.creditBadge}>
+            <Text style={styles.creditBadgeText}>{activeCourse.credits} 学分</Text>
           </View>
-          {Boolean(course.credits && course.credits !== '选填') && (
-            <View style={styles.creditBadge}>
-              <Text style={styles.creditBadgeText}>{course.credits} 学分</Text>
-            </View>
-          )}
+        )}
+      </View>
+
+      {/* 详细信息行列表 */}
+      <View style={styles.infoList}>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>📅</Text>
+          <Text style={styles.infoText}>{weeksLabel}</Text>
         </View>
 
-        {/* 3. 详细信息行列表 */}
-        <View style={styles.infoList}>
-          {/* 周数 */}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📅</Text>
-            <Text style={styles.infoText}>{weeksLabel}</Text>
-          </View>
-
-          {/* 节数与时间 */}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>⏰</Text>
-            <Text style={styles.infoText}>{periodTimeText}</Text>
-          </View>
-
-          {/* 教室地点 */}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📍</Text>
-            <Text style={styles.infoText}>{session.location || '未填教室'}</Text>
-          </View>
-
-          {/* 任课老师 */}
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>👤</Text>
-            <Text style={styles.infoText}>{session.teacher || '未填老师'}</Text>
-          </View>
-
-          {/* 备注行与 仅本周/所有周 药丸切换器 */}
-          <View style={[styles.infoRow, { justifyContent: 'space-between' }]}>
-            <View style={styles.flexRowCenter}>
-              <Text style={styles.infoIcon}>📝</Text>
-              <Text style={session.remark ? styles.infoText : styles.placeholderText}>
-                {session.remark || '备注 (可不填)'}
-              </Text>
-            </View>
-
-            {/* 药丸切换 */}
-            <View style={styles.scopePillContainer}>
-              <TouchableOpacity
-                style={[styles.scopeBtn, scopeIsThisWeek && styles.scopeBtnActive]}
-                accessibilityLabel="仅本周"
-                onPress={() => setScopeIsThisWeek(true)}
-              >
-                <Text style={[styles.scopeText, scopeIsThisWeek && styles.scopeTextActive]}>
-                  仅本周
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.scopeBtn, !scopeIsThisWeek && styles.scopeBtnActive]}
-                accessibilityLabel="所有周"
-                onPress={() => setScopeIsThisWeek(false)}
-              >
-                <Text style={[styles.scopeText, !scopeIsThisWeek && styles.scopeTextActive]}>
-                  所有周
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>⏰</Text>
+          <Text style={styles.infoText}>{periodTimeText}</Text>
         </View>
 
-        {/* 4. 底部动作条：编辑大按钮 + 复制 + 删除 */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.editMainBtn}
-            activeOpacity={0.8}
-            accessibilityLabel="编辑课程"
-            onPress={() => onEdit(course)}
-          >
-            <Text style={styles.editMainBtnText}>编辑</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.iconSquareBtn}
-            activeOpacity={0.7}
-            accessibilityLabel="复制课程"
-            onPress={() => onCopy(course)}
-          >
-            <Text style={styles.iconSquareText}>📄</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.iconSquareBtn}
-            activeOpacity={0.7}
-            accessibilityLabel="删除课程"
-            onPress={() => onDelete(course)}
-          >
-            <Text style={styles.iconSquareText}>🗑️</Text>
-          </TouchableOpacity>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>📍</Text>
+          <Text style={styles.infoText}>{session.location || '未填教室'}</Text>
         </View>
-      </Animated.View>
-    </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.infoIcon}>👤</Text>
+          <Text style={styles.infoText}>{session.teacher || '未填老师'}</Text>
+        </View>
+
+        <View style={[styles.infoRow, styles.remarkRow]}>
+          <View style={styles.flexRowCenter}>
+            <Text style={styles.infoIcon}>📝</Text>
+            <Text style={session.remark ? styles.infoText : styles.placeholderText}>
+              {session.remark || '备注 (可不填)'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* 底部动作条：编辑大按钮 + 复制 + 删除 */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity
+          style={styles.editMainBtn}
+          activeOpacity={0.8}
+          accessibilityLabel="编辑课程"
+          onPress={() => onEdit(activeCourse)}>
+          <Text style={styles.editMainBtnText}>编辑</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.iconSquareBtn}
+          activeOpacity={0.7}
+          accessibilityLabel="复制课程"
+          onPress={() => onCopy(activeCourse)}>
+          <Text style={styles.iconSquareText}>📄</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.iconSquareBtn}
+          activeOpacity={0.7}
+          accessibilityLabel="删除课程"
+          onPress={() => onDelete(activeCourse)}>
+          <Text style={styles.iconSquareText}>🗑️</Text>
+        </TouchableOpacity>
+      </View>
+    </BottomSheet>
   );
 };
 
 const styles = StyleSheet.create({
-  backdropOverlay: {
-    ...ABSOLUTE_FILL,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    zIndex: 90,
-  },
-  drawerCard: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+  sheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
+    paddingTop: 0,
+  },
+  body: {
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 28,
-    zIndex: 100,
   },
   dragHandle: {
     width: 36,
@@ -257,6 +190,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 1,
   },
   verticalColorBar: {
     width: 4,
@@ -267,6 +201,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#0F172A',
+    flexShrink: 1,
   },
   creditBadge: {
     paddingHorizontal: 8,
@@ -288,6 +223,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  remarkRow: {
+    justifyContent: 'space-between',
+  },
   flexRowCenter: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -302,37 +240,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#1E293B',
+    flexShrink: 1,
   },
   placeholderText: {
     fontSize: 13,
     color: '#94A3B8',
-  },
-  scopePillContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    padding: 2,
-  },
-  scopeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  scopeBtnActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  scopeText: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-  scopeTextActive: {
-    color: '#0F172A',
-    fontWeight: '700',
   },
   actionRow: {
     flexDirection: 'row',
