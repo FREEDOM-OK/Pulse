@@ -20,7 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { GlassGlow } from '@/components/ui/glass-glow';
+import { PageBackground } from '@/components/ui/page-background';
 import {
   DASH_CARD_HEIGHT,
   DASH_CARD_WIDTH,
@@ -285,7 +285,7 @@ export default function HomeScreen() {
   const stackWidth = DASH_CARD_WIDTH;
   const stackHeight = DASH_CARD_HEIGHT;
 
-  // —— 首页背景（默认 / 自定义纯色 / 自定义图片）——
+  // —— 全局页面背景（默认 / 预设渐变 / 自定义纯色 / 自定义图片）——
   const hasImageBg = homeBgMode === 'image' && !!homeBgImage;
   const bgColor = homeBgMode === 'color' ? homeBgColor : theme.background;
   const headerInk = homeBgMode === 'color' ? readableInk(homeBgColor) : theme.text;
@@ -302,9 +302,8 @@ export default function HomeScreen() {
         textShadowRadius: 12,
       }
     : null;
-  /** 毛玻璃皮肤、或用户换了花哨壁纸时，Tasks 要托在一张可读性卡片上。 */
-  const tasksOnGlass = glass || hasImageBg;
-  const imageOverlay = GlassMaterial[scheme].imageOverlay;
+  /** 毛玻璃皮肤、或用户选了任意页面背景时，Tasks 要托在一张可读性卡片上。 */
+  const tasksOnGlass = glass || homeBgMode !== 'default';
 
   const handleSearchResultPress = (result: SearchResult) => {
     if (result.kind === 'fitness') {
@@ -338,18 +337,7 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
-      {hasImageBg ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <Image
-            key={homeBgImage}
-            source={{ uri: homeBgImage }}
-            resizeMode="cover"
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: imageOverlay }]} />
-        </View>
-      ) : null}
-      {glass && !hasImageBg ? <GlassGlow scheme={scheme} /> : null}
+      <PageBackground />
       <View style={styles.pullWrap} {...pullResponder.panHandlers}>
         <ScrollView
           style={styles.scroll}
@@ -404,16 +392,7 @@ export default function HomeScreen() {
               onPress={() => setSearchOpen(true)}
               style={({ pressed }) => [
                 styles.searchBar,
-                glass
-                  ? {
-                      backgroundColor: GlassMaterial[scheme].card,
-                      borderWidth: 1.2,
-                      borderColor: GlassMaterial[scheme].cardBorder,
-                      shadowColor: 'transparent',
-                      shadowOpacity: 0,
-                      // 半透明底 + elevation 在 Android 会透出灰色阴影投射块，形成双层内框。
-                      elevation: 0,
-                    }
+                glass ? glassCardStyle(scheme)
                   : {
                       backgroundColor: theme.backgroundElement,
                       borderColor: scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'transparent',

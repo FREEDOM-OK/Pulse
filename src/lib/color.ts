@@ -59,6 +59,25 @@ export function readableInk(hex: string): '#111827' | '#FFFFFF' {
   return luminance(hex) > 0.6 ? '#111827' : '#FFFFFF';
 }
 
+/** 两色线性插值（t: 0~1），用于多段渐变逐行取色。 */
+export function mixHex(from: string, to: string, t: number): string {
+  const a = hexToRgb(from) ?? { r: 255, g: 255, b: 255 };
+  const b = hexToRgb(to) ?? { r: 255, g: 255, b: 255 };
+  const ratio = Math.min(1, Math.max(0, t));
+  return rgbToHex({
+    r: a.r + (b.r - a.r) * ratio,
+    g: a.g + (b.g - a.g) * ratio,
+    b: a.b + (b.b - a.b) * ratio,
+  });
+}
+
+/** Hex → `rgba(r, g, b, a)`，非法颜色按白色处理。 */
+export function hexToRgba(hex: string, alpha: number): string {
+  const rgb = hexToRgb(hex) ?? { r: 255, g: 255, b: 255 };
+  const a = Math.min(1, Math.max(0, alpha));
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`;
+}
+
 /** Hex → HSL（h: 0~360, s/l: 0~1）；非法颜色回白色。 */
 export function hexToHsl(hex: string): Hsl {
   const rgb = hexToRgb(hex) ?? { r: 255, g: 255, b: 255 };

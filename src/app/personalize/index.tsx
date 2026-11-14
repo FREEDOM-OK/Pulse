@@ -162,7 +162,7 @@ export default function PersonalizeScreen() {
           </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-            首页背景
+            页面背景（首页 / 计划 / 第三页）
           </ThemedText>
           <ThemedView type="backgroundElement" style={styles.group}>
             {HOME_BG_MODES.map((mode, index) => {

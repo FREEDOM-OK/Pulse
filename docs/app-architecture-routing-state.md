@@ -1,7 +1,7 @@
 # App 架构与路由状态流转说明
 
 > 状态：架构审核稿（2026-11-12）。本轮只提交文档，不修改业务代码。
-> 工程：`my-life-app`（Expo SDK 58、expo-router ~58.0.30、react-native 0.88.1、react-native-reanimated 4.7.1）。
+> 工程：`Pulse`（工程目录 `my-life-app`；Expo SDK 58、expo-router ~58.0.30、react-native 0.88.1、react-native-reanimated 4.7.1）。
 > 目标：先对齐“路由层级、数据来源、搜索层归属、Dash 视口几何”，确认后再按此文档改代码。
 
 ## 0. 结论先行

@@ -112,7 +112,7 @@ export default function SettingsScreen() {
     }, [])
   );
 
-  const version = Constants.expoConfig?.version ?? '1.2.2';
+  const version = Constants.expoConfig?.version ?? '1.3.0';
 
   const handleExport = async () => {
     setBusy(true);
@@ -379,7 +379,7 @@ export default function SettingsScreen() {
               <View style={styles.rowText}>
                 <ThemedText type="small">个性化</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  主题与个性皮肤、首页背景、Dash 卡片模式与样式
+                  主题与个性皮肤、页面背景、Dash 卡片模式与样式
                 </ThemedText>
               </View>
               <ThemedText type="small" themeColor="textSecondary">
@@ -544,7 +544,7 @@ export default function SettingsScreen() {
           </ThemedText>
           <ThemedView type="backgroundElement" style={styles.group}>
             <View style={styles.row}>
-              <ThemedText type="small">生活记录</ThemedText>
+              <ThemedText type="small">Pulse</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 版本 {version}
               </ThemedText>

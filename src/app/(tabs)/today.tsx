@@ -14,11 +14,15 @@ import { getMonthActivity } from '@/db/repositories/calendar';
 import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
 import { glassCardStyle } from '@/lib/glass';
 import { addDays, todayStr } from '@/lib/date';
+import { useThemePreference } from '@/theme/theme-context';
 
 export default function TodayScreen() {
   const theme = useTheme();
   const glass = useGlass();
   const scheme = useThemeMode();
+  const { homeBgMode } = useThemePreference();
+  // 毛玻璃或任意全局页面背景下，列表都要托在磨砂大卡片上保证可读。
+  const listOnGlass = glass || homeBgMode !== 'default';
   const insets = useSafeAreaInsets();
   const [date, setDate] = useState(todayStr());
   const [stats, setStats] = useState({ total: 0, done: 0 });
@@ -150,7 +154,7 @@ export default function TodayScreen() {
             { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
           ]}
           showsVerticalScrollIndicator={false}>
-          {glass ? (
+          {listOnGlass ? (
             <View style={[styles.glassList, glassCardStyle(scheme)]}>
               <TodayList date={date} onStats={setStats} />
             </View>

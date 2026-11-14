@@ -76,8 +76,8 @@ function Slider({ label, value, min, max, colors, onChange }: SliderProps) {
         }}
         {...responder.panHandlers}>
         <View pointerEvents="none" style={styles.trackFill}>
-          {colors.map((color) => (
-            <View key={color} style={[styles.trackSegment, { backgroundColor: color }]} />
+          {colors.map((color, index) => (
+            <View key={`stop-${index}-${color}`} style={[styles.trackSegment, { backgroundColor: color }]} />
           ))}
         </View>
         {width > 0 ? (
@@ -167,11 +167,11 @@ export function ColorPickerPanel({ color, onChange }: ColorPickerPanelProps) {
       />
 
       <View style={styles.presets}>
-        {HOME_BG_PRESETS.map((preset) => {
+        {HOME_BG_PRESETS.map((preset, index) => {
           const active = preset.color.toLowerCase() === color.toLowerCase();
           return (
             <Pressable
-              key={preset.color}
+              key={`preset-${index}-${preset.color}`}
               accessibilityRole="button"
               accessibilityLabel={`快捷颜色 ${preset.label}`}
               accessibilityState={{ selected: active }}

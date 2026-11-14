@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "my-life-app",
-    "slug": "my-life-app",
-    "version": "1.2.2",
+    "name": "Pulse",
+    "slug": "pulse",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mylifeapp",
+    "scheme": "pulse",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"

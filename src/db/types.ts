@@ -246,13 +246,15 @@ export const APP_SKIN_LABELS: Record<AppSkin, string> = {
   glass: '毛玻璃',
 };
 
-/** 首页背景模式：跟随皮肤底色 / 自定义纯色 / 自定义图片。 */
-export type HomeBgMode = 'default' | 'color' | 'image';
+/** 页面背景模式：跟随皮肤底色 / 两套预设渐变 / 自定义纯色 / 自定义图片。 */
+export type HomeBgMode = 'default' | 'mist' | 'zen' | 'color' | 'image';
 
-export const HOME_BG_MODES: HomeBgMode[] = ['default', 'color', 'image'];
+export const HOME_BG_MODES: HomeBgMode[] = ['default', 'mist', 'zen', 'color', 'image'];
 
 export const HOME_BG_MODE_LABELS: Record<HomeBgMode, string> = {
   default: '默认底色',
+  mist: '简约预设 · 晨雾冰川（蓝紫微光）',
+  zen: '简约预设 · 暖阳竹影（米白翠竹）',
   color: '纯色调色盘',
   image: '自定义图片',
 };

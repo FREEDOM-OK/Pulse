@@ -10,6 +10,7 @@ import { DateStrip } from '@/components/ui/date-strip';
 import { useGlass, useThemeMode } from '@/hooks/use-theme';
 import { formatDay, parseDate, todayStr } from '@/lib/date';
 import { glassCardStyle } from '@/lib/glass';
+import { useThemePreference } from '@/theme/theme-context';
 
 function validDate(value: string | undefined): string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return todayStr();
@@ -23,6 +24,8 @@ export default function DayDetailScreen() {
   const insets = useSafeAreaInsets();
   const glass = useGlass();
   const scheme = useThemeMode();
+  const { homeBgMode } = useThemePreference();
+  const listOnGlass = glass || homeBgMode !== 'default';
   const initialDate = validDate(typeof params.date === 'string' ? params.date : undefined);
   const [date, setDate] = useState(initialDate);
 
@@ -34,7 +37,7 @@ export default function DayDetailScreen() {
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}>
-          {glass ? (
+          {listOnGlass ? (
             <View style={[styles.glassList, glassCardStyle(scheme)]}>
               <TodayList date={date} showAddRow={false} />
             </View>

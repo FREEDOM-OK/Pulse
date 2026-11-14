@@ -38,7 +38,7 @@ export default function MiddleScreen() {
   );
 
   if (!middle) {
-    return <ThemedView style={{ flex: 1 }} />;
+    return <ThemedView style={{ flex: 1 }} glow />;
   }
   if (middle === 'timetable') {
     return <TimetableScreen mode="tab" />;

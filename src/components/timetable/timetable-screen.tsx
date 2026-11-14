@@ -10,7 +10,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CourseDetailDrawer } from '@/components/timetable/course-detail-drawer';
-import { GlassGlow } from '@/components/ui/glass-glow';
+import { PageBackground } from '@/components/ui/page-background';
 import { TimetableMoreSheet } from '@/components/timetable/timetable-more-sheet';
 import { WeekGrid } from '@/components/timetable/week-grid';
 import { WeekHeader } from '@/components/timetable/week-header';
@@ -52,7 +52,7 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const theme = useTheme();
-  const { scheme } = useThemePreference();
+  const { scheme, homeBgMode } = useThemePreference();
   const glass = useGlass();
   const material = useGlassMaterial();
   const screenWidth = windowWidth || 375;
@@ -77,18 +77,29 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
   const gridColor = settings.gridBackgroundColor.toUpperCase();
   const isDefaultLightGrid = gridColor === '#F5F5F7' || gridColor === '#FFFFFF';
   const useDarkGrid = scheme === 'dark' && isDefaultLightGrid;
-  // 毛玻璃皮肤：页面是环境光画布，表头行/左侧时间列换成半透明磨砂条。
-  const screenBackgroundColor = glass
-    ? theme.background
-    : useDarkGrid
-      ? theme.background
-      : settings.gridBackgroundColor;
-  const headerBackgroundColor = glass ? material.block : screenBackgroundColor;
-  const cellBackgroundColor = glass
+  // 毛玻璃皮肤或全局页面背景：默认浅色网格让位给底层 PageBackground，
+// 表头行/左侧时间列/单元格换成半透明磨砂块，课表与其它主页面保持同一种通透感。
+  const pageBgEnabled = glass || homeBgMode !== 'default';
+  const glassGrid = pageBgEnabled && isDefaultLightGrid;
+  const screenBackgroundColor = glassGrid
     ? 'transparent'
-    : useDarkGrid
-      ? theme.backgroundElement
-      : settings.gridBackgroundColor;
+    : glass
+      ? theme.background
+      : useDarkGrid
+        ? theme.background
+        : settings.gridBackgroundColor;
+  const headerBackgroundColor = glassGrid
+    ? material.block
+    : glass
+      ? material.block
+      : screenBackgroundColor;
+  const cellBackgroundColor = glassGrid
+    ? material.block
+    : glass
+      ? 'transparent'
+      : useDarkGrid
+        ? theme.backgroundElement
+        : settings.gridBackgroundColor;
 
   // 可见星期序列：起点由「每周起始日」决定，周六/周日可单独隐藏。
   const visibleDays = useMemo(
@@ -298,7 +309,7 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
         styles.container,
         { paddingTop: insets.top || SAFE_TOP_DP, backgroundColor: screenBackgroundColor },
       ]}>
-      {glass ? <GlassGlow scheme={scheme} /> : null}
+      {pageBgEnabled ? <PageBackground /> : null}
       <WeekHeader
         mode={mode}
         backgroundColor={headerBackgroundColor}

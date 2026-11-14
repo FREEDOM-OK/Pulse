@@ -27,15 +27,15 @@ describe('S5 外观设置（皮肤 / 首页背景）', () => {
     expect(await getHomeBgImage()).toBeNull();
   });
 
-  it('皮肤可切到苹果毛玻璃并持久化', async () => {
+  it('皮肤可切到毛玻璃并持久化', async () => {
     await createTestContext();
     await setAppSkin('glass');
     expect(await getAppSkin()).toBe('glass');
   });
 
-  it('首页背景三种模式都可持久化', async () => {
+  it('页面背景五种模式都可持久化（含两套预设渐变）', async () => {
     await createTestContext();
-    for (const mode of ['color', 'image', 'default'] as const) {
+    for (const mode of ['mist', 'zen', 'color', 'image', 'default'] as const) {
       await setHomeBgMode(mode);
       expect(await getHomeBgMode()).toBe(mode);
     }
