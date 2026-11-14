@@ -205,6 +205,9 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
               backgroundColor: navBackground,
               borderWidth: barBorderWidth,
               borderColor: barBorderColor,
+              // Android 上半透明胶囊叠加 elevation 会透出灰色硬件阴影块，
+              // 毛玻璃皮肤下显式压平，只保留描边与高不透明底。
+              ...(glass ? { elevation: 0, shadowOpacity: 0 } : null),
             },
           ]}
           onLayout={handleBarLayout}>

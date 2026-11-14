@@ -151,7 +151,7 @@ export default function PersonalizeScreen() {
                       </ThemedText>
                       <ThemedText type="small" themeColor="textSecondary">
                         {value === 'glass'
-                          ? 'iOS 磨砂透光玻璃质感 + 镜面高光描边'
+                          ? '磨砂透光玻璃质感 + 镜面高光描边'
                           : '纯色高对比度现代极简风'}
                       </ThemedText>
                     </View>

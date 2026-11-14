@@ -33,7 +33,8 @@ export function ThemedView({
   return (
     <View
       style={[
-        { backgroundColor: theme[type ?? 'background'] },
+        // 毛玻璃卡片只用材质层这一份半透明底，避免叠两层半透明变「死白方块」。
+        { backgroundColor: glassCard ? 'transparent' : theme[type ?? 'background'] },
         glassCard ? glassCardStyle(scheme) : null,
         style,
       ]}

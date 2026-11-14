@@ -28,7 +28,7 @@ interface ThemeContextValue {
   preference: ThemeSetting;
   scheme: 'light' | 'dark';
   setPreference: (value: ThemeSetting) => Promise<void>;
-  /** 全局皮肤：经典极简 / 苹果毛玻璃。 */
+  /** 全局皮肤：经典极简 / 毛玻璃。 */
   skin: AppSkin;
   /** 是否处于毛玻璃皮肤（省得每个组件都写 skin === 'glass'）。 */
   glass: boolean;

@@ -9,7 +9,7 @@ import { TAB_BAR_CLEARANCE } from '@/components/nav/app-tab-bar';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ModalSheet } from '@/components/ui/modal-sheet';
-import { Spacing } from '@/constants/theme';
+import { GlassMaterial, Spacing } from '@/constants/theme';
 import {
   BackupError,
   clearAllData,
@@ -44,7 +44,7 @@ import { deleteAvatarFile } from '@/lib/avatar';
 import { deleteHomeBgImage } from '@/lib/home-bg-image';
 import { getProfile } from '@/db/repositories/profile';
 import { useThemePreference } from '@/theme/theme-context';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
 
 const THEME_OPTIONS: { value: ThemeSetting; label: string }[] = [
   { value: 'system', label: '跟随系统' },
@@ -60,6 +60,10 @@ function errorMessage(error: unknown): string {
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const glass = useGlass();
+  const scheme = useThemeMode();
+  /** 毛玻璃下分隔线用低对比 hairline，避免实心底色在玻璃卡片里割裂。 */
+  const dividerColor = glass ? GlassMaterial[scheme].hairline : theme.background;
   const insets = useSafeAreaInsets();
   const {
     preference,
@@ -228,7 +232,7 @@ export default function SettingsScreen() {
             styles.content,
             { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
           ]}>
-          <View style={[styles.header, { backgroundColor: theme.background }]}>
+          <View style={styles.header}>
             <ThemedText type="subtitle" style={[styles.title, { color: theme.text }]}>
               设置
             </ThemedText>
@@ -287,7 +291,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -300,7 +304,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -313,7 +317,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -347,7 +351,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -365,7 +369,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -383,7 +387,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <View style={styles.row}>
               <ThemedText type="small">主题</ThemedText>
@@ -436,7 +440,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -454,7 +458,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -494,7 +498,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"
@@ -513,7 +517,7 @@ export default function SettingsScreen() {
               </ThemedText>
             </Pressable>
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+            <View style={[styles.divider, { backgroundColor: dividerColor }]} />
 
             <Pressable
               accessibilityRole="button"

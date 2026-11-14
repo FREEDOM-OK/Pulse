@@ -407,10 +407,12 @@ export default function HomeScreen() {
                 glass
                   ? {
                       backgroundColor: GlassMaterial[scheme].card,
-                      borderWidth: 0.8,
+                      borderWidth: 1.2,
                       borderColor: GlassMaterial[scheme].cardBorder,
-                      shadowColor: GlassMaterial[scheme].cardShadow,
-                      shadowOpacity: GlassMaterial[scheme].cardShadowOpacity,
+                      shadowColor: 'transparent',
+                      shadowOpacity: 0,
+                      // 半透明底 + elevation 在 Android 会透出灰色阴影投射块，形成双层内框。
+                      elevation: 0,
                     }
                   : {
                       backgroundColor: theme.backgroundElement,
@@ -474,8 +476,6 @@ export default function HomeScreen() {
                         glassCardStyle(scheme),
                         {
                           borderRadius: 24,
-                          marginHorizontal: 16,
-                          paddingHorizontal: 16,
                           paddingTop: 16,
                           paddingBottom: 8,
                         },

@@ -8,7 +8,7 @@ import { ThemePreferenceContext } from '@/theme/theme-context';
 
 /**
  * 主题色板：优先用用户手动选择，未选择时跟随系统。
- * 开了苹果毛玻璃皮肤就整体换成 GlassColors，所有界面不用改代码。
+ * 开了毛玻璃皮肤就整体换成 GlassColors，所有界面不用改代码。
  */
 export function useTheme() {
   const systemScheme = useColorScheme();

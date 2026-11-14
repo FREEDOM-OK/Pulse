@@ -3,22 +3,26 @@ import type { ViewStyle } from 'react-native';
 import { GlassMaterial, type GlassScheme } from '@/constants/theme';
 
 /**
- * 苹果毛玻璃的通用样式工厂。
+ * 毛玻璃的通用样式工厂。
  * 只返回视觉属性，圆角/尺寸仍由各组件自己的样式决定，避免覆盖布局。
  */
 
-/** 卡片磨砂表面：半透明底 + 镜面高光描边 + 柔和弥散底光。 */
+/**
+ * 卡片磨砂表面：半透明底 + 镜面高光描边。
+ * Android 上半透明背景叠加 elevation 会把硬件阴影投射块透出来，
+ * 形成「外圈灰框 + 内圈白块」的套娃，所以这里显式压成 elevation: 0。
+ */
 export function glassCardStyle(scheme: GlassScheme): ViewStyle {
   const material = GlassMaterial[scheme];
   return {
     backgroundColor: material.card,
-    borderWidth: 0.8,
+    borderWidth: 1.2,
     borderColor: material.cardBorder,
     shadowColor: material.cardShadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: material.cardShadowOpacity,
     shadowRadius: 18,
-    elevation: material.cardElevation,
+    elevation: 0,
   };
 }
 
@@ -43,9 +47,9 @@ export function glassSheetStyle(scheme: GlassScheme): ViewStyle {
     borderTopColor: scheme === 'light' ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.22)',
     shadowColor: material.cardShadow,
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: scheme === 'light' ? 0.12 : 0.4,
+    shadowOpacity: 0,
     shadowRadius: 28,
-    elevation: 8,
+    elevation: 0,
   };
 }
 

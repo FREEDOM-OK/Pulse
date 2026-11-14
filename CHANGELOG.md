@@ -4,6 +4,21 @@
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
 > - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
 
+## v1.2.30 — 2026-11-14
+
+### 毛玻璃皮肤 Android 渲染修复：去除套娃灰框 / 硬边光饼 / 底栏透字
+
+- `src/constants/theme.ts`：`GlassMaterial.light` 改为 `canvas #EEF2F9`、`card rgba(255,255,255,0.78)`、`cardBorder rgba(255,255,255,0.96)`、`cardShadow transparent`、`cardShadowOpacity 0`、`cardElevation 0`；`dark` 改为 `canvas #0B0E17`、`card rgba(30,34,46,0.75)`、`cardBorder rgba(255,255,255,0.14)`、`cardShadow transparent`、`cardShadowOpacity 0`、`cardElevation 0`。底栏 `bar` 提高到浅色 `rgba(255,255,255,0.90)` / 深色 `rgba(24,26,34,0.90)`，`barBorder` 浅色 `rgba(255,255,255,0.98)`、深色 `rgba(255,255,255,0.16)`，`barIndicator` 浅色 `rgba(15,23,42,0.06)`。
+- 根因说明：Android 上「半透明 backgroundColor + elevation > 0」会把硬件阴影投射块透出来，形成外圈灰框 + 内圈白块的套娃；因此所有玻璃卡片/搜索栏/底栏/弹窗在 glass 下显式 `elevation: 0`、`shadowOpacity: 0`。
+- `src/lib/glass.ts`：`glassCardStyle` 描边由 0.8 提升到 1.2 并显式 `elevation: 0`；`glassSheetStyle` 阴影透明度归零、`elevation: 0`（弹窗同样避免灰框）。
+- `src/components/themed-view.tsx`：`type="backgroundElement"` 走玻璃卡片时底色改为 `transparent`，只保留材质层这一份半透明底，避免两层半透明叠加成「死白方块」。
+- `src/components/ui/glass-glow.tsx` 重写：不再画单层 300/340 实心圆，改为每团光晕 10 层从大到小叠加的同心羽化圆（半径按 8% 递减，单层浅色 `opacity 0.012`、深色 `0.008`，颜色 `#93C5FD` 冰蓝与 `#DDD6FE` 微紫），中心柔和、边缘自然衰减，消除「圆饼贴纸」硬边。
+- `src/components/nav/app-tab-bar.tsx`：glass 下底栏胶囊内联覆盖 `elevation: 0 / shadowOpacity: 0`，去掉内部灰圈；配合更高不透明度的 `bar` 底色，滚动内容不再穿透成重影。
+- `src/app/(tabs)/index.tsx`：glass 搜索栏改 1.2px 白描边并显式 `elevation: 0 / shadowOpacity: 0`（覆盖 `styles.searchBar` 的 `elevation: 4`），消除双层内框；Tasks 玻璃大卡片不再叠 `marginHorizontal/paddingHorizontal` 内缩，只保留 `borderRadius: 24 + 上下内边距`，列表行保持透明。
+- `src/app/(tabs)/settings.tsx`：页头去掉 `backgroundColor: theme.background` 实心底，玻璃卡片内 10 处分隔线改用 `GlassMaterial[scheme].hairline`，不再出现横向割裂色块。
+- 皮肤文案统一为「毛玻璃」：`APP_SKIN_LABELS.glass`、个性化页副标题、相关注释均去掉「苹果」字样。
+- 验证：44 个测试文件 / 297 条用例、`tsc --noEmit`、`expo lint` 全部通过；真机 Android 渲染与滚动穿透需真人复核。
+
 ## v1.2.29 — 2026-11-14
 
 ### 新增「苹果毛玻璃」全局皮肤与首页背景定制（调色盘 / 自定义壁纸）

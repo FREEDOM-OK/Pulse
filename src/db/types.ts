@@ -236,14 +236,14 @@ export const COURSE_BACKGROUND_LABELS: Record<CourseBackground, string> = {
 /** 卡片自定义颜色默认值，与深色主卡一致。 */
 export const DEFAULT_CARD_COLOR = '#26262A';
 
-/** 全局皮肤：经典极简（现状） / 苹果毛玻璃。 */
+/** 全局皮肤：经典极简（现状） / 毛玻璃。 */
 export type AppSkin = 'default' | 'glass';
 
 export const APP_SKINS: AppSkin[] = ['default', 'glass'];
 
 export const APP_SKIN_LABELS: Record<AppSkin, string> = {
   default: '经典极简',
-  glass: '苹果毛玻璃',
+  glass: '毛玻璃',
 };
 
 /** 首页背景模式：跟随皮肤底色 / 自定义纯色 / 自定义图片。 */
