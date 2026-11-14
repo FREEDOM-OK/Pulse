@@ -6,6 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
+import { ColorPickerPanel } from '@/components/personalize/color-picker';
+import { HomeBgImagePanel } from '@/components/personalize/home-bg-image-panel';
 import { SettingsRow } from '@/components/timetable/settings-row';
 import { Space, Type } from '@/constants/theme';
 import {
@@ -17,10 +19,14 @@ import {
   setHideCompleted,
 } from '@/db/repositories/settings';
 import {
+  APP_SKINS,
+  APP_SKIN_LABELS,
   CARD_STYLES,
   CARD_STYLE_LABELS,
   DASH_MODES,
   DASH_MODE_LABELS,
+  HOME_BG_MODES,
+  HOME_BG_MODE_LABELS,
   type CardStyle,
   type DashMode,
 } from '@/db/types';
@@ -31,7 +37,16 @@ import { useThemePreference } from '@/theme/theme-context';
 export default function PersonalizeScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { preference, setPreference } = useThemePreference();
+  const {
+    preference,
+    setPreference,
+    skin,
+    setAppSkin,
+    homeBgMode,
+    homeBgColor,
+    setHomeBgMode,
+    setHomeBgColor,
+  } = useThemePreference();
   const [dashMode, setDashModeState] = useState<DashMode>('carousel');
   const [cardStyle, setCardStyleState] = useState<CardStyle>('default');
   const [hideCompleted, setHideCompletedState] = useState(false);
@@ -54,7 +69,7 @@ export default function PersonalizeScreen() {
     preference === 'system' ? '跟随系统' : preference === 'dark' ? '深色' : '浅色';
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <Breadcrumb
@@ -66,7 +81,10 @@ export default function PersonalizeScreen() {
           <ThemedText style={styles.title}>个性化</ThemedText>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+          contentContainerStyle={styles.content}>
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
             主题
           </ThemedText>
@@ -93,6 +111,100 @@ export default function PersonalizeScreen() {
                 </View>
               );
             })}
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            个性皮肤
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            {APP_SKINS.map((value, index) => {
+              const active = skin === value;
+              return (
+                <View key={value}>
+                  {index > 0 ? (
+                    <View style={[styles.divider, { backgroundColor: theme.background }]} />
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`个性皮肤 ${APP_SKIN_LABELS[value]}`}
+                    onPress={() => {
+                      setAppSkin(value).catch(() => undefined);
+                    }}
+                    style={({ pressed }) => [
+                      styles.optionRow,
+                      styles.skinRow,
+                      pressed && styles.pressed,
+                    ]}>
+                    <View
+                      style={[
+                        styles.skinPreview,
+                        value === 'glass'
+                          ? styles.glassPreview
+                          : [styles.classicPreview, { backgroundColor: theme.text }],
+                      ]}
+                    />
+                    <View style={styles.skinText}>
+                      <ThemedText type="small">
+                        {active ? '✓ ' : ''}
+                        {APP_SKIN_LABELS[value]}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        {value === 'glass'
+                          ? 'iOS 磨砂透光玻璃质感 + 镜面高光描边'
+                          : '纯色高对比度现代极简风'}
+                      </ThemedText>
+                    </View>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </ThemedView>
+
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            首页背景
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            {HOME_BG_MODES.map((mode, index) => {
+              const active = homeBgMode === mode;
+              return (
+                <View key={mode}>
+                  {index > 0 ? (
+                    <View style={[styles.divider, { backgroundColor: theme.background }]} />
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`首页背景 ${HOME_BG_MODE_LABELS[mode]}`}
+                    onPress={() => {
+                      setHomeBgMode(mode).catch(() => undefined);
+                    }}
+                    style={({ pressed }) => [styles.optionRow, pressed && styles.pressed]}>
+                    <ThemedText type="small">
+                      {active ? '✓ ' : ''}
+                      {HOME_BG_MODE_LABELS[mode]}
+                    </ThemedText>
+                  </Pressable>
+                </View>
+              );
+            })}
+
+            {homeBgMode === 'color' ? (
+              <View style={[styles.panelDivider, { borderTopColor: theme.background }]}>
+                <ColorPickerPanel
+                  color={homeBgColor}
+                  onChange={(hex) => {
+                    setHomeBgColor(hex).catch(() => undefined);
+                  }}
+                />
+              </View>
+            ) : null}
+
+            {homeBgMode === 'image' ? (
+              <View style={[styles.panelDivider, { borderTopColor: theme.background }]}>
+                <HomeBgImagePanel />
+              </View>
+            ) : null}
           </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
@@ -235,6 +347,37 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: StyleSheet.hairlineWidth,
+  },
+  skinRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.three,
+  },
+  skinPreview: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  classicPreview: {
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  glassPreview: {
+    backgroundColor: 'rgba(147,197,253,0.35)',
+    borderColor: 'rgba(255,255,255,0.95)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  skinText: {
+    flex: 1,
+    gap: 2,
+  },
+  panelDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingBottom: Space.two,
   },
   switchRow: {
     flexDirection: 'row',

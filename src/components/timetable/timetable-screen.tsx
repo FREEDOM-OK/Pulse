@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Platform,
@@ -10,16 +10,20 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CourseDetailDrawer } from '@/components/timetable/course-detail-drawer';
+import { GlassGlow } from '@/components/ui/glass-glow';
 import { TimetableMoreSheet } from '@/components/timetable/timetable-more-sheet';
 import { WeekGrid } from '@/components/timetable/week-grid';
 import { WeekHeader } from '@/components/timetable/week-header';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import type { CourseEntity } from '@/features/timetable/repository';
+import { useGlass, useGlassMaterial, useTheme } from '@/hooks/use-theme';
+import { useThemePreference } from '@/theme/theme-context';
 import { askConfirm, showNotice } from '@/lib/dialogs';
 import {
   SAFE_TOP_DP,
   TIME_COL,
   currentWeekNumber,
+  visibleWeekDays,
   weekDateFor,
 } from '@/lib/timetable-core';
 
@@ -47,13 +51,16 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+  const theme = useTheme();
+  const { scheme } = useThemePreference();
+  const glass = useGlass();
+  const material = useGlassMaterial();
   const screenWidth = windowWidth || 375;
   // 横向分页要用的真实宽度：以容器 onLayout 实测为准。窗口宽度和滚动容器宽度可能
   // 因为内边距、安全区、刘海屏而不一致；差几个像素，每次翻页就会「差一点」，
   // 在 Android 上表现为列表自己左右来回弹（抽搐）。
   const [listWidth, setListWidth] = useState(0);
   const pageWidth = listWidth || screenWidth;
-  const dayColWidth = (pageWidth - TIME_COL) / 7;
 
   const {
     activeSchedule,
@@ -62,8 +69,34 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
     viewingWeek,
     setViewingWeek,
     deleteCourse,
-    duplicateCourse,
   } = useTimetable();
+
+  // 深色模式下，默认浅色网格底（#F5F5F7 / #FFFFFF）自动换成深色：
+  // 容器/表头/时间列用 theme.background，空白格子用 theme.backgroundElement；
+  // 用户主动选过的其他颜色则原样保留。
+  const gridColor = settings.gridBackgroundColor.toUpperCase();
+  const isDefaultLightGrid = gridColor === '#F5F5F7' || gridColor === '#FFFFFF';
+  const useDarkGrid = scheme === 'dark' && isDefaultLightGrid;
+  // 毛玻璃皮肤：页面是环境光画布，表头行/左侧时间列换成半透明磨砂条。
+  const screenBackgroundColor = glass
+    ? theme.background
+    : useDarkGrid
+      ? theme.background
+      : settings.gridBackgroundColor;
+  const headerBackgroundColor = glass ? material.block : screenBackgroundColor;
+  const cellBackgroundColor = glass
+    ? 'transparent'
+    : useDarkGrid
+      ? theme.backgroundElement
+      : settings.gridBackgroundColor;
+
+  // 可见星期序列：起点由「每周起始日」决定，周六/周日可单独隐藏。
+  const visibleDays = useMemo(
+    () => visibleWeekDays(settings.weekStartDay, settings.showSaturday, settings.showSunday),
+    [settings.weekStartDay, settings.showSaturday, settings.showSunday]
+  );
+  // 列宽按可见天数摊平，隐藏周六/周日时每列自动变宽。
+  const dayColWidth = (pageWidth - TIME_COL) / Math.max(1, visibleDays.length);
 
   const flatListRef = useRef<FlatList<number>>(null);
   /** 最新周次，供 onLayout 等异步回调读取，避免闭包里拿到旧 viewingWeek。 */
@@ -220,10 +253,14 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
     [syncWeekFromOffset],
   );
 
-  const openAddCourse = (day: number, period: number) => {
+  const openAddCourse = (day: number, period: number, endPeriod?: number) => {
     router.push({
       pathname: '/timetable/course',
-      params: { day: String(day), period: String(period) },
+      params: {
+        day: String(day),
+        period: String(period),
+        ...(endPeriod ? { endPeriod: String(endPeriod) } : {}),
+      },
     });
   };
 
@@ -239,7 +276,13 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
       todayDayOfWeek={todayDayOfWeek}
       startDate={activeSchedule.startDate}
       saturation={settings.saturation}
+      cellHeight={settings.cellHeight}
+      cellRadius={settings.cellRadius}
+      gridBackgroundColor={headerBackgroundColor}
+      cellBackgroundColor={cellBackgroundColor}
+      visibleDays={visibleDays}
       bottomPadding={mode === 'tab' ? 100 : 32}
+      defaultSpan={settings.defaultSpan || 2}
       onAddCourse={openAddCourse}
       onPressCourse={(course, sessionIndex) => {
         setSelectedCourse(course);
@@ -250,9 +293,15 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top || SAFE_TOP_DP }]}>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top || SAFE_TOP_DP, backgroundColor: screenBackgroundColor },
+      ]}>
+      {glass ? <GlassGlow scheme={scheme} /> : null}
       <WeekHeader
         mode={mode}
+        backgroundColor={headerBackgroundColor}
         title={headerTitle}
         subtitle={headerSubtitle}
         onBack={() => router.back()}
@@ -311,16 +360,6 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
           setSelectedCourse(null);
           router.push({ pathname: '/timetable/course', params: { id: course.id } });
         }}
-        onCopy={async (course) => {
-          try {
-            await duplicateCourse(course);
-          } catch (err) {
-            // 写库失败要就地提示，绝不能让 Promise 拒绝逃出去（原生端会整页崩回首页）
-            showNotice(`复制失败：${err instanceof Error ? err.message : '未知错误'}`);
-          } finally {
-            setSelectedCourse(null);
-          }
-        }}
         onDelete={(course) => {
           void askConfirm({
             title: '确认删除',
@@ -353,9 +392,6 @@ export function TimetableScreen({ mode = 'page' }: TimetableScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    // 与表头/时间列/午休条一致的淡灰底色：根容器一直铺到屏幕底部，
-    // 让网格背景自然延伸到悬浮底栏下方，避免漏出外层纯白。
-    backgroundColor: '#F5F5F7',
   },
   weekPager: { flex: 1 },
 });

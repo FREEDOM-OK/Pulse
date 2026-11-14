@@ -39,6 +39,13 @@ interface BottomSheetProps {
   closeLabel?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /**
+   * 悬浮在 Modal 最顶层的浮层（Toast 之类）。
+   *
+   * 必须挂在 Modal 内部的根节点上：普通页面里的绝对定位 View 会被 Modal
+   * 的独立窗口层级压住，抽屉不关闭时根本看不见。
+   */
+  overlay?: React.ReactNode;
 }
 
 const ENTER_MS = 220;
@@ -69,6 +76,7 @@ export function BottomSheet({
   closeLabel = '关闭抽屉',
   children,
   footer,
+  overlay,
 }: BottomSheetProps) {
   const theme = useTheme();
   const { height } = useWindowDimensions();
@@ -215,6 +223,9 @@ export function BottomSheet({
           </View>
           {footer ? <View style={styles.footer}>{footer}</View> : null}
         </Animated.View>
+
+        {/* 顶层浮层：与 backdrop / sheet 同级，因此能盖在抽屉本体之上 */}
+        {overlay}
       </View>
     </Modal>
   );

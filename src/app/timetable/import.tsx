@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
+import { useThemePreference } from '@/theme/theme-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { askConfirm, showNotice } from '@/lib/dialogs';
@@ -25,6 +27,8 @@ const DEMO_TEXT = `高等数学 周一 1-2 1-16 张老师 A101
 体育 周五 5-6 王老师 操场`;
 
 export default function ImportTimetableScreen() {
+  const theme = useTheme();
+  const { scheme } = useThemePreference();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activeSchedule, importCoursesToActiveSchedule } = useTimetable();
@@ -72,6 +76,7 @@ export default function ImportTimetableScreen() {
       style={[
         styles.container,
         {
+          backgroundColor: theme.background,
           paddingTop: insets.top || SAFE_TOP_DP,
           paddingBottom: insets.bottom || SAFE_BOTTOM_DP,
         },
@@ -79,18 +84,27 @@ export default function ImportTimetableScreen() {
     >
       <View style={styles.headerBar}>
         <TouchableOpacity
-          style={styles.backBtnCircle}
+          style={[
+            styles.backBtnCircle,
+            {
+              borderColor: scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)',
+              backgroundColor: theme.backgroundElement,
+            },
+          ]}
           accessibilityLabel="返回"
           onPress={() => router.back()}
         >
-          <Text style={styles.backArrow}>‹</Text>
+          <Text style={[styles.backArrow, { color: theme.text }]}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>导入课表</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>导入课表</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollBody}>
-        <Text style={styles.topHint}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.scrollBody}>
+        <Text style={[styles.topHint, { color: theme.textSecondary }]}>
           每行一门课：课程名 星期 节次 [周次] [教师] [地点]，至少写前三项。
         </Text>
 
@@ -100,24 +114,27 @@ export default function ImportTimetableScreen() {
           multiline
           accessibilityLabel="导入文本"
           placeholder={DEMO_TEXT}
-          placeholderTextColor="rgba(0,0,0,0.3)"
-          style={styles.textArea}
+          placeholderTextColor={theme.textSecondary}
+          style={[
+            styles.textArea,
+            { backgroundColor: theme.backgroundElement, color: theme.text },
+          ]}
         />
 
         <View style={styles.btnRow}>
           <TouchableOpacity
-            style={styles.secondaryBtn}
+            style={[styles.secondaryBtn, { backgroundColor: theme.backgroundSelected }]}
             accessibilityLabel="粘贴示例"
             onPress={() => setRawText(DEMO_TEXT)}
           >
-            <Text style={styles.secondaryBtnText}>粘贴示例</Text>
+            <Text style={[styles.secondaryBtnText, { color: theme.text }]}>粘贴示例</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.secondaryBtn}
+            style={[styles.secondaryBtn, { backgroundColor: theme.backgroundSelected }]}
             accessibilityLabel="从文件导入"
             onPress={handlePickFile}
           >
-            <Text style={styles.secondaryBtnText}>从文件导入</Text>
+            <Text style={[styles.secondaryBtnText, { color: theme.text }]}>从文件导入</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.primaryBtn} onPress={handleParse} accessibilityLabel="解析">
             <Text style={styles.primaryBtnText}>解析</Text>
@@ -125,13 +142,13 @@ export default function ImportTimetableScreen() {
         </View>
 
         {preview && (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewHeader}>
+          <View style={[styles.previewCard, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.previewHeader, { color: theme.text }]}>
               解析到 {preview.courses.length} 门课 / {preview.totalSessions} 个时段
             </Text>
 
             {preview.courses.map((c) => (
-              <Text key={c.name} style={styles.courseRowText}>
+              <Text key={c.name} style={[styles.courseRowText, { color: theme.text }]}>
                 {c.name} · {c.sessions.length} 个时段
               </Text>
             ))}
@@ -163,7 +180,7 @@ export default function ImportTimetableScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F7' },
+  container: { flex: 1 },
   headerBar: {
     height: 52,
     paddingHorizontal: 16,
@@ -176,22 +193,18 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 22, color: '#111113', lineHeight: 24 },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: '#111113' },
+  backArrow: { fontSize: 22, lineHeight: 24 },
+  headerTitle: { fontSize: 17, fontWeight: '600' },
   scrollBody: { padding: 16, gap: 12 },
-  topHint: { fontSize: 13, fontWeight: '400', color: 'rgba(0,0,0,0.6)' },
+  topHint: { fontSize: 13, fontWeight: '400' },
   textArea: {
     minHeight: 168,
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 14,
     fontSize: 13,
-    color: '#111113',
     textAlignVertical: 'top',
   },
   btnRow: { flexDirection: 'row', gap: 8 },
@@ -199,11 +212,10 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 42,
     borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  secondaryBtnText: { fontSize: 13, fontWeight: '500', color: '#111113' },
+  secondaryBtnText: { fontSize: 13, fontWeight: '500' },
   primaryBtn: {
     flex: 1,
     height: 42,
@@ -214,13 +226,12 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   previewCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     gap: 8,
   },
-  previewHeader: { fontSize: 14, fontWeight: '600', color: '#111113' },
-  courseRowText: { fontSize: 13, color: 'rgba(0,0,0,0.75)' },
+  previewHeader: { fontSize: 14, fontWeight: '600' },
+  courseRowText: { fontSize: 13 },
   errorBox: { marginTop: 6, gap: 4 },
   errorLine: { fontSize: 12, color: '#EF4444' },
   importCommitBtn: {

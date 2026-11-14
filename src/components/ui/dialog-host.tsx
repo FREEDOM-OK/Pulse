@@ -3,7 +3,8 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
+import { glassSheetStyle } from '@/lib/glass';
 import {
   closeDialog,
   getDialogSnapshot,
@@ -15,6 +16,8 @@ import {
 export function DialogHost() {
   const dialog = useSyncExternalStore(subscribeDialog, getDialogSnapshot, getDialogSnapshot);
   const theme = useTheme();
+  const glass = useGlass();
+  const scheme = useThemeMode();
 
   return (
     <Modal
@@ -28,7 +31,7 @@ export function DialogHost() {
           accessibilityLabel="关闭弹窗"
           onPress={() => closeDialog(false)}
         />
-        <ThemedView style={styles.card}>
+        <ThemedView style={[styles.card, glass ? glassSheetStyle(scheme) : null]}>
           {dialog ? (
             <>
               <ThemedText style={styles.title}>{dialog.title}</ThemedText>

@@ -132,7 +132,7 @@ export function FitnessScreen({ mode = 'tab', initialDate }: FitnessScreenProps)
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <SubPageHeader
           title="健身"
@@ -185,6 +185,8 @@ export function FitnessScreen({ mode = 'tab', initialDate }: FitnessScreenProps)
         <DateStrip value={date} onChange={setDate} marked={markedDays} />
 
         <ScrollView
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
           contentContainerStyle={[
             styles.content,
             mode === 'tab' ? { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom } : null,

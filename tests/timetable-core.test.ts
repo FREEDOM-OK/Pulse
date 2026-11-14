@@ -6,9 +6,12 @@ import {
   rowTop,
   rowBottom,
   blocksOf,
+  periodsForTimeRange,
   softenColor,
   foregroundFor,
   parseImportText,
+  timeToGridY,
+  timeToMinutes,
 } from '@/lib/timetable-core';
 
 describe('timetable-core unit tests', () => {
@@ -101,5 +104,59 @@ describe('timetable-core unit tests', () => {
       '第 2 行：无法识别星期「周八」',
       '第 3 行：无法识别节次「1」',
     ]);
+  });
+});
+
+const CUSTOM_PERIODS = [
+  { start: '07:40', end: '08:30' },
+  { start: '08:30', end: '09:20' },
+  { start: '09:20', end: '10:10' },
+  { start: '10:30', end: '11:20' },
+];
+
+describe('自定义时间的网格映射', () => {
+  test('timeToMinutes 接受 8:23，非法输入返回 NaN', () => {
+    expect(timeToMinutes('08:23')).toBe(503);
+    expect(timeToMinutes('8:23')).toBe(503);
+    expect(timeToMinutes('')).toBeNaN();
+    expect(timeToMinutes('abc')).toBeNaN();
+  });
+
+  test('节内按比例插值：08:00 落在第 1 节的 40%', () => {
+    expect(timeToGridY(timeToMinutes('08:00'), CUSTOM_PERIODS, 58, 20, 4)).toBeCloseTo(
+      0 + (20 / 50) * 58,
+      5
+    );
+    expect(timeToGridY(timeToMinutes('09:08'), CUSTOM_PERIODS, 58, 20, 4)).toBeCloseTo(
+      58 + (38 / 50) * 58,
+      5
+    );
+  });
+
+  test('早于第一节 → 0；晚于最后一节 → 网格底部', () => {
+    expect(timeToGridY(timeToMinutes('07:00'), CUSTOM_PERIODS, 58, 20, 4)).toBe(0);
+    expect(timeToGridY(timeToMinutes('12:00'), CUSTOM_PERIODS, 58, 20, 4)).toBe(
+      rowBottom(CUSTOM_PERIODS.length, 58, 20, 4)
+    );
+  });
+
+  test('午休区间按 lunchH 比例插值（lunchAfter=3，10:25 → 174 + 15）', () => {
+    expect(timeToGridY(timeToMinutes('10:25'), CUSTOM_PERIODS, 58, 20, 3)).toBeCloseTo(189, 5);
+  });
+
+  test('普通课间没有像素空间，贴在下课那条线上', () => {
+    expect(timeToGridY(timeToMinutes('10:25'), CUSTOM_PERIODS, 58, 20, 4)).toBe(174);
+  });
+
+  test('periodsForTimeRange 反推有交集的起止节次', () => {
+    expect(periodsForTimeRange('08:00', '09:08', CUSTOM_PERIODS)).toEqual({
+      startPeriod: 1,
+      endPeriod: 2,
+    });
+    expect(periodsForTimeRange('09:20', '10:10', CUSTOM_PERIODS)).toEqual({
+      startPeriod: 3,
+      endPeriod: 3,
+    });
+    expect(periodsForTimeRange('06:00', '06:30', CUSTOM_PERIODS)).toBeNull();
   });
 });

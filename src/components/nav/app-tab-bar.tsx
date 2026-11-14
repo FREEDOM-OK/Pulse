@@ -22,13 +22,14 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { EventForm } from '@/components/home/event-form';
-import { MemoForm } from '@/components/today/memo-form';
 import { TaskForm } from '@/components/today/task-form';
 import { ActionMenu } from '@/components/ui/action-menu';
 import { RipplePressable } from '@/components/ui/ripple-pressable';
 import { buildTabItems, type TabItem } from '@/constants/tabs';
-import type { EventType, MiddleTab } from '@/db/types';
+import type { MiddleTab } from '@/db/types';
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
+import { useGlass, useGlassMaterial, useTheme } from '@/hooks/use-theme';
+import { useThemePreference } from '@/theme/theme-context';
 import { bumpDataVersion } from '@/lib/data-version';
 import { todayStr } from '@/lib/date';
 
@@ -43,12 +44,13 @@ const INDICATOR_RADIUS = 23;
 const PLUS_CIRCLE_SIZE = 42;
 const ICON_SIZE = 22;
 
-const NAV_BACKGROUND = '#FFFFFF';
-const ACTIVE_COLOR = '#000000';
-const INACTIVE_COLOR = '#8E8E93';
-const INDICATOR_COLOR = '#F2F2F7';
-const PLUS_BACKGROUND = '#000000';
-const PLUS_FOREGROUND = '#FFFFFF';
+const NAV_BACKGROUND_LIGHT = '#FFFFFF';
+const NAV_BACKGROUND_DARK = '#1C1C1E';
+const INDICATOR_COLOR_LIGHT = '#F2F2F7';
+const ACTIVE_COLOR_LIGHT = '#000000';
+const INACTIVE_COLOR_LIGHT = '#8E8E93';
+const PLUS_BACKGROUND_LIGHT = '#000000';
+const PLUS_FOREGROUND_LIGHT = '#FFFFFF';
 
 /** 5 个视觉槽位里，真实路由 Tab 占 0/1/3/4，槽位 2 留给加号。 */
 const SLOT_INDEX = [0, 1, 3, 4] as const;
@@ -80,10 +82,30 @@ interface AppTabBarProps extends BottomTabBarProps {
 export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarProps) {
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const theme = useTheme();
+  const { scheme } = useThemePreference();
+  const glass = useGlass();
+  const material = useGlassMaterial();
+  const isDark = scheme === 'dark';
+  // 毛玻璃皮肤：高透悬浮灵动岛胶囊；经典皮肤保持原来的纯色底栏。
+  const navBackground = glass
+    ? material.bar
+    : isDark
+      ? NAV_BACKGROUND_DARK
+      : NAV_BACKGROUND_LIGHT;
+  const barBorderWidth = glass ? 1 : isDark ? StyleSheet.hairlineWidth : 0;
+  const barBorderColor = glass ? material.barBorder : 'rgba(255,255,255,0.12)';
+  const indicatorColor = glass
+    ? material.barIndicator
+    : isDark
+      ? theme.backgroundSelected
+      : INDICATOR_COLOR_LIGHT;
+  // 深色下反色：白底加号 + 黑加号，和浅色模式的黑底白加号保持同样的对比度。
+  const plusBackground = isDark ? theme.text : PLUS_BACKGROUND_LIGHT;
+  const plusForeground = isDark ? theme.background : PLUS_FOREGROUND_LIGHT;
   const [menuOpen, setMenuOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
-  const [memoOpen, setMemoOpen] = useState(false);
-  const [eventType, setEventType] = useState<EventType | null>(null);
+  const [eventOpen, setEventOpen] = useState(false);
   const [today] = useState(() => todayStr());
   const [barWidth, setBarWidth] = useState(0);
 
@@ -154,43 +176,19 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
 
   const menuItems = [
     {
-      key: 'task',
-      label: '新建任务',
+      key: 'entry',
+      label: '新建任务/备忘',
       onPress: () => {
         setMenuOpen(false);
         setTaskOpen(true);
       },
     },
     {
-      key: 'memo',
-      label: '新建备忘',
+      key: 'event',
+      label: '记事件',
       onPress: () => {
         setMenuOpen(false);
-        setMemoOpen(true);
-      },
-    },
-    {
-      key: 'expense',
-      label: '记重大消费',
-      onPress: () => {
-        setMenuOpen(false);
-        setEventType('expense');
-      },
-    },
-    {
-      key: 'shopping',
-      label: '记重大购物',
-      onPress: () => {
-        setMenuOpen(false);
-        setEventType('shopping');
-      },
-    },
-    {
-      key: 'meal',
-      label: '记今日好饭',
-      onPress: () => {
-        setMenuOpen(false);
-        setEventType('meal');
+        setEventOpen(true);
       },
     },
   ];
@@ -200,11 +198,20 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
       <View
         pointerEvents="box-none"
         style={[styles.dock, { paddingBottom: BOTTOM_GAP + insets.bottom }]}>
-        <View style={styles.bar} onLayout={handleBarLayout}>
+        <View
+          style={[
+            styles.bar,
+            {
+              backgroundColor: navBackground,
+              borderWidth: barBorderWidth,
+              borderColor: barBorderColor,
+            },
+          ]}
+          onLayout={handleBarLayout}>
           {barWidth > 0 ? (
             <Animated.View
               pointerEvents="none"
-              style={[styles.indicator, indicatorStyle]}
+              style={[styles.indicator, indicatorStyle, { backgroundColor: indicatorColor }]}
             />
           ) : null}
 
@@ -215,14 +222,14 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
             accessibilityRole="button"
             accessibilityLabel="新建"
             onPress={() => setMenuOpen(true)}
-            rippleColor="rgba(255,255,255,0.3)"
+            rippleColor={isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.3)'}
             rippleRadius={PLUS_CIRCLE_SIZE / 2}
             style={styles.plusHit}
             contentStyle={styles.plusContent}>
-            <View style={styles.plusCircle}>
+            <View style={[styles.plusCircle, { backgroundColor: plusBackground }]}>
               <SymbolView
                 name={{ ios: 'plus', android: 'add', web: 'add' }}
-                tintColor={PLUS_FOREGROUND}
+                tintColor={plusForeground}
                 size={24}
               />
             </View>
@@ -244,6 +251,7 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
         visible={taskOpen}
         date={today}
         task={null}
+        initialKind="task"
         onClose={() => setTaskOpen(false)}
         onSaved={() => {
           setTaskOpen(false);
@@ -251,23 +259,12 @@ export function AppTabBar({ state, emitter, navigateToTab, middle }: AppTabBarPr
         }}
       />
 
-      <MemoForm
-        visible={memoOpen}
-        date={today}
-        memo={null}
-        onClose={() => setMemoOpen(false)}
-        onSaved={() => {
-          setMemoOpen(false);
-          bumpDataVersion();
-        }}
-      />
-
       <EventForm
-        visible={eventType != null}
-        type={eventType}
-        onClose={() => setEventType(null)}
+        visible={eventOpen}
+        initialType="expense"
+        onClose={() => setEventOpen(false)}
         onSaved={() => {
-          setEventType(null);
+          setEventOpen(false);
           bumpDataVersion();
         }}
       />
@@ -285,6 +282,11 @@ interface TabButtonProps {
 /** 图标与文字用双层淡入淡出，选中时平滑过渡到纯黑，而不是直接跳色。 */
 function TabButton({ tab, active, reduced, onPress }: TabButtonProps) {
   const selection = useSharedValue(active ? 1 : 0);
+  const theme = useTheme();
+  const { scheme } = useThemePreference();
+  const isDark = scheme === 'dark';
+  const activeColor = isDark ? theme.text : ACTIVE_COLOR_LIGHT;
+  const inactiveColor = isDark ? theme.textSecondary : INACTIVE_COLOR_LIGHT;
 
   useEffect(() => {
     selection.value = reduced ? (active ? 1 : 0) : withTiming(active ? 1 : 0, { duration: 180 });
@@ -300,26 +302,26 @@ function TabButton({ tab, active, reduced, onPress }: TabButtonProps) {
       accessibilityLabel={tab.title}
       accessibilityState={{ selected: active }}
       onPress={onPress}
-      rippleColor="rgba(0,0,0,0.08)"
+      rippleColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}
       rippleRadius={INDICATOR_RADIUS}
       style={styles.tab}
       contentStyle={styles.tabContent}>
       <View style={styles.iconBox}>
-        <SymbolView name={tab.icon} tintColor={INACTIVE_COLOR} size={ICON_SIZE} />
+        <SymbolView name={tab.icon} tintColor={inactiveColor} size={ICON_SIZE} />
         <Animated.View
           pointerEvents="none"
           style={[styles.iconOverlay, activeFadeStyle]}>
-          <SymbolView name={tab.icon} tintColor={ACTIVE_COLOR} size={ICON_SIZE} />
+          <SymbolView name={tab.icon} tintColor={activeColor} size={ICON_SIZE} />
         </Animated.View>
       </View>
 
       <View style={styles.labelBox}>
-        <Text numberOfLines={1} style={styles.label}>
+        <Text numberOfLines={1} style={[styles.label, { color: inactiveColor }]}>
           {tab.title}
         </Text>
         <Animated.Text
           numberOfLines={1}
-          style={[styles.label, styles.labelActive, activeFadeStyle]}>
+          style={[styles.label, styles.labelActive, { color: activeColor }, activeFadeStyle]}>
           {tab.title}
         </Animated.Text>
       </View>
@@ -341,7 +343,6 @@ const styles = StyleSheet.create({
     height: BAR_HEIGHT,
     width: '100%',
     borderRadius: BAR_RADIUS,
-    backgroundColor: NAV_BACKGROUND,
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
@@ -358,7 +359,6 @@ const styles = StyleSheet.create({
     width: INDICATOR_WIDTH,
     height: INDICATOR_HEIGHT,
     borderRadius: INDICATOR_RADIUS,
-    backgroundColor: INDICATOR_COLOR,
   },
   tab: {
     width: TAB_SIZE,
@@ -397,7 +397,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 13,
     fontWeight: '500',
-    color: INACTIVE_COLOR,
     textAlign: 'center',
   },
   labelActive: {
@@ -406,7 +405,6 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     fontWeight: '700',
-    color: ACTIVE_COLOR,
   },
   plusHit: {
     width: TAB_SIZE,
@@ -423,7 +421,6 @@ const styles = StyleSheet.create({
     width: PLUS_CIRCLE_SIZE,
     height: PLUS_CIRCLE_SIZE,
     borderRadius: PLUS_CIRCLE_SIZE / 2,
-    backgroundColor: PLUS_BACKGROUND,
     alignItems: 'center',
     justifyContent: 'center',
   },

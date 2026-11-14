@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
@@ -28,6 +28,7 @@ import {
   type ThemeSetting,
 } from '@/db/repositories/settings';
 import {
+  DEFAULT_HOME_BG_COLOR,
   MIDDLE_TABS,
   MIDDLE_TAB_LABELS,
   SORT_MODES,
@@ -40,6 +41,7 @@ import { bumpDataVersion } from '@/lib/data-version';
 import { buildAutoBackupName, buildBackupFileName, parseBackupText, serializeBackup } from '@/lib/backup-text';
 import { pickBackupText, saveAutoBackup, saveBackupFile } from '@/lib/backup-file';
 import { deleteAvatarFile } from '@/lib/avatar';
+import { deleteHomeBgImage } from '@/lib/home-bg-image';
 import { getProfile } from '@/db/repositories/profile';
 import { useThemePreference } from '@/theme/theme-context';
 import { useTheme } from '@/hooks/use-theme';
@@ -59,7 +61,15 @@ function errorMessage(error: unknown): string {
 export default function SettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { preference, setPreference } = useThemePreference();
+  const {
+    preference,
+    setPreference,
+    homeBgImage,
+    setAppSkin,
+    setHomeBgMode,
+    setHomeBgColor,
+    setHomeBgImage,
+  } = useThemePreference();
   const router = useRouter();
 
   const [profile, setProfile] = useState<ProfileRow | null>(null);
@@ -69,21 +79,14 @@ export default function SettingsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [importPayload, setImportPayload] = useState<BackupPayload | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
-  const [defaultRepsText, setDefaultRepsText] = useState('8');
-  const [defaultWeightText, setDefaultWeightText] = useState('0');
+  const [defaultReps, setDefaultReps] = useState(8);
+  const [defaultWeight, setDefaultWeight] = useState(0);
+  const [editingFitnessField, setEditingFitnessField] = useState<'reps' | 'weight' | null>(null);
+  const [draftFitnessValue, setDraftFitnessValue] = useState('');
   const [sortMode, setSortModeState] = useState<SortMode>('memo-first');
   const [sortOpen, setSortOpen] = useState(false);
   const [middle, setMiddleState] = useState<MiddleTab>('fitness');
   const [middleOpen, setMiddleOpen] = useState(false);
-
-  useEffect(() => {
-    getFitnessDefaults()
-      .then((defaults) => {
-        setDefaultRepsText(String(defaults.reps));
-        setDefaultWeightText(String(defaults.weight));
-      })
-      .catch(() => undefined);
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -95,6 +98,12 @@ export default function SettingsScreen() {
         .catch(() => undefined);
       getMiddleTab()
         .then(setMiddleState)
+        .catch(() => undefined);
+      getFitnessDefaults()
+        .then((defaults) => {
+          setDefaultReps(defaults.reps);
+          setDefaultWeight(defaults.weight);
+        })
         .catch(() => undefined);
     }, [])
   );
@@ -152,9 +161,18 @@ export default function SettingsScreen() {
       const location = await saveAutoBackup(buildAutoBackupName(), current);
       await clearAllData();
       await deleteAvatarFile(profile?.avatarUri ?? null);
+      await deleteHomeBgImage(homeBgImage);
       setProfile(null);
+      const clearedDefaults = await getFitnessDefaults();
+      setDefaultReps(clearedDefaults.reps);
+      setDefaultWeight(clearedDefaults.weight);
       await setPreference('system');
-      setMessage(`已清空所有数据，主题恢复为「跟随系统」。${location}`);
+      await setAppSkin('default');
+      await setHomeBgMode('default');
+      await setHomeBgColor(DEFAULT_HOME_BG_COLOR);
+      await setHomeBgImage(null);
+      bumpDataVersion();
+      setMessage(`已清空所有数据，主题恢复为「跟随系统」，外观恢复默认。${location}`);
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -162,24 +180,37 @@ export default function SettingsScreen() {
     }
   };
 
-  const sumDefaultReps = Math.round(Number(defaultRepsText));
-  const sumDefaultWeight = Math.round(Number(defaultWeightText));
-  const defaultsValid =
-    Number.isInteger(sumDefaultReps) &&
-    sumDefaultReps >= 1 &&
-    Number.isInteger(sumDefaultWeight) &&
-    sumDefaultWeight >= 0;
+  const openFitnessEditor = (field: 'reps' | 'weight') => {
+    setDraftFitnessValue(String(field === 'reps' ? defaultReps : defaultWeight));
+    setEditingFitnessField(field);
+  };
 
-  const commitFitnessDefaults = async () => {
-    if (!defaultsValid) return;
-    const defaults = { reps: sumDefaultReps, weight: sumDefaultWeight };
+  const draftTrimmed = draftFitnessValue.trim();
+  const draftNumber = Number(draftTrimmed);
+  const fitnessDraftValid =
+    editingFitnessField !== null &&
+    draftTrimmed !== '' &&
+    Number.isInteger(draftNumber) &&
+    (editingFitnessField === 'reps' ? draftNumber >= 1 : draftNumber >= 0);
+
+  const handleSaveFitnessDefaults = async () => {
+    const field = editingFitnessField;
+    if (!field || !fitnessDraftValid) return;
+    const value = Number(draftFitnessValue.trim());
+    const nextDefaults =
+      field === 'reps'
+        ? { reps: value, weight: defaultWeight }
+        : { reps: defaultReps, weight: value };
     try {
-      await setFitnessDefaults(defaults);
-      setDefaultRepsText(String(defaults.reps));
-      setDefaultWeightText(String(defaults.weight));
+      await setFitnessDefaults(nextDefaults);
+      setDefaultReps(nextDefaults.reps);
+      setDefaultWeight(nextDefaults.weight);
+      bumpDataVersion();
+      setEditingFitnessField(null);
       setError(null);
       setMessage('健身默认值已保存。');
     } catch (reason) {
+      setEditingFitnessField(null);
       setMessage(null);
       setError(errorMessage(reason));
     }
@@ -188,15 +219,17 @@ export default function SettingsScreen() {
   const summary = importPayload ? summarizeBackup(importPayload) : null;
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
           contentContainerStyle={[
             styles.content,
             { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
           ]}>
-          <View style={styles.header}>
-            <ThemedText type="subtitle" style={styles.title}>
+          <View style={[styles.header, { backgroundColor: theme.background }]}>
+            <ThemedText type="subtitle" style={[styles.title, { color: theme.text }]}>
               设置
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
@@ -225,44 +258,19 @@ export default function SettingsScreen() {
             <ThemedText style={styles.accountName}>{profile?.name ?? '用户'}</ThemedText>
           </Pressable>
 
-          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-            首页
-          </ThemedText>
-          <ThemedView type="backgroundElement" style={styles.group}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="首页卡片"
-              onPress={() => router.push('/cards')}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-              <View style={styles.rowText}>
-                <ThemedText type="small">首页卡片</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  调整 Dash 卡片的顺序与显示开关
-                </ThemedText>
-              </View>
-              <ThemedText type="small" themeColor="textSecondary">
-                ›
-              </ThemedText>
-            </Pressable>
+          {message ? (
+            <ThemedView type="backgroundElement" style={styles.messageBox}>
+              <ThemedText type="small">{message}</ThemedText>
+            </ThemedView>
+          ) : null}
 
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="列表排序"
-              onPress={() => setSortOpen(true)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-              <View style={styles.rowText}>
-                <ThemedText type="small">列表排序</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  首页与今日计划共用
-                </ThemedText>
-              </View>
-              <ThemedText type="small" themeColor="textSecondary">
-                {SORT_MODE_LABELS[sortMode]} ›
+          {error ? (
+            <ThemedView type="backgroundElement" style={styles.errorBox}>
+              <ThemedText type="small" style={styles.errorText}>
+                {error}
               </ThemedText>
-            </Pressable>
-          </ThemedView>
+            </ThemedView>
+          ) : null}
 
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
             快捷入口
@@ -304,12 +312,43 @@ export default function SettingsScreen() {
                 ›
               </ThemedText>
             </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="快捷入口 游戏"
+              onPress={() => router.push('/games')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <ThemedText type="small">游戏</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </Pressable>
           </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-            外观
+            界面与外观
           </ThemedText>
           <ThemedView type="backgroundElement" style={styles.group}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="首页卡片"
+              onPress={() => router.push('/cards')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">首页卡片</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  调整 Dash 卡片的顺序与显示开关
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                ›
+              </ThemedText>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`第三个标签 ${MIDDLE_TAB_LABELS[middle]}`}
@@ -336,31 +375,106 @@ export default function SettingsScreen() {
               <View style={styles.rowText}>
                 <ThemedText type="small">个性化</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  主题、Dash 卡片模式与样式
+                  主题与个性皮肤、首页背景、Dash 卡片模式与样式
                 </ThemedText>
               </View>
               <ThemedText type="small" themeColor="textSecondary">
                 ›
               </ThemedText>
             </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <View style={styles.row}>
+              <ThemedText type="small">主题</ThemedText>
+              <View style={styles.themeOptions}>
+                {THEME_OPTIONS.map((option) => {
+                  const active = preference === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      onPress={() => {
+                        setPreference(option.value).catch(() => undefined);
+                      }}
+                      style={({ pressed }) => [
+                        styles.themeChip,
+                        { backgroundColor: active ? theme.text : theme.background },
+                        pressed && styles.pressed,
+                      ]}>
+                      <ThemedText
+                        type="small"
+                        style={{ color: active ? theme.background : theme.text }}>
+                        {active ? '✓ ' : ''}
+                        {option.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
           </ThemedView>
 
-          {message ? (
-            <ThemedView type="backgroundElement" style={styles.messageBox}>
-              <ThemedText type="small">{message}</ThemedText>
-            </ThemedView>
-          ) : null}
-
-          {error ? (
-            <ThemedView type="backgroundElement" style={styles.errorBox}>
-              <ThemedText type="small" style={styles.errorText}>
-                {error}
+          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
+            功能偏好
+          </ThemedText>
+          <ThemedView type="backgroundElement" style={styles.group}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="列表排序"
+              onPress={() => setSortOpen(true)}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">列表排序</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  首页与今日计划共用
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {SORT_MODE_LABELS[sortMode]} ›
               </ThemedText>
-            </ThemedView>
-          ) : null}
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="健身默认次数"
+              onPress={() => openFitnessEditor('reps')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">默认次数</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  新增健身训练动作时的默认每组次数
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {defaultReps} 次 ›
+              </ThemedText>
+            </Pressable>
+
+            <View style={[styles.divider, { backgroundColor: theme.background }]} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="健身默认重量"
+              onPress={() => openFitnessEditor('weight')}
+              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
+              <View style={styles.rowText}>
+                <ThemedText type="small">默认重量</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
+                  新增健身训练动作时的默认负重
+                </ThemedText>
+              </View>
+              <ThemedText type="small" themeColor="textSecondary">
+                {defaultWeight} kg ›
+              </ThemedText>
+            </Pressable>
+          </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-            数据
+            数据与安全
           </ThemedText>
           <ThemedView type="backgroundElement" style={styles.group}>
             <Pressable
@@ -419,88 +533,6 @@ export default function SettingsScreen() {
                 ›
               </ThemedText>
             </Pressable>
-          </ThemedView>
-
-          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-            健身默认值
-          </ThemedText>
-          <ThemedView type="backgroundElement" style={styles.group}>
-            <View style={styles.defaultsRow}>
-              <ThemedText type="small">默认次数</ThemedText>
-              <TextInput
-                value={defaultRepsText}
-                onChangeText={setDefaultRepsText}
-                keyboardType="number-pad"
-                maxLength={3}
-                accessibilityLabel="健身默认次数"
-                style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
-              />
-              <ThemedText type="small" themeColor="textSecondary">次</ThemedText>
-            </View>
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
-            <View style={styles.defaultsRow}>
-              <ThemedText type="small">默认重量</ThemedText>
-              <TextInput
-                value={defaultWeightText}
-                onChangeText={setDefaultWeightText}
-                keyboardType="number-pad"
-                maxLength={4}
-                accessibilityLabel="健身默认重量"
-                style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
-              />
-              <ThemedText type="small" themeColor="textSecondary">kg</ThemedText>
-            </View>
-            <View style={[styles.divider, { backgroundColor: theme.background }]} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="保存健身默认值"
-              disabled={busy || !defaultsValid}
-              onPress={() => commitFitnessDefaults().catch(() => undefined)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed, !defaultsValid && styles.disabled]}
-            >
-              <View style={styles.rowText}>
-                <ThemedText type="small">保存健身默认值</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.hint}>
-                  之后新增的训练动作会使用这里的次数和重量，仍可单独修改
-                </ThemedText>
-              </View>
-              <ThemedText type="small" themeColor="textSecondary">›</ThemedText>
-            </Pressable>
-          </ThemedView>
-
-          <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
-            外观
-          </ThemedText>
-          <ThemedView type="backgroundElement" style={styles.group}>
-            <View style={styles.row}>
-              <ThemedText type="small">主题</ThemedText>
-              <View style={styles.themeOptions}>
-                {THEME_OPTIONS.map((option) => {
-                  const active = preference === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: active }}
-                      onPress={() => {
-                        setPreference(option.value).catch(() => undefined);
-                      }}
-                      style={({ pressed }) => [
-                        styles.themeChip,
-                        { backgroundColor: active ? theme.text : theme.background },
-                        pressed && styles.pressed,
-                      ]}>
-                      <ThemedText
-                        type="small"
-                        style={{ color: active ? theme.background : theme.text }}>
-                        {active ? '✓ ' : ''}
-                        {option.label}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
           </ThemedView>
 
           <ThemedText type="small" themeColor="textSecondary" style={styles.sectionLabel}>
@@ -611,6 +643,65 @@ export default function SettingsScreen() {
         </View>
       </ModalSheet>
 
+      <ModalSheet
+        visible={editingFitnessField !== null}
+        title={editingFitnessField === 'reps' ? '修改默认次数' : '修改默认重量'}
+        onClose={() => setEditingFitnessField(null)}
+        footer={
+          <View style={styles.modalActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="取消修改健身默认值"
+              onPress={() => setEditingFitnessField(null)}
+              style={({ pressed }) => [
+                styles.modalButton,
+                { backgroundColor: theme.backgroundElement },
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText type="small">取消</ThemedText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="保存健身默认值"
+              disabled={!fitnessDraftValid}
+              onPress={() => handleSaveFitnessDefaults().catch(() => undefined)}
+              style={({ pressed }) => [
+                styles.modalButton,
+                { backgroundColor: theme.text },
+                pressed && styles.pressed,
+                !fitnessDraftValid && styles.disabled,
+              ]}>
+              <ThemedText type="small" style={{ color: theme.background }}>
+                保存
+              </ThemedText>
+            </Pressable>
+          </View>
+        }>
+        <View style={styles.fitnessDialogBody}>
+          <ThemedText type="small" themeColor="textSecondary">
+            {editingFitnessField === 'reps'
+              ? '请输入大于等于 1 的整数（单位：次）'
+              : '请输入大于等于 0 的整数（单位：kg）'}
+          </ThemedText>
+          <TextInput
+            value={draftFitnessValue}
+            onChangeText={setDraftFitnessValue}
+            autoFocus
+            keyboardType="number-pad"
+            maxLength={editingFitnessField === 'reps' ? 3 : 4}
+            accessibilityLabel={editingFitnessField === 'reps' ? '默认次数输入' : '默认重量输入'}
+            style={[styles.dialogInput, { backgroundColor: theme.background, color: theme.text }]}
+          />
+          {editingFitnessField !== null && !fitnessDraftValid ? (
+            <ThemedText type="small" style={styles.dialogError}>
+              {editingFitnessField === 'reps'
+                ? '请输入大于等于 1 的整数'
+                : '请输入大于等于 0 的整数'}
+            </ThemedText>
+          ) : null}
+        </View>
+      </ModalSheet>
+
       <ActionMenu
         visible={middleOpen}
         title="第三个标签"
@@ -654,11 +745,15 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: Spacing.one,
+    // 顶部多留 8dp：深色模式下标题与状态栏之间要有呼吸位，避免被安全区边缘挤压。
+    paddingTop: Spacing.two,
     marginBottom: Spacing.three,
   },
   title: {
     fontSize: 26,
     lineHeight: 32,
+    // 显式指定文字色，避免任何父级/旧主题残留把深色模式标题染成背景色。
+    flexShrink: 0,
   },
   account: {
     flexDirection: 'row',
@@ -718,20 +813,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.one,
   },
-  defaultsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    paddingVertical: Spacing.two,
+  dialogInput: {
+    height: 46,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 17,
+    fontWeight: '600',
+    marginTop: 8,
   },
-  numberInput: {
-    width: 72,
-    borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    fontSize: 14,
-    textAlign: 'center',
-    minHeight: 34,
+  fitnessDialogBody: {
+    gap: Spacing.one,
+  },
+  dialogError: {
+    marginTop: Spacing.one,
+    fontSize: 12,
+    color: '#D64545',
   },
   disabled: {
     opacity: 0.4,

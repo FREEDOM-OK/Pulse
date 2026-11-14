@@ -4,7 +4,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import type { TrainingItemRow } from '@/db/types';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useGlassMaterial, useTheme } from '@/hooks/use-theme';
 
 interface CompleteValues {
   reps?: number;
@@ -36,6 +36,17 @@ export function TrainingCard({
   flash = false,
 }: TrainingCardProps) {
   const theme = useTheme();
+  const glass = useGlass();
+  const material = useGlassMaterial();
+  /** 毛玻璃皮肤下次数/重量输入框用半透明白底 + 细高光边，普通皮肤保持纯色底。 */
+  const fieldStyle = glass
+    ? {
+        backgroundColor: material.block,
+        borderWidth: 0.8,
+        borderColor: material.blockBorder,
+        color: theme.text,
+      }
+    : { backgroundColor: theme.background, color: theme.text };
   const isDuration = item.tracking_type === 'duration';
   const partLabel = category
     ? category === '自定义类'
@@ -149,7 +160,7 @@ export function TrainingCard({
               keyboardType="number-pad"
               maxLength={4}
               accessibilityLabel={`${item.exercise_name} 运动时间`}
-              style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+              style={[styles.numberInput, fieldStyle]}
             />
             <ThemedText type="small" themeColor="textSecondary">
               分钟
@@ -170,7 +181,7 @@ export function TrainingCard({
               keyboardType="number-pad"
               maxLength={3}
               accessibilityLabel={`${item.exercise_name} 每组次数`}
-              style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+              style={[styles.numberInput, fieldStyle]}
             />
             <ThemedText type="small" themeColor="textSecondary">
               次 ×
@@ -183,7 +194,7 @@ export function TrainingCard({
               keyboardType="number-pad"
               maxLength={4}
               accessibilityLabel={`${item.exercise_name} 重量`}
-              style={[styles.numberInput, { backgroundColor: theme.background, color: theme.text }]}
+              style={[styles.numberInput, fieldStyle]}
             />
             <ThemedText type="small" themeColor="textSecondary">
               kg

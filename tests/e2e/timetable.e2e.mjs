@@ -17,9 +17,14 @@ export async function run(page, baseUrl) {
   // ---------- 1. 设置页 ----------
   await page.gotoFresh(`${baseUrl}/timetable/settings`);
   await page.waitForText('设置');
-  await page.waitForLabel('节次设置');
+  await page.waitForLabel('上课时间');
   await page.waitForLabel('导入课表');
   await page.waitForLabel('全部课程');
+  await page.waitForLabel('开学时间');
+  await page.waitForLabel('每周起始日');
+  await page.waitForLabel('显示周六');
+  await page.waitForLabel('显示周日');
+  await page.waitForLabel('更多外观设置');
 
   // 课表管理页能进去、能返回（字段在「新建」抽屉里）
   await page.clickLabel('课表管理');
@@ -32,13 +37,16 @@ export async function run(page, baseUrl) {
   await page.clickLabel('返回');
   await page.waitForText('设置');
 
-  // 色彩饱和度 60% 并跨刷新持久化
-  await page.clickLabel('色彩饱和度');
+  // 色彩饱和度 60% 并跨刷新持久化（已挪进「更多外观设置」页）
+  await page.clickLabel('更多外观设置');
+  await page.waitForText('课程表背景颜色');
   await page.waitForLabel('饱和度60%');
   await page.clickLabel('饱和度60%');
-  await page.waitForText('60%');
+  await sleep(400);
   await page.reload();
-  await page.waitForText('60%');
+  await page.waitForLabel('饱和度60%');
+  await page.clickLabel('返回');
+  await page.waitForText('设置');
 
   // ---------- 2. 网格添加课程 ----------
   await page.goto(`${baseUrl}/timetable`);

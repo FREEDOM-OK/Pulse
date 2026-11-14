@@ -40,10 +40,19 @@ export async function run(page, baseUrl) {
     throw new Error('刷新后深色主题没有保持');
   }
 
-  // 设置健身默认次数/重量，随后新增动作应带默认值
-  await page.fillByLabel('健身默认次数', '12');
-  await page.fillByLabel('健身默认重量', '40');
+  // 设置健身默认次数/重量：点行打开弹窗 → 输入 → 保存，随后新增动作应带默认值
+  await page.clickLabel('健身默认次数');
+  await page.waitForText('修改默认次数');
+  await page.fillByLabel('默认次数输入', '12');
   await page.clickLabel('保存健身默认值');
+  await page.waitForNoText('修改默认次数');
+  await page.waitForText('健身默认值已保存。');
+
+  await page.clickLabel('健身默认重量');
+  await page.waitForText('修改默认重量');
+  await page.fillByLabel('默认重量输入', '40');
+  await page.clickLabel('保存健身默认值');
+  await page.waitForNoText('修改默认重量');
   await page.waitForText('健身默认值已保存。');
 
   await page.clickLabel('健身');

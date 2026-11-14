@@ -4,6 +4,164 @@
 > - 小改动只升补丁版本，**只写在这个文件里**，不改 App 内显示的版本号、不弹任何更新日志。
 > - 只有用户明确说「进入下一个大版本」时才动 App 内的版本号/日志。当前 App 内版本为 1.2.2（用户在 2026-11-11 明确要求定为 1.2.2）。
 
+## v1.2.29 — 2026-11-14
+
+### 新增「苹果毛玻璃」全局皮肤与首页背景定制（调色盘 / 自定义壁纸）
+
+- 新增 4 个 `settings` 键（不新增表、`SCHEMA_VERSION` 仍为 9）：`app.skin`（`default` 经典极简 / `glass` 苹果毛玻璃，默认 `default`）、`home.bgMode`（`default` / `color` / `image`）、`home.bgColor`（默认 `#EEF2F9`，读回小写、非法值回落）、`home.bgImage`（默认 `null`，传 `null` 删除键）。对应 `src/db/repositories/settings.ts` 的 getter / setter，并全部接入 `src/theme/theme-context.tsx` 实时广播，切换即时生效、无需重启。
+- 新增 `src/constants/theme.ts` 的 `GlassColors`、`GlassMaterial`（浅/深两套玻璃配方：云母画布、磨砂卡片、高光描边、悬浮阴影、底栏胶囊、弹窗浓度、弥散光晕、壁纸蒙版等）与 `ThemePalette` 类型；`src/hooks/use-theme.ts` 在 `glass` 皮肤下自动返回玻璃色板，并新增 `useSkin/useGlass/useGlassMaterial`。
+- 新增 `src/lib/glass.ts`（`glassCardStyle` / `glassBarStyle` / `glassSheetStyle` / `glassBlockStyle`）、`src/lib/color.ts`（Hex/RGB/HSL 互转、亮度、可读文字色）、`src/lib/home-bg-path.ts`、`src/lib/home-bg-image.ts`（复用头像那套 `expo-image-picker` + `expo-file-system`，壁纸复制到 App 私有目录）。
+- `src/components/themed-view.tsx` 升级：`glass` 皮肤下 `type="backgroundElement"` 自动获得半透明磨砂底 + `0.8px` 镜面高光白边 + 柔和弥散底光（设置 / 健身 / 日历 / 游戏 / 个性化等页的分组卡片自动生效）；新增 `glow` 属性用于页面根容器。新增 `src/components/ui/glass-glow.tsx` 在根容器四角渲染两团极柔和的弥散光晕（`pointerEvents` 穿透）。
+- 底栏 `src/components/nav/app-tab-bar.tsx`：`glass` 下胶囊变高透灵动岛毛玻璃（浅 `rgba(255,255,255,0.72)` / 深 `rgba(28,30,36,0.72)`，1px 高光描边），内部指示器变晶莹半透明胶囊。
+- 首页 `src/app/(tabs)/index.tsx`：玻璃搜索框 + 高光描边、筛选按钮半透明化；`glass` 或自定义壁纸下 Tasks 列表包进 24dp 圆角半透明毛玻璃大容器（`padding: 16`），保证任何壁纸下任务文字清晰；Dash 卡片（`dash-card.tsx`）在默认样式下变为通透磨砂玻璃，图标圈/箭头圈变冰晶质感。
+- 计划页 `date-strip.tsx` 选中胶囊加微光描边；`today` 与 `day/[date]` 的任务/备忘/课程列表在玻璃皮肤下统一承托进 24dp 圆角玻璃大卡片；课表 `timetable-screen.tsx` 表头/时间列用半透明磨砂底、`week-grid.tsx` 课程色块加 0.8px 透明白边；游戏页分段切换器叠加玻璃与细高光边；健身动作卡片的次数/重量输入框改为半透明冰晶底 + 细高光边；`ModalSheet` / `ActionMenu` / `ConfirmDialog` / `DialogHost` 面板变高浓度磨砂 + 顶部亮白高光边；`_layout.tsx` 根与导航主题随玻璃画布切换。
+- 首页背景：`home.bgMode === 'color'` 时根容器直接用 `home.bgColor`，并按亮度自动调整问候语/日期文字颜色；`=== 'image'` 且有 `home.bgImage` 时底层铺满 `resizeMode="cover"` 的壁纸 + 自适应柔光蒙版（浅 `rgba(255,255,255,0.18)` / 深 `rgba(0,0,0,0.35)`）。
+- 「我的 → 个性化」新增「个性皮肤」分组（两种皮肤带预览块，点击立即 `setAppSkin`）与「首页背景」分组（默认底色 / 纯色调色盘 / 自定义图片三选一）：调色盘含实时色块 + Hex 输入、色相（360° 彩虹）/ 饱和度 / 明度三条可拖动滑条、8 个快捷莫兰迪色点；图片面板含缩略图预览、虚线占位、从相册选择与清除。
+- 清空数据时同步复位皮肤与首页背景（默认底色、删除壁纸文件）；新增 `tests/s10-appearance.test.ts`（6 条）锁定默认值、校验回落与持久化。
+- 验证：44 个测试文件 / 297 条用例、`tsc --noEmit`、`expo lint` 全部通过；调色盘拖动手势与真机玻璃观感需真人确认。
+
+## v1.2.28 — 2026-11-14
+
+### 深色模式全链路适配；二级页返回白屏修复、转场提速
+
+- `src/app/_layout.tsx`：根容器改为铺主题底色；新增 `<StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />`；Navigation Theme 的 `background` / `card` / `text` / `border` 全部取主题色；根 Stack 转场改为 `ios_from_right` + `animationDuration: 180` + `freezeOnBlur: true`，返回时不再先闪白。
+- `src/app/timetable/_layout.tsx`：内层 Stack 同步转场参数与主题底色。
+- `src/app/(tabs)/_layout.tsx`：`Tabs` 增加 `sceneStyle.backgroundColor = theme.background`，底栏淡入淡出期间不露白底。
+- `src/app/(tabs)/settings.tsx`：页头与「设置」标题显式使用主题色，深色下标题清晰可见。
+- `src/app/(tabs)/index.tsx`、`src/components/home/search-overlay.tsx`：容器、问候、日期、头像、搜索框、筛选按钮、标题、搜索覆盖层、chips、关闭按钮等全部接入 `useTheme` / `useThemePreference`；深色下描边改为低透明白、阴影关闭。
+- `src/components/home/search-results.tsx`：搜索结果卡片、标题、副标题、日期与空状态接入主题色，深色下不再出现白卡。
+- `src/components/nav/app-tab-bar.tsx`：底座浅色 `#FFFFFF` / 深色 `#1C1C1E` 并加深色 hairline 描边；指示器、选中/未选中文字、中间加号圆与涟漪色全部随主题切换。
+- 课表：`src/components/timetable/timetable-screen.tsx` 在深色且网格背景为默认 `#F5F5F7` / `#FFFFFF` 时，页面用 `theme.background`、格子用 `theme.backgroundElement`；`week-header.tsx`、`week-grid.tsx`、`course-detail-drawer.tsx`、`timetable-more-sheet.tsx`、`wheel-sheet.tsx` 与 `src/app/timetable/{appearance,course,courses,import,periods,schedules,settings}.tsx` 全部接入主题色，深色分隔线统一 `rgba(255,255,255,0.08)`，强调色与课程色板保持不变。
+- `tests/s2-tab-bar.test.ts`：断言同步为新的 `*_LIGHT` 常量名，并补充深色常量检查。
+- 验证：43 个测试文件 / 291 条用例、`tsc --noEmit`、`expo lint` 全部通过；深色视觉与返回转场需真机确认。
+
+## v1.2.27 — 2026-11-14
+
+### 全 App 页面隐藏纵向滚动条、关闭安卓越界拉伸；「记消费」图标换成美元符号
+
+- `src/app/(tabs)/settings.tsx` 主 `ScrollView` 增加 `showsVerticalScrollIndicator={false}` 与 `overScrollMode="never"`，返回「我的」时右侧不再露出系统粗灰滚动条，也不会出现安卓边缘拉伸阴影。
+- 同步补齐其余页面的纵向滚动容器：`src/app/personalize/index.tsx`、`src/app/personalize/cards.tsx`、`src/app/cards.tsx`、`src/app/profile.tsx`、`src/app/games.tsx`（两个分页）、`src/components/fitness/fitness-screen.tsx`、`src/components/calendar/calendar-panel.tsx`、`src/app/timetable/{appearance,courses,import,schedules,settings,periods}.tsx`，以及 `src/components/ui/modal-sheet.tsx` 与课表「午休位置」抽屉，统一 `showsVerticalScrollIndicator={false}`（页面级同时 `overScrollMode="never"`）。
+- `src/components/home/event-form.tsx`：「记消费」圆钮图标从钞票图标改为美元线条图标 `{ ios: 'dollarsign', android: 'attach_money', web: 'attach_money' }`（已确认 expo-symbols 的 Android 符号表含 `attach_money`），尺寸与选中/未选中配色保持不变。
+- 验证：43 个测试文件 / 291 条用例、`tsc --noEmit`、`expo lint` 全部通过；滚动条与转场残影需真机滑动确认。
+
+## v1.2.26 — 2026-11-14
+
+### 二级页面统一右滑推入转场；「记事件」换成 ModalSheet 黑白风格并支持选日期；课表空白格预览固定单节
+
+- `src/app/_layout.tsx`：根 `<Stack>` 的 `screenOptions` 统一为 `animation: 'slide_from_right'`、`animationDuration: 240`、`gestureEnabled: true`、`gestureDirection: 'horizontal'`、`fullScreenGestureEnabled: true`，并用当前主题色设置 `contentStyle.backgroundColor`，转场期间不再闪白底/黑底；`(tabs)` 单独 `animation: 'fade'`，底栏切换不左右乱滑。
+- `src/app/timetable/_layout.tsx`：从只有 `animation: 'slide_from_right'` 补齐同一套时长、手势与主题底色配置，课表内二级页与全 App 手感一致。
+- `src/components/home/event-form.tsx` 整体重构：删除自写 `<Modal>` / `<KeyboardAvoidingView>` / 绿色保存按钮，改用 `ModalSheet` + `modalStyles.actionsRow`（浅灰「取消」+ 黑色胶囊「保存」）；类型行三个 68×68 圆形按钮改用 `SymbolView` 黑白线条图标（`yensign.circle` / `bag` / `fork.knife`，Android 对应 `payments` / `shopping_bag` / `restaurant`，size 22），选中态 `theme.text` 底 + `theme.background` 图标文字，未选中态 `theme.backgroundElement` 底 + `theme.text`，彻底移除 #E15241 / #F59E0B / #10B981 彩色与 🛍 / 🍚 Emoji。
+- EventForm 新增 `formDate` 与 `MonthPicker`：日期行显示 `formatDay(formDate)` 与「修改 ›」，`createEvent({ ..., date: formDate })` 写入所选日期，事件会出现在对应日期的日历里；内容（必填、maxLength 120）、金额（选填、decimal-pad）、备注（选填、maxLength 200）统一改用 `TextField`，props 增加可选 `date`。
+- `src/components/ui/app-button.tsx`：`AppButton` 新增可选 `accessibilityLabel`（默认回落到 `label`），EventForm 保存按钮保留「保存事件」无障碍名，E2E 无需改选择器。
+- `src/components/timetable/week-grid.tsx`：空白格预览块不再按 `defaultSpan` 取 2 节，固定 `const startP = pendingSlot.period; const endP = startP;`，高度严格 `rowH - 2`，删除「下一节有课 / 跨午休」两处收缩逻辑；点击预览跳转时传 `onAddCourse(day, startP, startP)`，新建页默认只填这一节（`defaultSpan` 仅保留为建课页默认跨度）。
+- 验证：43 个测试文件 / 291 条用例、`tsc --noEmit`、`expo lint` 全部通过；转场手感、圆钮视觉与日期弹层按 AGENTS 约定交真人确认，E2E 未跑（需先重启 Metro）。
+
+## v1.2.25 — 2026-11-13
+
+### 底栏「＋」合并为两个入口：新建任务/备忘 与 记事件；任务自动延期、连续多天备忘、日历事件徽章
+
+- `src/components/nav/app-tab-bar.tsx`：底部「＋」菜单从 5 项压成 2 项（`新建任务/备忘`、`记事件`），菜单标题仍为「新建」；删除 `MemoForm` 的引入、状态与渲染，`TaskForm` 以 `initialKind="task"` 打开，`EventForm` 以 `visible + initialType="expense"` 打开；`SLOT_COUNT = 5` 布局与 `accessibilityLabel="新建"` 保持不变。
+- `src/components/today/today-list.tsx`：计划页底部「＋ 新建」不再弹只有两项的 ActionMenu，直接打开综合 `TaskForm`（`accessibilityLabel="新建任务或备忘"`），与底栏体验一致；`MemoForm` 仅保留给长按编辑备忘。
+- `src/components/today/task-form.tsx` 重写为综合弹窗：新建时标题「新建任务/备忘」，首行「类型」两胶囊（任务 / 备忘，默认任务）；字段顺序为 内容（必填，placeholder 随类型切换「例如：写周报」/「例如：周五前交房租」）→ 选择日期（MonthPicker）→ 时间（选填）→ 任务专属备注与「今日未完成自动延期到下一天」开关 / 备忘专属「置顶备忘」→ 仅新建时显示「仅今日 / 今日起3天 / 今日起7天」三胶囊；编辑已有任务时固定任务模式，日期变化走 `moveTaskToDate`。
+- `src/components/home/event-form.tsx` 重写为「记事件」综合弹窗：props 改为 `initialType?: EventType | null`，只要 `visible` 就渲染，不再因类型为空返回 null；标题下三个 68×68 圆形按钮（记消费 `¥` / #E15241、记购物 `🛍` / #F59E0B、记好饭 `🍚` / #10B981），选中实心主题色 + 白字 + 微阴影，未选中浅底 + 半透明描边；内容必填、金额与备注选填（空值由 events 仓库归一为 null）。
+- `src/db/repositories/tasks.ts`：`CreateTaskInput` 新增 `autoPostpone?: boolean`，新任务 ID 记进 `settings` 表 `tasks.autoPostponeIds`（JSON 数组，零表结构改动）；新增 `getAutoPostponeIds` / `isTaskAutoPostpone` / `setTaskAutoPostpone` / `rolloverAutoPostponeTasks(today)`；删除任务或整组时同步移出集合。
+- 自动顺延：`today-list.tsx` 的 `load()` 在查看今天时先 `await rolloverAutoPostponeTasks(date)`，把「开启开关、`done = 0`、`date < 今天`」的任务逐条 `moveTaskToDate` 到今天末尾，再拉取列表；已完成、未开启开关、未来日期的任务不受影响。
+- `src/db/repositories/memos.ts` 新增 `createMemoSeries(input, days)`：事务内按 `addDays` 从起始日连续插入，任务与备忘都能用 3 天 / 7 天连续创建。
+- `src/db/types.ts` 新增 `EventBadgeStyle` 与 `EVENT_BADGE_STYLES`（记消费 / 记购物 / 记好饭，含背景与文字色），保留原 `EVENT_TYPE_LABELS`。
+- `src/components/calendar/calendar-panel.tsx`：事件卡片头部显示「N 条 · 消费 · 好饭」式类型小结；每行左侧原纯文本类型升级为圆角彩色徽章（`paddingHorizontal 8 / paddingVertical 3 / borderRadius 6`），`accessibilityLabel` 仍用原 `EVENT_TYPE_LABELS`，右侧金额不变。
+- 新增 `tests/p2-entry-series.test.ts` 3 条：只顺延开启开关的过期未完成任务、重复执行返回 false、删除/开关同步清理集合；备忘连续 3 天的内容/时间/置顶一致。
+- E2E 文案同步（`today.e2e.mjs` / `home.e2e.mjs` / `screenshots.mjs`）：改点「新建任务或备忘」「记事件」「类型 备忘」「今天起3天」等新标签；按 AGENTS 约定未在本次跑 E2E（需先重启 Metro，且弹窗视觉与手势交真人确认）。
+- 验证：43 个测试文件 / 291 条用例、`tsc --noEmit`、`expo lint` 全部通过；`SCHEMA_VERSION` 保持 9，无新增迁移。
+
+## v1.2.24 — 2026-11-13
+
+### 课表：复制后抽屉保持展开、Toast 挪进 Modal 顶层；课程表单换线性图标
+
+- `src/components/ui/bottom-sheet.tsx` 新增可选属性 `overlay?: React.ReactNode`，渲染在 `<Modal>` 内 `styles.root` 下、与 `backdrop` / `sheet` 同级 —— 页面级绝对定位元素会被 Modal 的独立窗口层级压住，Toast 必须挂在这里才看得见。
+- `course-detail-drawer.tsx`：复制不再关闭抽屉（父组件已删掉 `onCopy` 回调与 `setSelectedCourse(null)`，也不再 `duplicateCourse`）；抽屉内部维护 `copyToast` 状态 + `useRef` 定时器（1800ms 自动清除、卸载时清理），点复制后 `writeClipboard(copyText)` 成功弹「复制成功」、失败弹「复制失败，请重试」。
+- Toast 样式：`position: absolute`、`alignSelf: center`、`top: (insets.top || 24) + 16`、白底、`paddingHorizontal 18 / paddingVertical 10 / borderRadius 999`、`shadowOpacity 0.12 / shadowRadius 12 / shadowOffset {0,4}`、`elevation 10`、`zIndex 9999`，文字 `#111113 / 13 / 600`。
+- `timetable-screen.tsx`：删掉上一轮页面级的 Toast 状态与样式（现在由抽屉自己接管），`CourseDetailDrawer` 不再传 `onCopy`。
+- `src/app/timetable/course.tsx`：8 个 `styles.rowEmoji` 彩色 Emoji（🎨 ⭐ 📅 ⏰ 📝 📍 👤 📋）全部换成 `SymbolView` 单色线性图标（`size 20` / `tintColor "#111113"`，iOS 与 Android/Web 名称分开配置）；`styles.rowEmoji` 删除，`styles.rowLeft` 的 `gap` 从 10 调到 12，图标与文字垂直居中。
+- 新增 `tests/a5-timetable-icons.test.ts` 4 条：课程表单与详情抽屉均无彩色 Emoji 且都用了 `SymbolView`、`BottomSheet` 提供 `overlay` 且抽屉把 Toast 挂在 `overlay` 上、页面侧不再有 `duplicateCourse` / `onCopy`。
+- 验证：42 个测试文件 / 288 条用例、`tsc --noEmit`、`expo lint` 全部通过；复制手感与图标视觉需真机确认。
+
+## v1.2.23 — 2026-11-13
+
+### 课表：显示周六/周日开关失效修复 + 课程详情抽屉线性图标与复制 Toast
+
+- 新增 `src/lib/settings-codec.ts`：`serializeSettingValue(value)` 把布尔统一落成 `'1'` / `'0'`（对象走 JSON、其余 `String`），`parseBoolSetting(raw, fallback)` 同时兼容 `'1'/'0'` 与历史遗留的 `'true'/'false'`，坏值回落默认。
+- `TimetableContext.updateSetting` 改用 `serializeSettingValue`：此前 `String(false)` 会写成 `'false'`，而 `reloadAll` 用 `map[...] !== '0'` 判断，`'false' !== '0'` 恒为 true，所以「显示周六 / 显示周日」点一下关掉、刷新又弹回开启。
+- `TimetableContext.reloadAll` 的 `showSaturday` / `showSunday` / `reminderEnabled` 改用 `parseBoolSetting`（历史数据里的 `'false'` 现在也能正确读成关闭）。
+- `settings.tsx` 的「显示周六 / 显示周日」两行不带任何 `disabled` / 置灰逻辑，未开「当前课表」条件下也能随时开关；确认两行只受 `updateSetting` 驱动。
+- `course-detail-drawer.tsx`：彩色 Emoji 全部换成 `expo-symbols` 的 `SymbolView` 单色线性图标（日历 / 时钟 / 定位 / 人像 / 便签，`size={18}`、`tintColor="#94A3B8"`；底部复制 `doc.on.doc`、删除 `trash`，`size={20}`、`tintColor="#111113"`，按钮 `48×48 / borderRadius 16 / #F4F4F5`）；标题行下方新增贯穿细分割线（`hairlineWidth`、`#E2E8F0`、`paddingBottom 14`、`marginBottom 16`）。
+- 复制行为改为「复制文本」：抽屉拼出 `课程名 · 第 X 周 · 第 A - B 节 HH:MM - HH:MM · 教室：… · 教师：… · 备注：…`，交给 `src/lib/clipboard.ts` 的 `writeClipboard`（Web 走 `navigator.clipboard.writeText`，原生走 `expo-clipboard` 的 `setStringAsync`，任何失败只返回 false、绝不抛错），不再调用 `duplicateCourse` 生成「XX副本」。
+- `timetable-screen.tsx` 新增非阻塞顶部 Toast：`position: absolute`、`top: (insets.top || 24) + 12`、居中的 `#1C1C1E` 胶囊（`paddingHorizontal 18 / paddingVertical 10 / borderRadius 999`），白字 13/600，显示 1800ms 自动消失；点复制后先 `setSelectedCourse(null)` 再弹「复制成功」（写剪贴板失败时提示「复制失败，请重试」），全程不走系统 `Alert`。
+- 新增依赖 `expo-clipboard@~58.0.4`（`npx expo install expo-clipboard`）。
+- 新增 `tests/a4-settings-codec.test.ts` 5 条：布尔落库 `'1'/'0'`、对象/数字/字符串序列化、`parseBoolSetting` 六种输入、关闭后写库读回仍为关闭、历史 `'false'` 读回按关闭处理。
+- 验证：41 个测试文件 / 284 条用例、`tsc --noEmit`、`expo lint` 全部通过。新增原生模块后需重新构建 dev client（Expo Go 自带 `expo-clipboard`，无需重建）。
+
+## v1.2.22 — 2026-11-13
+
+### 课表：课程数据/课表外观两组升级 + 背景色与网格实时联动
+
+- `repository.ts` 的 `TimetableSettings` 新增 6 个字段（全部落在 `settings` 表 `timetable.*` 键下，零 Schema 迁移）：`weekStartDay: 1 | 6 | 7`（默认 1）、`showSaturday` / `showSunday`（默认 true，存 '1' / '0'）、`cellHeight`（默认 64，44~90）、`cellRadius`（默认 6，0~18）、`gridBackgroundColor`（默认 `#F5F5F7`）；`timetable-core.ts` 同步新增默认值 / 区间常量、`clampNumber`、`visibleWeekDays(weekStartDay, showSaturday, showSunday)`。
+- `TimetableContext.reloadAll` 兜底解析 6 个键（`showSaturday !== '0'`、`parseInt(... || '64')` 后 `clampNumber`、`parseWeekStartDay` 只接受 1 / 6 / 7）；`resetAppearanceDefaults` 改为一次性把 10 个外观键写回默认值（不再分散成 4 段 SQL）。
+- `settings.tsx` 两组重排：`课程数据`（上课时间 / 开学时间 / 每周起始日 / 当前周 / 学期周数 / 导入课表）与 `课表外观`（显示周六 / 显示周日 圆角复选框、课程格子高度、格子圆角半径、午休位置、更多外观设置双行入口）；新增居中日历弹窗（`monthGrid` 渲染、选中日 `#4A5588` 描边圆）、三个底部滚轮（沿用 `WheelSheet` + `WheelPicker`）、两个居中数字输入弹窗（当前周 / 学期周数）；「色彩饱和度 / 默认连堂节数 / 外观浏览」三行移出本页。
+- 当前周反推：`mondayOf(new Date())` 往前推 `(target - 1) * 7` 天写回 `startDate` 后 `setViewingWeek(target)`；改开学时间同样重算并同步 `viewingWeek`；学期周数校验 1~60 并把超界的 `viewingWeek` 夹回。
+- `appearance.tsx` 重写：顶栏 `更多外观设置` + 右侧 `恢复默认`；顶部实时预览（背景 `gridBackgroundColor`、格子 `cellHeight` / `cellRadius` / 饱和度同框联动）；8 个护眼底色色板 + 40×40 选中描边与 ✓（点击即 `updateSetting('gridBackgroundColor', hex)`）、饱和度 5 档内嵌切换；新增「高级外观定制」4 行占位（右侧 `暂未开放`，点击 `showNotice('该功能暂未开放，敬请期待')`）。
+- `week-grid.tsx` 行高改由 `cellHeight` 驱动（`rowH` 替换全部 `ROW_H` 用法），课程块 / 预览块圆角取 `cellRadius`，表头 / 时间列 / 网格底色取 `gridBackgroundColor`；表头与行内空白格只遍历 `visibleDays`，课程块按 `visibleDays.indexOf(dayOfWeek)` 定位（`-1` 直接不渲染），列宽按可见天数摊平。
+- `timetable-screen.tsx` 用 `useMemo` 计算 `visibleDays`、`dayColWidth = (pageWidth - TIME_COL) / visibleDays.length`，根容器背景色取 `settings.gridBackgroundColor`。
+- 新增 `tests/a3-appearance-settings.test.ts` 8 条（默认值 / 区间、`clampNumber` 越界与 NaN、6 种 `visibleWeekDays` 排列）；`tests/e2e/timetable.e2e.mjs` 同步改为从「更多外观设置」页切饱和度并校验新增行。
+- 验证：40 个测试文件 / 279 条用例、`tsc --noEmit`、`expo lint` 全部通过；滚轮与日历属手势/触摸交互，按约定交真机确认。
+
+## v1.2.21 — 2026-11-13
+
+### 我的（设置）：五个分组重排，健身默认值改成点击弹窗输入
+
+- `settings.tsx` 的 ScrollView 重排为「快捷入口 / 界面与外观 / 功能偏好 / 数据与安全 / 关于」五组：快捷入口新增「游戏」入口（`/games`）；原「首页」卡片设置与首尾两个「外观」合并为「界面与外观」（首页卡片、第三个标签、个性化、主题四行），消除重复的「外观」标题；列表排序与健身默认值合并进「功能偏好」；`message` / `error` 提示框移到个人资料行正下方。
+- 「默认次数 / 默认重量」从外置 `TextInput` + 独立「保存」按钮改为点击行打开 `ModalSheet` 输入（reps 最多 3 位、weight 最多 4 位、`number-pad`）：校验 `Number.isInteger` 且 reps ≥ 1 / weight ≥ 0 后自动 `setFitnessDefaults` + `bumpDataVersion()`，提示「健身默认值已保存。」；删除 `numberInput` / `defaultsRow` 样式与第三行按钮，新增 `dialogInput`（高 46、圆角 12）与 `dialogError`。
+- 行级视觉（`styles.group` / `styles.row` / `styles.divider`）、卡片圆角与分隔线保持不变；清空数据后同步刷新本地默认值显示。
+- `tests/e2e/settings.e2e.mjs` 改为「点行 → 等弹窗标题 → 填输入框 → 点保存」；验证：39 个测试文件 / 272 条用例、`tsc --noEmit`、`expo lint`、E2E P8 场景全部通过。
+
+## v1.2.20 — 2026-11-13
+
+### 课表：预览框两态交互、自定义时间按真实比例定位、周数滑条跟手
+
+- `week-grid.tsx` 的 `＋` 预览块改为严格两态：已有预览框时点任何空白格只收起预览、不瞬移；点表头行或左侧时间列同样收起；点粉块本身才清空预览并跳新建页；点已有课程块先收起预览再开详情。
+- `timetable-core.ts` 新增 `timeToMinutes` / `timeToGridY` / `periodsForTimeRange`：把真实时间映射到网格像素 y（节内按比例插值、午休按 `lunchH` 插值、普通课间贴分界线、早于首节归 0、晚于末节贴底）。
+- `week-grid.tsx` 课程块渲染抽出 `renderBlock`：`customTime.enabled` 的时段不再按 `startPeriod/endPeriod` 整格切块，而是用真实起止时间算 `top/height`（最小 24），跨课间/午休也画一整块。
+- `course.tsx` 保存自定义时间时用 `periodsForTimeRange` 反推相交节次并同步 `startPeriod` / `endPeriod`，详情里的「第 X - Y 节」与实际跨度一致。
+- `timetable-more-sheet.tsx` 周数滑条：新增本地 `dragWeek` 驱动滑块与「第 N 周」文案，只有跨过一周刻度才 `setDragWeek` + 下一帧 `onJumpToWeek(week, false)`；`onPanResponderMove` 改用 `startXRef + gestureState.dx`，不再读会跳变的 `locationX`；松手/取消时落最终周次并清空 `dragWeek`，背后课表用 `animated: false` 瞬移。
+- 新增 `tests/timetable-core.test.ts` 5 条：`timeToMinutes` 宽容解析、节内插值、边界归零/贴底、午休插值、`periodsForTimeRange` 反推。
+- 验证：39 个测试文件 / 272 条用例、`tsc --noEmit`、`expo lint` 全部通过；滑条手感与预览块交互属手势行为，按约定交真机确认。
+
+## v1.2.19 — 2026-11-13
+
+### 课表：两段式添加课程 + 节次/时间三列与双列滚轮
+
+- `week-grid.tsx` 空白格改为两段式：第一次点只放一个粉色 `＋` 预览块（`#F472B6`、圆角 6、白字 26/300），点预览块才跳新建页；跨度默认取 `settings.defaultSpan`，若下一节当天已有课或会跨过午休分割线则收缩为单节。换周、课程数据变化、点已有课程块都会清空预览，再点同一格取消。**没有 ↑↓ 胶囊按钮**。
+- `week-grid.tsx` 新增 `defaultSpan` 入参与 `onAddCourse(day, period, endPeriod?)`；`timetable-screen.tsx` 的 `openAddCourse` 按需带上 `endPeriod` 路由参数。
+- `course.tsx` 读取 `endPeriod` 初始化结束节（夹在 `[startPeriod, totalPeriods]`），所以「预览 2 节」打开后就是 2 节。
+- `course.tsx` 的节次弹窗由胶囊列表换成 `WheelSheet` + 三列滚轮（星期 / 第 N 节 / `—` / 第 N 节，行高 44、可见 5 行、三列共用贯穿细线）：草稿态 `draftDay` / `draftStart` / `draftEnd`，开始节超过结束节时结束节跟随、反之开始节回退，点「保存」才写回时段并刷新未开启自定义时间时的时间备份。
+- `course.tsx` 自定义时间页的上/下课时间由 `TextInput` 改成可点胶囊，点开复用双列时间滚轮抽屉（`src/components/timetable/wheel-sheet.tsx`，标题随目标显示「上课时间 / 下课时间」）；保存时若下课 ≤ 上课则自动顺延 45 分钟并夹在当天 23:59 内。
+- `wheel-picker.tsx` 新增可选 `itemHeight`（默认 40，不传时行为与旧版完全一致），课表三列滚轮传 44；行高同时作用于吸附间隔、高亮块与每项高度。
+
+## v1.2.18 — 2026-11-13
+
+### 课表：多时间表 + 底部时间滚轮（零 Schema 迁移）
+
+- 新增 `TimeTablePreset`（id / name / fixedDuration / durationMinutes / periods）与纯函数 `addMinutes` / `relayoutPeriods` / `applyFixedDuration` / `appendPeriod` / `validatePeriods`，落在 `src/lib/timetable-core.ts`。
+- 时间表只借用 `settings` 键值：`timetable.timeTables`（JSON 数组）与 `timetable.scheduleTimeTableMap`（`scheduleId -> timeTableId`）；首次播种用现有 `period.times` + `timetable.periodDuration` 生成一套「默认」并把已有课表全部绑上，不建表、不改 `SCHEMA_VERSION`。
+- `TimetableContext` 新增 `timeTables` / `scheduleTimeTableMap` / `activeTimeTable` / `timeTableIdForSchedule` / `selectTimeTable` / `saveTimeTable` / `createTimeTable` / `deleteTimeTable`；`reloadAll` 以「当前课表绑定的那套时间表」为唯一来源回灌 `period.times` 与 `timetable.periodDuration`（仅在不等时才写库）。切时间表、保存时间表、`switchSchedule` 之后都走 `reloadAll()` + `bumpDataVersion()`，首页 Tasks / 计划页 TodayList / 课表网格读到的仍是同一份 `period.times`。
+- `/timetable/periods` 重写为两视图同路由：列表视图（新建胶囊、名称+✎、`共 N 节课 · X分钟/节`、`当前课表在用` / `N个课表在用`、右侧单选圈）；编辑视图（名称输入、固定上课时长开关 + 副标题联动文案、30–90 步进 5 的时长滚轮、`⊞ 添加`、长按删除、24 小时制提示）。开启固定时长后结束时间置灰不可点，改开始时间用 `relayoutPeriods` 按原课间整体顺延。
+- 时间选择统一改成底部 `BottomSheet` + 双列 `WheelPicker`（00–23 / 00–59、中间粗冒号、选中行上下 0.5 细线、全宽圆角保存按钮），不再用 `TextInput` 手敲；非唯一时间表可在编辑页底部删除，绑定它的课表自动改绑到剩余第一套。
+- `wheel-picker.tsx` 修掉松手闪动：`reportedRef` 标记手势回写的下标，`useEffect` 只在外来改值时 `scrollToOffset`；新增 `onScroll`（`scrollEventThrottle={16}`）实时刷新居中索引，中线 18/700、远处 14 渐隐，并加 `nestedScrollEnabled` 防止安卓抽屉吞掉纵向手势。
+- `timetable/settings.tsx` 删除「单节时长」行与其抽屉、「关于 / 版本」分组及 `expo-constants` 引用（功能并入编辑时间表页）。
+- 新增 `tests/a2-timetable-presets.test.ts`（7 条）：播种两键、损坏 JSON 回退、写回激活时间表同步 `period.times`、绑定表读回、`listCoursesForDate` 时段文案随切换变化、顺延算法与固定时长对齐。
+- 验证：`npm run verify` 通过，39 个测试文件 / 265 条用例、`tsc --noEmit`、`expo lint` 均无错误；滚轮与长按属于手势交互，按约定交真机验证。
+
+App 内显示版本仍为 1.2.2，不弹更新日志。
+
 ## v1.2.17 — 2026-11-13
 
 ### 课表：抽屉挂载时序、autoHeight 高度坍缩与翻周互相覆盖

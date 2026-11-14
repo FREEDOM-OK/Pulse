@@ -11,11 +11,14 @@ import { DateStrip, dateLabel } from '@/components/ui/date-strip';
 import { MonthPicker } from '@/components/ui/month-picker';
 import { Spacing } from '@/constants/theme';
 import { getMonthActivity } from '@/db/repositories/calendar';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
+import { glassCardStyle } from '@/lib/glass';
 import { addDays, todayStr } from '@/lib/date';
 
 export default function TodayScreen() {
   const theme = useTheme();
+  const glass = useGlass();
+  const scheme = useThemeMode();
   const insets = useSafeAreaInsets();
   const [date, setDate] = useState(todayStr());
   const [stats, setStats] = useState({ total: 0, done: 0 });
@@ -85,7 +88,7 @@ export default function TodayScreen() {
   }, [headerOpacity, headerShift, titleOpacity, titleShift]);
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <Animated.View
           style={[
@@ -147,7 +150,13 @@ export default function TodayScreen() {
             { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom },
           ]}
           showsVerticalScrollIndicator={false}>
-          <TodayList date={date} onStats={setStats} />
+          {glass ? (
+            <View style={[styles.glassList, glassCardStyle(scheme)]}>
+              <TodayList date={date} onStats={setStats} />
+            </View>
+          ) : (
+            <TodayList date={date} onStats={setStats} />
+          )}
         </ScrollView>
       </SafeAreaView>
 
@@ -229,6 +238,10 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.four,
     flexGrow: 1,
+  },
+  glassList: {
+    borderRadius: 24,
+    padding: 16,
   },
   pressed: {
     opacity: 0.6,

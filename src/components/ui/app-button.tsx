@@ -10,6 +10,8 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger';
   disabled?: boolean;
   fullWidth?: boolean;
+  /** 覆盖读屏与 E2E 查找用的无障碍名称；不传时由 label 决定。 */
+  accessibilityLabel?: string;
 }
 
 export function AppButton({
@@ -18,6 +20,7 @@ export function AppButton({
   variant = 'primary',
   disabled = false,
   fullWidth = false,
+  accessibilityLabel,
 }: ButtonProps) {
   const theme = useTheme();
   const background =
@@ -28,6 +31,7 @@ export function AppButton({
   return (
     <RipplePressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       disabled={disabled}
       onPress={onPress}
       rippleColor={rippleColor}

@@ -2,11 +2,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
 import type { TabIcon } from '@/constants/tabs';
+import { useTheme } from '@/hooks/use-theme';
 
 type HeaderMode = 'tab' | 'page';
 
 interface WeekHeaderProps {
   mode: HeaderMode;
+  /** 与课表容器一致的顶栏底色（深色默认网格下由上层解析成 theme.background）。 */
+  backgroundColor: string;
   /** 主标题，如「第 2 周 周四」。 */
   title: string;
   /** 副标题，如「2026/11/12」。 */
@@ -33,6 +36,7 @@ const MORE_ICON: TabIcon = { ios: 'ellipsis', android: 'more_horiz', web: 'more_
  */
 export function WeekHeader({
   mode,
+  backgroundColor,
   title,
   subtitle,
   onBack,
@@ -40,23 +44,29 @@ export function WeekHeader({
   onImport,
   onMore,
 }: WeekHeaderProps) {
+  const theme = useTheme();
+
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { backgroundColor }]}>
       {mode === 'page' ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="返回"
           onPress={onBack}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-          <Text style={styles.backArrow}>‹</Text>
+          style={({ pressed }) => [
+            styles.backBtn,
+            { backgroundColor: theme.backgroundElement, borderColor: theme.backgroundSelected },
+            pressed && styles.pressed,
+          ]}>
+          <Text style={[styles.backArrow, { color: theme.text }]}>‹</Text>
         </Pressable>
       ) : null}
 
       <View style={styles.titleBlock}>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={styles.subtitle} numberOfLines={1}>
+        <Text style={[styles.subtitle, { color: theme.textSecondary }]} numberOfLines={1}>
           {subtitle}
         </Text>
       </View>
@@ -79,6 +89,8 @@ function HeaderIconButton({
   label: string;
   onPress: () => void;
 }) {
+  const theme = useTheme();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -86,7 +98,7 @@ function HeaderIconButton({
       onPress={onPress}
       hitSlop={4}
       style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
-      <SymbolView name={icon} size={20} tintColor="#1C1C1E" />
+      <SymbolView name={icon} size={20} tintColor={theme.text} />
     </Pressable>
   );
 }
@@ -100,23 +112,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F5F5F7',
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 22, color: '#111113', lineHeight: 24, marginTop: -2 },
+  backArrow: { fontSize: 22, lineHeight: 24, marginTop: -2 },
   pressed: { opacity: 0.55 },
   titleBlock: { flex: 1, justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '700', color: '#1C1C1E' },
-  subtitle: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  title: { fontSize: 20, fontWeight: '700' },
+  subtitle: { fontSize: 12, marginTop: 2 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   iconBtn: {
     width: 36,

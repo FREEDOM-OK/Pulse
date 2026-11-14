@@ -20,6 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
+import { GlassGlow } from '@/components/ui/glass-glow';
 import {
   DASH_CARD_HEIGHT,
   DASH_CARD_WIDTH,
@@ -47,6 +48,11 @@ import type {
 } from '@/db/types';
 import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
 import { formatMonthDay, parseDate, todayStr } from '@/lib/date';
+import { isDarkBackground, readableInk } from '@/lib/color';
+import { glassCardStyle } from '@/lib/glass';
+import { GlassMaterial } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { useThemePreference } from '@/theme/theme-context';
 
 const WEEKDAY_CHARS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -61,6 +67,8 @@ function writePullDistance(shared: SharedValue<number>, value: number) {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const theme = useTheme();
+  const { scheme, glass, homeBgMode, homeBgColor, homeBgImage } = useThemePreference();
   const today = todayStr();
   const dataVersion = useDataVersion();
 
@@ -277,6 +285,27 @@ export default function HomeScreen() {
   const stackWidth = DASH_CARD_WIDTH;
   const stackHeight = DASH_CARD_HEIGHT;
 
+  // —— 首页背景（默认 / 自定义纯色 / 自定义图片）——
+  const hasImageBg = homeBgMode === 'image' && !!homeBgImage;
+  const bgColor = homeBgMode === 'color' ? homeBgColor : theme.background;
+  const headerInk = homeBgMode === 'color' ? readableInk(homeBgColor) : theme.text;
+  const helloInk =
+    homeBgMode === 'color'
+      ? isDarkBackground(homeBgColor)
+        ? 'rgba(255,255,255,0.78)'
+        : 'rgba(17,24,39,0.6)'
+      : theme.textSecondary;
+  const headerShadow = hasImageBg
+    ? {
+        textShadowColor: scheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.85)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 12,
+      }
+    : null;
+  /** 毛玻璃皮肤、或用户换了花哨壁纸时，Tasks 要托在一张可读性卡片上。 */
+  const tasksOnGlass = glass || hasImageBg;
+  const imageOverlay = GlassMaterial[scheme].imageOverlay;
+
   const handleSearchResultPress = (result: SearchResult) => {
     if (result.kind === 'fitness') {
       router.push({ pathname: '/fitness', params: { date: result.date } });
@@ -308,7 +337,19 @@ export default function HomeScreen() {
   }, [dashMode, cardModels, cardStyle, cardColor, stackWidth, stackHeight, router]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
+      {hasImageBg ? (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <Image
+            key={homeBgImage}
+            source={{ uri: homeBgImage }}
+            resizeMode="cover"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: imageOverlay }]} />
+        </View>
+      ) : null}
+      {glass && !hasImageBg ? <GlassGlow scheme={scheme} /> : null}
       <View style={styles.pullWrap} {...pullResponder.panHandlers}>
         <ScrollView
           style={styles.scroll}
@@ -327,8 +368,12 @@ export default function HomeScreen() {
             <Animated.View style={[styles.titleZone, { paddingTop: insets.top + 20 }]}>
               <View style={styles.headerRow}>
                 <Animated.View testID="home-title-text" style={[styles.headerText, titleAnimatedStyle]}>
-                  <ThemedText style={styles.hello}>Hey, {name}!</ThemedText>
-                  <ThemedText style={styles.date}>{dateLabel}</ThemedText>
+                  <ThemedText style={[styles.hello, { color: helloInk }, headerShadow]}>
+                    Hey, {name}!
+                  </ThemedText>
+                  <ThemedText style={[styles.date, { color: headerInk }, headerShadow]}>
+                    {dateLabel}
+                  </ThemedText>
                 </Animated.View>
 
                 <Pressable
@@ -336,7 +381,7 @@ export default function HomeScreen() {
                   accessibilityLabel="打开个人资料"
                   onPress={() => router.push('/profile')}
                   style={({ pressed }) => [pressed && styles.pressed]}>
-                  <View style={styles.avatar}>
+                  <View style={[styles.avatar, { backgroundColor: theme.backgroundElement }]}>
                     {profile?.avatarUri ? (
                       <Image
                         key={profile.avatarUri}
@@ -344,7 +389,9 @@ export default function HomeScreen() {
                         style={styles.avatarImage}
                       />
                     ) : (
-                      <ThemedText style={styles.avatarText}>{name.slice(0, 1)}</ThemedText>
+                      <ThemedText style={[styles.avatarText, { color: theme.text }]}>
+                        {name.slice(0, 1)}
+                      </ThemedText>
                     )}
                   </View>
                 </Pressable>
@@ -355,20 +402,48 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="搜索"
               onPress={() => setSearchOpen(true)}
-              style={({ pressed }) => [styles.searchBar, pressed && styles.pressed]}>
+              style={({ pressed }) => [
+                styles.searchBar,
+                glass
+                  ? {
+                      backgroundColor: GlassMaterial[scheme].card,
+                      borderWidth: 0.8,
+                      borderColor: GlassMaterial[scheme].cardBorder,
+                      shadowColor: GlassMaterial[scheme].cardShadow,
+                      shadowOpacity: GlassMaterial[scheme].cardShadowOpacity,
+                    }
+                  : {
+                      backgroundColor: theme.backgroundElement,
+                      borderColor: scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                      shadowOpacity: scheme === 'dark' ? 0 : 0.06,
+                    },
+                pressed && styles.pressed,
+              ]}>
               <View style={styles.searchLeft}>
                 <SymbolView
                   name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-                  tintColor="#8E8E93"
+                  tintColor={theme.textSecondary}
                   size={20}
                 />
-                <ThemedText style={styles.searchPlaceholder}>搜索</ThemedText>
+                <ThemedText style={[styles.searchPlaceholder, { color: theme.textSecondary }]}>
+                  搜索
+                </ThemedText>
               </View>
 
-              <View style={styles.filterButton}>
+              <View
+                style={[
+                  styles.filterButton,
+                  {
+                    backgroundColor: glass
+                      ? scheme === 'light'
+                        ? 'rgba(255,255,255,0.5)'
+                        : GlassMaterial[scheme].block
+                      : theme.backgroundSelected,
+                  },
+                ]}>
                 <SymbolView
                   name={{ ios: 'line.3.horizontal.decrease', android: 'tune', web: 'tune' }}
-                  tintColor="#000000"
+                  tintColor={theme.text}
                   size={18}
                 />
               </View>
@@ -376,29 +451,48 @@ export default function HomeScreen() {
 
             <View>
               <View style={styles.sectionHeader}>
-                <ThemedText style={styles.sectionTitle}>Dash</ThemedText>
+                <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Dash</ThemedText>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="管理首页卡片"
                   onPress={() => router.push('/cards')}
                   hitSlop={8}
                   style={({ pressed }) => [pressed && styles.pressed]}>
-                  <ThemedText style={styles.sectionLink}>管理 &gt;</ThemedText>
+                  <ThemedText style={[styles.sectionLink, { color: theme.textSecondary }]}>
+                    管理 &gt;
+                  </ThemedText>
                 </Pressable>
               </View>
 
               <View style={styles.dashBlock}>{dashBlock}</View>
 
-              <View style={styles.tasks}>
+              <View
+                style={[
+                  styles.tasks,
+                  tasksOnGlass
+                    ? [
+                        glassCardStyle(scheme),
+                        {
+                          borderRadius: 24,
+                          marginHorizontal: 16,
+                          paddingHorizontal: 16,
+                          paddingTop: 16,
+                          paddingBottom: 8,
+                        },
+                      ]
+                    : null,
+                ]}>
                 <View style={styles.tasksHeader}>
-                  <ThemedText style={styles.sectionTitle}>Tasks</ThemedText>
+                  <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Tasks</ThemedText>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="查看今日全部"
                     onPress={() => router.navigate('/today')}
                     hitSlop={8}
                     style={({ pressed }) => [pressed && styles.pressed]}>
-                    <ThemedText style={styles.sectionLink}>完成 &gt;</ThemedText>
+                    <ThemedText style={[styles.sectionLink, { color: theme.textSecondary }]}>
+                      完成 &gt;
+                    </ThemedText>
                   </Pressable>
                 </View>
 
@@ -407,12 +501,12 @@ export default function HomeScreen() {
                   emptyText="今天还没有安排"
                   checkSize={20}
                   checkRadius={6}
-                  checkBorderColor="#8E8E93"
-                  checkCheckedColor="#000000"
-                  checkCheckColor="#FFFFFF"
+                  checkBorderColor={theme.textSecondary}
+                  checkCheckedColor={theme.text}
+                  checkCheckColor={theme.background}
                   courseVariant="home"
-                  textColor="#000000"
-                  secondaryTextColor="#8E8E93"
+                  textColor={theme.text}
+                  secondaryTextColor={theme.textSecondary}
                   rowSpacing={16}
                   showSeparators={false}
                   showAddRow={false}
@@ -435,7 +529,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   scroll: {
     flex: 1,
@@ -465,14 +558,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     fontWeight: '500',
-    color: '#666666',
   },
   date: {
     fontSize: 22,
     lineHeight: 30,
     fontWeight: '700',
     letterSpacing: -0.4,
-    color: '#000000',
     marginTop: 6,
   },
   avatar: {
@@ -482,7 +573,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F2F2F7',
   },
   avatarImage: {
     width: '100%',
@@ -491,21 +581,19 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#000000',
   },
   searchBar: {
     marginTop: 24,
     marginHorizontal: 20,
     height: 50,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 4,
   },
@@ -519,13 +607,11 @@ const styles = StyleSheet.create({
   searchPlaceholder: {
     fontSize: 15,
     lineHeight: 20,
-    color: '#8E8E93',
   },
   filterButton: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#F2F2F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -541,12 +627,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
     lineHeight: 26,
     fontWeight: '700',
-    color: '#000000',
   },
   sectionLink: {
     fontSize: 13,
     lineHeight: 18,
-    color: '#8E8E93',
   },
   dashBlock: {},
   tasks: {

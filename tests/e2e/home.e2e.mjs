@@ -63,12 +63,11 @@ export async function run(page, baseUrl) {
     throw new Error(`搜索关闭后未复位：${JSON.stringify(searchBlurred)}`);
   }
 
-  // 凸起 + → 记重大消费，首页日历卡立刻更新
+  // 凸起 + → 记事件（默认消费），首页日历卡立刻更新
   await page.clickLabel('新建');
-  await page.waitForText('记重大消费');
-  await page.clickText('记重大消费');
-  await page.waitForLabel('事件名称');
-  await page.fillByLabel('事件名称', '买键盘');
+  await page.clickText('记事件');
+  await page.waitForText('记事件');
+  await page.fillByLabel('内容', '买键盘');
   await page.fillByLabel('金额', '199.5');
   await page.fillByLabel('备注', '办公用');
   await page.clickLabel('保存事件');
@@ -76,9 +75,9 @@ export async function run(page, baseUrl) {
 
   // 金额写错时不保存并给提示
   await page.clickLabel('新建');
-  await page.clickText('记今日好饭');
-  await page.waitForLabel('吃了什么');
-  await page.fillByLabel('吃了什么', '牛肉面');
+  await page.clickText('记事件');
+  await page.clickLabel('记好饭');
+  await page.fillByLabel('内容', '牛肉面');
   await page.fillByLabel('金额', '1.2.3');
   await page.clickLabel('保存事件');
   await page.waitForText('金额只能填数字，可以用小数点');
@@ -101,8 +100,7 @@ export async function run(page, baseUrl) {
   await page.clickLabel('计划');
   await page.waitForText('Today');
   await page.clickLabel('新建任务或备忘');
-  await page.clickText('新建任务');
-  await page.waitForText('添加任务');
+  await page.waitForText('新建任务/备忘');
   await page.fill('例如：写周报', '写周报');
   await page.clickText('保存');
   await page.waitForText('写周报');
@@ -130,8 +128,7 @@ export async function run(page, baseUrl) {
   await page.clickLabel('计划');
   await page.waitForText('Today');
   await page.clickLabel('新建任务或备忘');
-  await page.clickText('新建备忘');
-  await page.waitForText('新建备忘');
+  await page.clickLabel('类型 备忘');
   await page.fill('例如：周五前交房租', '周五前交房租');
   await page.clickText('保存');
   await page.waitForText('周五前交房租');

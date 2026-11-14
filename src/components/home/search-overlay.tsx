@@ -5,6 +5,7 @@ import {
   Easing,
   Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
 import { SearchResults } from '@/components/home/search-results';
+import { useTheme } from '@/hooks/use-theme';
 import {
   clearSearchHistory,
   listSearchHistory,
@@ -32,7 +34,8 @@ export interface SearchOverlayProps {
 }
 
 const OPEN_DURATION = 220;
-const CLOSE_DURATION = 200;
+/** 退场必须够快：整屏 #F7F7FA 变半透明的这段时间里，会和首页文字叠出重影。 */
+const CLOSE_DURATION = 120;
 const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
 
 /**
@@ -44,6 +47,7 @@ const EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
  */
 export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverlayProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const inputRef = useRef<ElementRef<typeof TextInput>>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const offset = useRef(new Animated.Value(12)).current;
@@ -53,6 +57,7 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
   const [submitted, setSubmitted] = useState(false);
   const [searching, setSearching] = useState(false);
   const closingRef = useRef(false);
+  const runningRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -70,7 +75,7 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
 
     progress.setValue(0);
     offset.setValue(12);
-    Animated.parallel([
+    const animation = Animated.parallel([
       Animated.timing(progress, {
         toValue: 1,
         duration: OPEN_DURATION,
@@ -83,7 +88,9 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
         easing: EASE,
         useNativeDriver: true,
       }),
-    ]).start();
+    ]);
+    runningRef.current = animation;
+    animation.start();
 
     const focusTimer = setTimeout(() => inputRef.current?.focus(), 60);
     return () => clearTimeout(focusTimer);
@@ -91,10 +98,14 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
 
   const close = useCallback(
     (after?: () => void) => {
+      // 先收焦点再退场：输入框光标和键盘都算「前景」，留着会在淡出时单独闪一下。
+      inputRef.current?.blur();
+      Keyboard.dismiss();
       if (closingRef.current) return;
       closingRef.current = true;
-      Keyboard.dismiss();
-      Animated.parallel([
+      // 开场动画还没播完就点关闭时，先停掉它，避免两条 timing 同时写同一个值而抖动。
+      runningRef.current?.stop();
+      const animation = Animated.parallel([
         Animated.timing(progress, {
           toValue: 0,
           duration: CLOSE_DURATION,
@@ -107,12 +118,24 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
           easing: EASE,
           useNativeDriver: true,
         }),
-      ]).start(() => {
+      ]);
+      runningRef.current = animation;
+      animation.start(({ finished }) => {
+        // 被中途打断（例如组件已卸载）就不要再回调父级。
+        if (!finished) return;
         onClose();
         after?.();
       });
     },
     [offset, onClose, progress]
+  );
+
+  // 卸载时停掉还在跑的进出场动画，避免回调落到已卸载的组件上。
+  useEffect(
+    () => () => {
+      runningRef.current?.stop();
+    },
+    []
   );
 
   const submit = useCallback(async () => {
@@ -157,6 +180,10 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
 
   const showHistory = query.trim().length === 0;
 
+  // 关闭后不要把一个隐藏的 <Modal visible={false}> 一直挂在原生树上：直接不渲染。
+  // 退场动画在 close() 内部播完（CLOSE_DURATION）才通知父级，因此这里不会打断淡出。
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
@@ -166,18 +193,28 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
       navigationBarTranslucent
       onRequestClose={() => close()}>
       <Animated.View
+        // Android 给整层先离屏合成为一张纹理再整体淡出：子视图的阴影 / 文字不会各自透出残影。
+        // Web 与 iOS 不需要，透传下去反而会变成非法 DOM 属性。
+        {...(Platform.OS === 'android'
+          ? { renderToHardwareTextureAndroid: true, needsOffscreenAlphaCompositing: true }
+          : null)}
         style={[
           styles.overlay,
           {
+            backgroundColor: theme.background,
             opacity: progress,
             transform: [{ translateY: offset }],
           },
         ]}>
         <View style={[styles.searchRow, { marginTop: insets.top + 8 }]}>
-          <View style={styles.searchBox}>
+          <View
+            style={[
+              styles.searchBox,
+              { backgroundColor: theme.backgroundElement, borderColor: theme.backgroundSelected },
+            ]}>
             <SymbolView
               name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-              tintColor="#8E8E93"
+              tintColor={theme.textSecondary}
               size={20}
             />
             <TextInput
@@ -189,9 +226,9 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
               }}
               returnKeyType="search"
               placeholder="搜索任务、备忘或训练"
-              placeholderTextColor="#8E8E93"
-              selectionColor="#000000"
-              style={styles.input}
+              placeholderTextColor={theme.textSecondary}
+              selectionColor={theme.text}
+              style={[styles.input, { color: theme.text }]}
               accessibilityLabel="搜索"
               autoCorrect={false}
             />
@@ -200,10 +237,14 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
             accessibilityRole="button"
             accessibilityLabel="关闭搜索"
             onPress={() => close()}
-            style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
+            style={({ pressed }) => [
+              styles.close,
+              { backgroundColor: theme.backgroundSelected },
+              pressed && styles.pressed,
+            ]}>
             <SymbolView
               name={{ ios: 'xmark', android: 'close', web: 'close' }}
-              tintColor="#1C1C1E"
+              tintColor={theme.text}
               size={17}
             />
           </Pressable>
@@ -216,14 +257,14 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             <View style={styles.historyHeader}>
-              <Text style={styles.sectionLabel}>最近搜索</Text>
+              <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>最近搜索</Text>
               {history.length > 0 ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="清空搜索历史"
                   onPress={handleClearHistory}
                   hitSlop={8}>
-                  <Text style={styles.clearText}>清空历史</Text>
+                  <Text style={[styles.clearText, { color: theme.textSecondary }]}>清空历史</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -236,26 +277,30 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
                     accessibilityRole="button"
                     accessibilityLabel={`搜索历史 ${item.query}`}
                     onPress={() => handleHistoryPress(item.query)}
-                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}>
+                    style={({ pressed }) => [
+                      styles.chip,
+                      { backgroundColor: theme.backgroundElement },
+                      pressed && styles.pressed,
+                    ]}>
                     <SymbolView
                       name={{ ios: 'clock', android: 'history', web: 'history' }}
-                      tintColor="#8E8E93"
+                      tintColor={theme.textSecondary}
                       size={13}
                     />
-                    <Text style={styles.chipText} numberOfLines={1}>
+                    <Text style={[styles.chipText, { color: theme.text }]} numberOfLines={1}>
                       {item.query}
                     </Text>
                   </Pressable>
                 ))}
               </View>
             ) : (
-              <Text style={styles.emptyHistory}>暂无搜索历史</Text>
+              <Text style={[styles.emptyHistory, { color: theme.textSecondary }]}>暂无搜索历史</Text>
             )}
           </ScrollView>
         ) : submitted ? (
           searching ? (
             <View style={styles.loading}>
-              <ActivityIndicator color="#000000" />
+              <ActivityIndicator color={theme.text} />
             </View>
           ) : (
             <SearchResults
@@ -267,7 +312,7 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
           )
         ) : (
           <View style={styles.hint}>
-            <Text style={styles.hintText}>按回车搜索</Text>
+            <Text style={[styles.hintText, { color: theme.textSecondary }]}>按回车搜索</Text>
           </View>
         )}
       </Animated.View>
@@ -278,7 +323,6 @@ export function SearchOverlay({ visible, onClose, onSelectResult }: SearchOverla
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: '#F7F7FA',
   },
   searchRow: {
     marginHorizontal: 20,
@@ -294,12 +338,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 4,
+    // 不用 shadow / elevation：Android 上子视图的硬件阴影不随父级 opacity 衰减，
+    // 淡出时会残留一圈深灰黑框；浅灰底上的 1px 细边框已经足够分层。
+    borderWidth: 1,
   },
   input: {
     flex: 1,
@@ -307,7 +348,6 @@ const styles = StyleSheet.create({
     height: 50,
     paddingVertical: 0,
     fontSize: 15,
-    color: '#000000',
     outlineColor: 'transparent',
     outlineWidth: 0,
   },
@@ -317,7 +357,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E9E9EE',
   },
   historyScroll: {
     flex: 1,
@@ -336,12 +375,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
-    color: '#8E8E93',
   },
   clearText: {
     fontSize: 12,
     lineHeight: 16,
-    color: '#8E8E93',
   },
   chips: {
     flexDirection: 'row',
@@ -356,19 +393,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
   },
   chipText: {
     maxWidth: 220,
     fontSize: 13,
     lineHeight: 18,
-    color: '#1C1C1E',
   },
   emptyHistory: {
     marginTop: 20,
     fontSize: 13,
     lineHeight: 18,
-    color: '#A1A1A6',
   },
   loading: {
     flex: 1,
@@ -383,7 +417,6 @@ const styles = StyleSheet.create({
   hintText: {
     fontSize: 13,
     lineHeight: 18,
-    color: '#A1A1A6',
   },
   pressed: {
     opacity: 0.65,

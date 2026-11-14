@@ -1,7 +1,8 @@
 import type { SqlParam } from '../driver';
 import { getDriver } from '../connection';
 import type { TaskRow } from '../types';
-import { nowIso } from '@/lib/date';
+import { deleteSetting, getSetting, setSetting } from './settings';
+import { nowIso, todayStr } from '@/lib/date';
 import { createRepeatGroupId } from '@/lib/id';
 
 export interface CreateTaskInput {
@@ -10,6 +11,8 @@ export interface CreateTaskInput {
   note?: string | null;
   time?: string | null;
   pinned?: boolean;
+  /** 勾选「今日未完成自动延期到下一天」；ID 记在 settings 表，不新增字段。 */
+  autoPostpone?: boolean;
 }
 
 export interface TaskPatch {
@@ -71,7 +74,9 @@ export async function createTask(input: CreateTaskInput): Promise<number> {
       nowIso(),
     ]
   );
-  return result.lastInsertRowId;
+  const id = result.lastInsertRowId;
+  if (input.autoPostpone) await addAutoPostponeIds([id]);
+  return id;
 }
 
 /** 一次添加到连续 days 天（含起始日），共用 repeat_group_id。 */
@@ -106,6 +111,7 @@ export async function createTaskSeries(
     }
   });
 
+  if (input.autoPostpone) await addAutoPostponeIds(ids);
   return ids;
 }
 
@@ -182,8 +188,94 @@ export async function moveTaskToDate(id: number, date: string): Promise<void> {
 
 export async function deleteTask(id: number): Promise<void> {
   await getDriver().runAsync('DELETE FROM tasks WHERE id = ?', [id]);
+  await removeAutoPostponeIds([id]);
 }
 
 export async function deleteTaskGroup(repeatGroupId: string): Promise<void> {
+  const rows = await getDriver().getAllAsync<{ id: number }>(
+    'SELECT id FROM tasks WHERE repeat_group_id = ?',
+    [repeatGroupId]
+  );
   await getDriver().runAsync('DELETE FROM tasks WHERE repeat_group_id = ?', [repeatGroupId]);
+  if (rows.length > 0) await removeAutoPostponeIds(rows.map((row) => row.id));
+}
+
+// —— 未完成自动顺延（零表结构改动：ID 列表存在 settings 表的字符串里） ——
+
+const AUTO_POSTPONE_KEY = 'tasks.autoPostponeIds';
+
+/** 读取开启了自动延期的任务 ID；数据损坏时按空集合处理。 */
+export async function getAutoPostponeIds(): Promise<number[]> {
+  const raw = await getSetting(AUTO_POSTPONE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function saveAutoPostponeIds(ids: number[]): Promise<void> {
+  const unique = Array.from(new Set(ids));
+  if (unique.length === 0) {
+    await deleteSetting(AUTO_POSTPONE_KEY);
+    return;
+  }
+  await setSetting(AUTO_POSTPONE_KEY, JSON.stringify(unique));
+}
+
+async function addAutoPostponeIds(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const current = await getAutoPostponeIds();
+  await saveAutoPostponeIds([...current, ...ids]);
+}
+
+async function removeAutoPostponeIds(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const current = await getAutoPostponeIds();
+  if (current.length === 0) return;
+  const removed = new Set(ids);
+  const next = current.filter((id) => !removed.has(id));
+  if (next.length === current.length) return;
+  await saveAutoPostponeIds(next);
+}
+
+/** 某个任务是否开启了「未完成自动延期」。 */
+export async function isTaskAutoPostpone(id: number): Promise<boolean> {
+  return (await getAutoPostponeIds()).includes(id);
+}
+
+/** 编辑任务时切换自动延期开关。 */
+export async function setTaskAutoPostpone(id: number, enabled: boolean): Promise<void> {
+  if (enabled) {
+    await addAutoPostponeIds([id]);
+    return;
+  }
+  await removeAutoPostponeIds([id]);
+}
+
+/**
+ * 把开启了自动延期、且 `date < today` 还没完成的任务顺延到今天。
+ * 在今日列表加载前调用；返回是否真正迁移过，方便调用方决定是否刷新。
+ */
+export async function rolloverAutoPostponeTasks(today: string = todayStr()): Promise<boolean> {
+  const ids = await getAutoPostponeIds();
+  if (ids.length === 0) return false;
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = await getDriver().getAllAsync<TaskRow>(
+    `SELECT * FROM tasks WHERE done = 0 AND date < ? AND id IN (${placeholders})
+     ORDER BY date ASC, sort_order ASC, id ASC`,
+    [today, ...ids]
+  );
+  if (rows.length === 0) return false;
+
+  for (const task of rows) {
+    await moveTaskToDate(task.id, today);
+  }
+  return true;
 }

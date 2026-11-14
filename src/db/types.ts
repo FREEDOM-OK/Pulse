@@ -17,6 +17,37 @@ export const EVENT_TITLE_LABELS: Record<EventType, string> = {
   meal: '吃了什么',
 };
 
+/** 日历回顾里事件分类徽章的视觉配置。 */
+export interface EventBadgeStyle {
+  /** 徽章上的完整文案。 */
+  label: string;
+  /** 卡片头部汇总时用的短文案。 */
+  shortLabel: string;
+  background: string;
+  text: string;
+}
+
+export const EVENT_BADGE_STYLES: Record<EventType, EventBadgeStyle> = {
+  expense: {
+    label: '记消费',
+    shortLabel: '消费',
+    background: 'rgba(225, 82, 65, 0.14)',
+    text: '#E15241',
+  },
+  shopping: {
+    label: '记购物',
+    shortLabel: '购物',
+    background: 'rgba(245, 158, 11, 0.14)',
+    text: '#D97706',
+  },
+  meal: {
+    label: '记好饭',
+    shortLabel: '好饭',
+    background: 'rgba(16, 185, 129, 0.14)',
+    text: '#059669',
+  },
+};
+
 export interface EventRow {
   id: number;
   date: string;
@@ -204,6 +235,42 @@ export const COURSE_BACKGROUND_LABELS: Record<CourseBackground, string> = {
 
 /** 卡片自定义颜色默认值，与深色主卡一致。 */
 export const DEFAULT_CARD_COLOR = '#26262A';
+
+/** 全局皮肤：经典极简（现状） / 苹果毛玻璃。 */
+export type AppSkin = 'default' | 'glass';
+
+export const APP_SKINS: AppSkin[] = ['default', 'glass'];
+
+export const APP_SKIN_LABELS: Record<AppSkin, string> = {
+  default: '经典极简',
+  glass: '苹果毛玻璃',
+};
+
+/** 首页背景模式：跟随皮肤底色 / 自定义纯色 / 自定义图片。 */
+export type HomeBgMode = 'default' | 'color' | 'image';
+
+export const HOME_BG_MODES: HomeBgMode[] = ['default', 'color', 'image'];
+
+export const HOME_BG_MODE_LABELS: Record<HomeBgMode, string> = {
+  default: '默认底色',
+  color: '纯色调色盘',
+  image: '自定义图片',
+};
+
+/** 首页自定义背景色默认值：冰川浅蓝。 */
+export const DEFAULT_HOME_BG_COLOR = '#EEF2F9';
+
+/** 调色盘下方的快捷色点（果味莫兰迪 / 马卡龙）。 */
+export const HOME_BG_PRESETS: { label: string; color: string }[] = [
+  { label: '冰川蓝', color: '#E8F0FE' },
+  { label: '薄荷青', color: '#E6F4EA' },
+  { label: '樱花粉', color: '#FCE8E6' },
+  { label: '奶油杏', color: '#FEF7E0' },
+  { label: '薰衣草', color: '#F3E8FD' },
+  { label: '迷雾灰', color: '#F1F5F9' },
+  { label: '深空蓝', color: '#0F172A' },
+  { label: '暗夜紫', color: '#1E1B4B' },
+];
 
 
 

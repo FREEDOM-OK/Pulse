@@ -21,7 +21,7 @@ import {
 import type { PlayedGameRow, WishlistRow } from '@/db/types';
 import { formatDay, formatDuration } from '@/lib/date';
 import { isTabSwipe, tabAfterSwipe } from '@/lib/games-tab';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useGlassMaterial, useTheme, useThemeMode } from '@/hooks/use-theme';
 
 type TabKey = 'want' | 'played';
 
@@ -32,6 +32,9 @@ const TAB_SEGMENTS = [
 
 export default function GamesScreen() {
   const theme = useTheme();
+  const glass = useGlass();
+  const material = useGlassMaterial();
+  const scheme = useThemeMode();
   const [tab, setTab] = useState<TabKey>('want');
   const [wishlist, setWishlist] = useState<WishlistRow[]>([]);
   const [played, setPlayed] = useState<PlayedGameRow[]>([]);
@@ -136,7 +139,7 @@ export default function GamesScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
         <View style={styles.header}>
           <ThemedText type="small" themeColor="textSecondary">
@@ -145,7 +148,11 @@ export default function GamesScreen() {
         </View>
 
         <View
-          style={[styles.segments, { backgroundColor: theme.backgroundElement }]}
+          style={[
+            styles.segments,
+            { backgroundColor: theme.backgroundElement },
+            glass ? { borderWidth: 0.8, borderColor: material.cardBorder } : null,
+          ]}
           onLayout={(event) => setSegmentsWidth(event.nativeEvent.layout.width)}>
           {segmentsWidth > 0 ? (
             <Animated.View
@@ -155,7 +162,11 @@ export default function GamesScreen() {
                 styles.indicator,
                 {
                   width: segmentsWidth / 2 - 3,
-                  backgroundColor: theme.background,
+                  backgroundColor: glass
+                    ? scheme === 'light'
+                      ? 'rgba(255,255,255,0.9)'
+                      : 'rgba(255,255,255,0.16)'
+                    : theme.background,
                   transform: [
                     {
                       translateX: progress.interpolate({
@@ -207,7 +218,7 @@ export default function GamesScreen() {
               ]}>
               {/* 想玩清单 */}
               <View style={[styles.page, { width: pageWidth }]}>
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView showsVerticalScrollIndicator={false} overScrollMode="never" contentContainerStyle={styles.content}>
                   {wishlist.length === 0 ? (
                     <EmptyState text="想玩清单是空的" hint="点右下角「＋」添加想玩的游戏" />
                   ) : (
@@ -257,7 +268,7 @@ export default function GamesScreen() {
 
               {/* 已玩记录 */}
               <View style={[styles.page, { width: pageWidth }]}>
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView showsVerticalScrollIndicator={false} overScrollMode="never" contentContainerStyle={styles.content}>
                   {played.length === 0 ? (
                     <EmptyState text="还没有游玩记录" hint="在「想玩清单」里点「玩了」记录一次" />
                   ) : (

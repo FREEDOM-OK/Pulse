@@ -65,7 +65,7 @@ describe('首页结构（PRDv1.2 P5）', () => {
     expect(overlay).toContain('Keyboard.dismiss()');
     expect(overlay).toContain('listSearchHistory()');
     expect(overlay).toContain('清空历史');
-    expect(overlay).toContain('CLOSE_DURATION = 200');
+    expect(overlay).toContain('CLOSE_DURATION = 120');
 
     const results = readSrc('components/home/search-results.tsx');
     expect(results).toContain('height: 72');

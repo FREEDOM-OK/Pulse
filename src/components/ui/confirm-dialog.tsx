@@ -2,7 +2,8 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
+import { glassSheetStyle } from '@/lib/glass';
 
 interface ConfirmDialogProps {
   visible: boolean;
@@ -25,12 +26,14 @@ export function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const theme = useTheme();
+  const glass = useGlass();
+  const scheme = useThemeMode();
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.root}>
         <Pressable style={styles.backdrop} onPress={onCancel} />
-        <ThemedView style={styles.card}>
+        <ThemedView style={[styles.card, glass ? glassSheetStyle(scheme) : null]}>
           <ThemedText style={styles.title}>{title}</ThemedText>
           {message ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.message}>

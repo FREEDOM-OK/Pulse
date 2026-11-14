@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Spacing } from '@/constants/theme';
 import { getDayDetail, getMonthActivity, type DayDetail, type DayFlags } from '@/db/repositories/calendar';
 import { formatDay, formatDuration, monthRange, parseDate, todayStr } from '@/lib/date';
-import { EVENT_TYPE_LABELS } from '@/db/types';
+import { EVENT_BADGE_STYLES, EVENT_TYPE_LABELS } from '@/db/types';
 import { formatAmount } from '@/lib/format';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -85,8 +85,21 @@ export function CalendarPanel({
     [detail]
   );
 
+  /** 卡片头部的事件类型汇总，按出现顺序去重，如「消费 · 好饭」。 */
+  const eventSummary = useMemo(() => {
+    if (!detail) return '';
+    const labels: string[] = [];
+    for (const event of detail.events) {
+      const label = EVENT_BADGE_STYLES[event.type].shortLabel;
+      if (!labels.includes(label)) labels.push(label);
+    }
+    return labels.join(' · ');
+  }, [detail]);
+
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
+      overScrollMode="never"
       style={style}
       scrollEnabled={scrollEnabled}
       contentContainerStyle={[styles.content, contentContainerStyle]}
@@ -183,14 +196,26 @@ export function CalendarPanel({
               <View style={styles.sectionHeader}>
                 <ThemedText type="smallBold">事件</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  {detail.events.length} 条
+                  {detail.events.length} 条{eventSummary ? ` · ${eventSummary}` : ''}
                 </ThemedText>
               </View>
               {detail.events.map((event) => (
                 <View key={event.id} style={styles.plainRow}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.eventType}>
-                    {EVENT_TYPE_LABELS[event.type]}
-                  </ThemedText>
+                  <View
+                    accessible
+                    accessibilityLabel={EVENT_TYPE_LABELS[event.type]}
+                    style={[
+                      styles.eventBadge,
+                      { backgroundColor: EVENT_BADGE_STYLES[event.type].background },
+                    ]}>
+                    <ThemedText
+                      style={[
+                        styles.eventBadgeText,
+                        { color: EVENT_BADGE_STYLES[event.type].text },
+                      ]}>
+                      {EVENT_BADGE_STYLES[event.type].label}
+                    </ThemedText>
+                  </View>
                   <View style={styles.flexText}>
                     <ThemedText type="small" numberOfLines={1}>
                       {event.title}
@@ -284,8 +309,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
   },
-  eventType: {
-    width: 60,
+  eventBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  eventBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   doneText: {
     textDecorationLine: 'line-through',

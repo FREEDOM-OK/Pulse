@@ -1,6 +1,7 @@
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { useTheme } from '@/hooks/use-theme';
 import type { SearchResult } from '@/db/repositories/search';
 import { formatMonthDay } from '@/lib/date';
 
@@ -22,6 +23,7 @@ export interface SearchResultsProps {
 
 /** 沉浸式搜索面板里的结果列表；每条结果固定高度、统一卡片。 */
 export function SearchResults({ results, query, onPress, bottomInset }: SearchResultsProps) {
+  const theme = useTheme();
   const title = query.trim() ? '搜索结果' : '最近记录';
 
   return (
@@ -34,16 +36,18 @@ export function SearchResults({ results, query, onPress, bottomInset }: SearchRe
       contentContainerStyle={{ paddingBottom: bottomInset + 110 }}
       ListHeaderComponent={
         <View style={styles.headingRow}>
-          <ThemedText style={styles.heading}>{title}</ThemedText>
+          <ThemedText style={[styles.heading, { color: theme.textSecondary }]}>{title}</ThemedText>
           {query.trim() && results.length > 0 ? (
-            <ThemedText style={styles.count}>{results.length} 条</ThemedText>
+            <ThemedText style={[styles.count, { color: theme.textSecondary }]}>{results.length} 条</ThemedText>
           ) : null}
         </View>
       }
       ListEmptyComponent={
         <View style={styles.empty}>
-          <ThemedText style={styles.emptyText}>没有找到相关内容</ThemedText>
-          <ThemedText style={styles.emptyHint}>试试任务、备忘或训练动作的名称</ThemedText>
+          <ThemedText style={[styles.emptyText, { color: theme.text }]}>没有找到相关内容</ThemedText>
+          <ThemedText style={[styles.emptyHint, { color: theme.textSecondary }]}>
+            试试任务、备忘或训练动作的名称
+          </ThemedText>
         </View>
       }
       renderItem={({ item }) => {
@@ -53,22 +57,26 @@ export function SearchResults({ results, query, onPress, bottomInset }: SearchRe
             accessibilityRole="button"
             accessibilityLabel={`${meta.label} ${item.title} ${formatMonthDay(item.date)}`}
             onPress={() => onPress(item)}
-            style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+            style={({ pressed }) => [
+              styles.card,
+              { backgroundColor: theme.backgroundElement },
+              pressed && styles.pressed,
+            ]}>
             <View style={[styles.tag, { backgroundColor: meta.background }]}>
               <View style={[styles.dot, { backgroundColor: meta.color }]} />
               <ThemedText style={[styles.tagText, { color: meta.color }]}>{meta.label}</ThemedText>
             </View>
 
             <View style={styles.body}>
-              <ThemedText style={styles.title} numberOfLines={1}>
+              <ThemedText style={[styles.title, { color: theme.text }]} numberOfLines={1}>
                 {item.title}
               </ThemedText>
-              <ThemedText style={styles.subtitle} numberOfLines={1}>
+              <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]} numberOfLines={1}>
                 {item.subtitle}
               </ThemedText>
             </View>
 
-            <ThemedText style={styles.date}>{formatMonthDay(item.date)}</ThemedText>
+            <ThemedText style={[styles.date, { color: theme.textSecondary }]}>{formatMonthDay(item.date)}</ThemedText>
           </Pressable>
         );
       }}

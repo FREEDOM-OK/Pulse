@@ -19,8 +19,9 @@ describe('S2 悬浮胶囊底栏与第三标签（2026-11-11 第二版）', () =>
   it('底座为 66dp 高、33dp 圆角的纯白胶囊', () => {
     expect(bar).toContain('const BAR_HEIGHT = 66');
     expect(bar).toContain('const BAR_RADIUS = 33');
-    expect(bar).toContain("const NAV_BACKGROUND = '#FFFFFF'");
-    expect(bar).toContain('backgroundColor: NAV_BACKGROUND');
+    expect(bar).toContain("const NAV_BACKGROUND_LIGHT = '#FFFFFF'");
+    expect(bar).toContain("const NAV_BACKGROUND_DARK = '#1C1C1E'");
+    expect(bar).toContain('backgroundColor: navBackground');
     expect(bar).toContain('shadowOffset: { width: 0, height: 6 }');
     expect(bar).toContain('shadowOpacity: 0.1');
     expect(bar).toContain('shadowRadius: 12');
@@ -48,7 +49,7 @@ describe('S2 悬浮胶囊底栏与第三标签（2026-11-11 第二版）', () =>
 
   it('中间加号是 42dp 黑圆，完全嵌在 56dp 槽位内、没有负外边距', () => {
     expect(bar).toContain('const PLUS_CIRCLE_SIZE = 42');
-    expect(bar).toContain("const PLUS_BACKGROUND = '#000000'");
+    expect(bar).toContain("const PLUS_BACKGROUND_LIGHT = '#000000'");
     expect(bar).toContain('width: PLUS_CIRCLE_SIZE');
     expect(bar).toContain('height: PLUS_CIRCLE_SIZE');
     expect(bar).not.toContain('marginTop: -16');
@@ -59,7 +60,7 @@ describe('S2 悬浮胶囊底栏与第三标签（2026-11-11 第二版）', () =>
     expect(bar).toContain('const INDICATOR_WIDTH = 52');
     expect(bar).toContain('const INDICATOR_HEIGHT = 46');
     expect(bar).toContain('const INDICATOR_RADIUS = 23');
-    expect(bar).toContain("const INDICATOR_COLOR = '#F2F2F7'");
+    expect(bar).toContain("const INDICATOR_COLOR_LIGHT = '#F2F2F7'");
     expect(bar).toContain('indicatorLeft(activeSlot, barWidth)');
     expect(bar).toContain('duration: 250');
     expect(bar).toContain('Easing.bezier(0.25, 0.1, 0.25, 1)');
@@ -92,8 +93,8 @@ describe('S2 悬浮胶囊底栏与第三标签（2026-11-11 第二版）', () =>
   });
 
   it('选中色纯黑、未选中 #8E8E93，并带 180ms 颜色淡入', () => {
-    expect(bar).toContain("const ACTIVE_COLOR = '#000000'");
-    expect(bar).toContain("const INACTIVE_COLOR = '#8E8E93'");
+    expect(bar).toContain("const ACTIVE_COLOR_LIGHT = '#000000'");
+    expect(bar).toContain("const INACTIVE_COLOR_LIGHT = '#8E8E93'");
     expect(bar).toContain('withTiming(active ? 1 : 0, { duration: 180 })');
     expect(bar).toContain('fontSize: 10');
   });

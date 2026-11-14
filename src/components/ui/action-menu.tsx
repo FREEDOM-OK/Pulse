@@ -2,6 +2,8 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useGlass, useThemeMode } from '@/hooks/use-theme';
+import { glassSheetStyle } from '@/lib/glass';
 
 export interface ActionMenuItem {
   key: string;
@@ -23,6 +25,8 @@ interface ActionMenuProps {
  * 用长按替代左右滑动，避免和外层的横滑（游戏页切页签）抢手势。
  */
 export function ActionMenu({ visible, title, message, items, onClose }: ActionMenuProps) {
+  const glass = useGlass();
+  const scheme = useThemeMode();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.root}>
@@ -37,7 +41,7 @@ export function ActionMenu({ visible, title, message, items, onClose }: ActionMe
           onStartShouldSetResponder={() => true}
           onResponderRelease={onClose}
         />
-        <ThemedView style={styles.sheet}>
+        <ThemedView style={[styles.sheet, glass ? glassSheetStyle(scheme) : null]}>
           {title ? (
             <ThemedText type="smallBold" style={styles.title}>
               {title}

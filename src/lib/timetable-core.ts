@@ -10,6 +10,47 @@ export const HEADER_H = 40;
 export const ROW_H = 58;
 export const LUNCH_H = 20;
 
+/** 课程格高度（dp）：默认 64，可调区间 44~90，步进 2。 */
+export const DEFAULT_CELL_HEIGHT = 64;
+export const MIN_CELL_HEIGHT = 44;
+export const MAX_CELL_HEIGHT = 90;
+export const CELL_HEIGHT_STEP = 2;
+
+/** 课程格圆角（dp）：默认 6，可调区间 0~18，步进 1。 */
+export const DEFAULT_CELL_RADIUS = 6;
+export const MIN_CELL_RADIUS = 0;
+export const MAX_CELL_RADIUS = 18;
+
+/** 课表背景色（8 个护眼底色之外也允许任意 hex）。 */
+export const DEFAULT_GRID_BACKGROUND = '#F5F5F7';
+
+/** 每周起始日：1=周一、6=周六、7=周日。 */
+export const DEFAULT_WEEK_START_DAY: 1 | 6 | 7 = 1;
+
+export function clampNumber(value: number, min: number, max: number): number {
+  if (Number.isNaN(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * 可见星期序列：从 weekStartDay 开始顺时针排列 7 天，再按 showSaturday / showSunday 过滤。
+ * 例：weekStartDay=7 且两天都显示 → [7, 1, 2, 3, 4, 5, 6]。
+ */
+export function visibleWeekDays(
+  weekStartDay: 1 | 6 | 7,
+  showSaturday: boolean,
+  showSunday: boolean
+): number[] {
+  const days: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = ((weekStartDay - 1 + i) % 7) + 1;
+    if (day === 6 && !showSaturday) continue;
+    if (day === 7 && !showSunday) continue;
+    days.push(day);
+  }
+  return days;
+}
+
 export const COURSE_COLORS: string[] = [
   '#EF4444', '#F97316', '#F59E0B', '#84CC16', '#10B981',
   '#06B6D4', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899',
@@ -22,7 +63,7 @@ export const COURSE_COLORS: string[] = [
  * 同一毫秒内连续创建（双击保存、批量导入）也不会撞主键。
  */
 let localIdSeed = 0;
-export function createLocalId(prefix: 'c' | 's' | 'sched'): string {
+export function createLocalId(prefix: 'c' | 's' | 'sched' | 'tt'): string {
   localIdSeed += 1;
   return `${prefix}_${Date.now()}_${localIdSeed}`;
 }
@@ -214,6 +255,99 @@ export function blocksOf(start: number, end: number, lunchAfter: number): [numbe
   return [[start, end]];
 }
 
+/** `HH:MM` → 当天分钟数；非法输入返回 NaN（与 toMinutes 的区别：宽进，接受 8:23 这种写法）。 */
+export function timeToMinutes(hhmm: string): number {
+  const match = /^(\d{1,2}):(\d{2})$/.exec((hhmm || '').trim());
+  if (!match) return NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * 真实时间 → 网格 Y 坐标（自定义时间的课程块靠它做像素级定位）。
+ *
+ * - 落在某节课的 [start, end] 内：按该节行高线性插值；
+ * - 落在午休区间：按午休条高度线性插值；
+ * - 落在普通课间：两节课之间没有像素空间，直接贴在下课那条线上；
+ * - 早于第一节 → 0；晚于最后一节下课 → 网格底部。
+ */
+export function timeToGridY(
+  targetMin: number,
+  periods: PeriodTime[],
+  rowH: number,
+  lunchH: number,
+  lunchAfter: number
+): number {
+  if (!Array.isArray(periods) || periods.length === 0) return 0;
+  if (!Number.isFinite(targetMin)) return 0;
+
+  const firstStart = timeToMinutes(periods[0].start);
+  if (Number.isFinite(firstStart) && targetMin < firstStart) return 0;
+
+  const lastEnd = timeToMinutes(periods[periods.length - 1].end);
+  if (Number.isFinite(lastEnd) && targetMin > lastEnd) {
+    return rowBottom(periods.length, rowH, lunchH, lunchAfter);
+  }
+
+  for (let i = 0; i < periods.length; i++) {
+    const p = i + 1;
+    const startMin = timeToMinutes(periods[i].start);
+    const endMin = timeToMinutes(periods[i].end);
+    if (!Number.isFinite(startMin) || !Number.isFinite(endMin)) continue;
+
+    const topY = rowTop(p, rowH, lunchH, lunchAfter);
+    const bottomY = topY + rowH;
+
+    if (targetMin >= startMin && targetMin <= endMin) {
+      return topY + ((targetMin - startMin) / Math.max(1, endMin - startMin)) * rowH;
+    }
+
+    const next = periods[i + 1];
+    if (next) {
+      const nextStart = timeToMinutes(next.start);
+      if (Number.isFinite(nextStart) && targetMin > endMin && targetMin < nextStart) {
+        // 午休区间：这一段在网格里真的有 lunchH 像素，可以按比例落点。
+        if (p === lunchAfter && lunchH > 0) {
+          return bottomY + ((targetMin - endMin) / Math.max(1, nextStart - endMin)) * lunchH;
+        }
+        return bottomY;
+      }
+    }
+  }
+
+  return rowBottom(periods.length, rowH, lunchH, lunchAfter);
+}
+
+/**
+ * 自定义时间段 → 与之有交集的起止节次（用于详情里显示「第 X - Y 节」）。
+ * 与任何节次都不相交时返回 null，调用方保持原节次不动。
+ */
+export function periodsForTimeRange(
+  startTime: string,
+  endTime: string,
+  periods: PeriodTime[]
+): { startPeriod: number; endPeriod: number } | null {
+  const startMin = timeToMinutes(startTime);
+  const endMin = timeToMinutes(endTime);
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) {
+    return null;
+  }
+
+  let first = -1;
+  let last = -1;
+  periods.forEach((periodTime, index) => {
+    const sMin = timeToMinutes(periodTime.start);
+    const eMin = timeToMinutes(periodTime.end);
+    if (!Number.isFinite(sMin) || !Number.isFinite(eMin)) return;
+    if (sMin < endMin && eMin > startMin) {
+      if (first === -1) first = index + 1;
+      last = index + 1;
+    }
+  });
+
+  if (first === -1 || last === -1) return null;
+  return { startPeriod: first, endPeriod: last };
+}
+
 /** '周一 第3-4节 · 1-16周 · 张老师 · A101'（空字段跳过） */
 export function sessionSummary(s: {
   dayOfWeek: number;
@@ -380,4 +514,131 @@ export function parseImportText(text: string, totalWeeks: number): ParseResult {
     totalSessions,
     errors,
   };
+}
+
+// —— 多时间表（TimeTablePreset）——
+//
+// 只借用 `settings` 表的键值存储，不新增表、不迁移 Schema：
+//   `timetable.timeTables`             → TimeTablePreset[] 的 JSON
+//   `timetable.scheduleTimeTableMap`   → Record<scheduleId, timeTableId> 的 JSON
+// 当前生效的节次时间仍然写回主库的 `period.times`，首页 / 计划页 / 课表网格
+// 都读这一份，所以三端天然同步。
+
+/** 一套时间表：名称 + 是否固定时长 + 每节时长 + 各节起止时间。 */
+export interface TimeTablePreset {
+  id: string;
+  name: string;
+  /** 是否开启「固定上课时长」：开时每节 end 恒等于 start + durationMinutes。 */
+  fixedDuration: boolean;
+  /** 每节课时长（分钟），30–90，步进 5。 */
+  durationMinutes: number;
+  periods: PeriodTime[];
+}
+
+/** 单套时间表最多节数（与 `periods.tsx` 的「添加」上限一致）。 */
+export const MAX_PERIODS = 20;
+/** 固定时长的可选范围与步进。 */
+export const MIN_DURATION_MINUTES = 30;
+export const MAX_DURATION_MINUTES = 90;
+export const DURATION_STEP = 5;
+/** 新增一节课时在没有上一节可参考时的兜底时间。 */
+export const DEFAULT_PERIOD_START = '08:00';
+/** 自动顺延时使用的默认课间休息（分钟）。 */
+export const DEFAULT_BREAK_MINUTES = 10;
+
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** 校验 `HH:MM`（24 小时制）。 */
+export function isValidHhmm(value: string): boolean {
+  return HHMM_RE.test(value);
+}
+
+/** `HH:MM` → 当天分钟数；非法输入返回 NaN。 */
+export function toMinutes(value: string): number {
+  const match = HHMM_RE.exec(value);
+  if (!match) return NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/** 分钟数 → `HH:MM`，按 24 小时取模。 */
+export function fromMinutes(total: number): string {
+  const normalized = ((Math.round(total) % 1440) + 1440) % 1440;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** `HH:MM` 加若干分钟，跨天自动回绕。 */
+export function addMinutes(value: string, delta: number): string {
+  const base = toMinutes(value);
+  if (!Number.isFinite(base)) return value;
+  return fromMinutes(base + delta);
+}
+
+/**
+ * 固定时长联动：把第 `index` 节的 end 重算为 start + duration，
+ * 后续节次若与前一节重叠，则按「原课间间隔（缺失时 10 分钟）」整体后推。
+ * 不重叠的后续节次只重算 end，不动 start。
+ */
+export function relayoutPeriods(
+  periods: PeriodTime[],
+  index: number,
+  durationMinutes: number
+): PeriodTime[] {
+  if (index < 0 || index >= periods.length) return periods.map((p) => ({ ...p }));
+  const gaps = periods.map((period, i) => {
+    if (i === 0) return DEFAULT_BREAK_MINUTES;
+    const prevEnd = toMinutes(periods[i - 1].end);
+    const start = toMinutes(period.start);
+    if (!Number.isFinite(prevEnd) || !Number.isFinite(start)) return DEFAULT_BREAK_MINUTES;
+    const gap = start - prevEnd;
+    return gap >= 0 ? gap : DEFAULT_BREAK_MINUTES;
+  });
+
+  const next = periods.map((p) => ({ ...p }));
+  next[index].end = addMinutes(next[index].start, durationMinutes);
+
+  for (let i = index + 1; i < next.length; i++) {
+    const start = toMinutes(next[i].start);
+    const prevEnd = toMinutes(next[i - 1].end);
+    if (!Number.isFinite(start) || !Number.isFinite(prevEnd)) continue;
+    if (start < prevEnd) {
+      next[i].start = fromMinutes(prevEnd + gaps[i]);
+    }
+    next[i].end = addMinutes(next[i].start, durationMinutes);
+  }
+  return next;
+}
+
+/** 把整套节次的 end 全部重算为 start + duration（切换固定时长 / 修改时长时用）。 */
+export function applyFixedDuration(periods: PeriodTime[], durationMinutes: number): PeriodTime[] {
+  if (periods.length === 0) return [];
+  let next: PeriodTime[] = periods.map((p) => ({ ...p }));
+  next = relayoutPeriods(next, 0, durationMinutes);
+  return next;
+}
+
+/** 在末尾追加一节：接在上一节 end 后 10 分钟开始。 */
+export function appendPeriod(periods: PeriodTime[], durationMinutes: number): PeriodTime[] {
+  const last = periods[periods.length - 1];
+  const start = last ? addMinutes(last.end, DEFAULT_BREAK_MINUTES) : DEFAULT_PERIOD_START;
+  return [...periods.map((p) => ({ ...p })), { start, end: addMinutes(start, durationMinutes) }];
+}
+
+/** 校验一套节次时间，返回第一条错误文案；合法返回 null。 */
+export function validatePeriods(periods: PeriodTime[]): string | null {
+  if (periods.length === 0) return '至少保留一节课';
+  for (let i = 0; i < periods.length; i++) {
+    const { start, end } = periods[i];
+    if (!isValidHhmm(start) || !isValidHhmm(end)) {
+      return `第 ${i + 1} 节的开始/结束时间格式应为 HH:MM`;
+    }
+    if (toMinutes(start) >= toMinutes(end)) {
+      return `第 ${i + 1} 节的结束时间需晚于开始时间`;
+    }
+    if (i > 0 && toMinutes(start) < toMinutes(periods[i - 1].end)) {
+      return `第 ${i + 1} 节与第 ${i} 节时间重叠`;
+    }
+  }
+  return null;
 }

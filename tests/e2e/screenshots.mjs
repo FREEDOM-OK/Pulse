@@ -18,29 +18,28 @@ async function main() {
     await page.reload();
     await page.waitForText('Hi，');
 
-    // 首页第一页：添加一条消费事件
-    await page.clickLabel('添加事件');
-    await page.waitForText('添加重大消费');
-    await page.clickText('添加重大消费');
-    await page.waitForText('金额');
-    await page.fillByLabel('事件名称', '超市采购');
+    // 首页第一页：通过底栏「＋」记一条消费事件
+    await page.clickLabel('新建');
+    await page.clickText('记事件');
+    await page.waitForText('记事件');
+    await page.fillByLabel('内容', '超市采购');
     await page.fillByLabel('金额', '128.5');
     await page.clickLabel('保存事件');
-    await page.waitForText('今日 1 条');
+    await page.waitForText('本月 1 条');
     await sleep(300);
     await page.screenshot(path.join(OUT_DIR, 'home-light.png'));
 
     // 今日计划：两条任务，第一条完成
     await page.goto(`${BASE_URL}/today`);
     await page.waitForText('这一天还没有任务');
-    await page.clickLabel('添加任务');
-    await page.waitForText('添加任务');
+    await page.clickLabel('新建任务或备忘');
+    await page.waitForText('新建任务/备忘');
     await page.fill('例如：写周报', '写周报');
     await page.fill('09:00', '09:30');
     await page.clickText('保存');
     await page.waitForText('写周报');
 
-    await page.clickLabel('添加任务');
+    await page.clickLabel('新建任务或备忘');
     await page.fill('例如：写周报', '买菜');
     await page.clickText('保存');
     await page.waitForText('买菜');

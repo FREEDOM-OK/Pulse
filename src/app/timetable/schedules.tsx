@@ -10,12 +10,16 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
+import { useThemePreference } from '@/theme/theme-context';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import { ScheduleEntity } from '@/features/timetable/repository';
 import { askConfirm, showActions, showNotice } from '@/lib/dialogs';
 import { SAFE_TOP_DP, SAFE_BOTTOM_DP } from '@/lib/timetable-core';
 
 export default function SchedulesManageScreen() {
+  const theme = useTheme();
+  const { scheme } = useThemePreference();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // 从课表抽屉的「新建课表」进来时带 create=1，直接拉起新建表单。
@@ -88,6 +92,7 @@ export default function SchedulesManageScreen() {
       style={[
         styles.container,
         {
+          backgroundColor: theme.background,
           paddingTop: insets.top || SAFE_TOP_DP,
           paddingBottom: insets.bottom || SAFE_BOTTOM_DP,
         },
@@ -95,19 +100,28 @@ export default function SchedulesManageScreen() {
     >
       <View style={styles.headerBar}>
         <TouchableOpacity
-          style={styles.backBtnCircle}
+          style={[
+            styles.backBtnCircle,
+            {
+              borderColor: scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)',
+              backgroundColor: theme.backgroundElement,
+            },
+          ]}
           accessibilityLabel="返回"
           onPress={() => router.back()}
         >
-          <Text style={styles.backArrow}>‹</Text>
+          <Text style={[styles.backArrow, { color: theme.text }]}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>课表管理</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>课表管理</Text>
         <TouchableOpacity onPress={() => openForm()} accessibilityLabel="新建课表">
           <Text style={styles.addTopText}>＋ 新建</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollBody}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.scrollBody}>
         {schedules.map((s) => {
           const isCurrent = s.id === activeSchedule.id;
           const cCount = isCurrent ? courses.length : 0;
@@ -115,7 +129,7 @@ export default function SchedulesManageScreen() {
           return (
             <TouchableOpacity
               key={s.id}
-              style={styles.schedCard}
+              style={[styles.schedCard, { backgroundColor: theme.backgroundElement }]}
               accessibilityLabel={`课表 ${s.name}`}
               onPress={async () => {
                 try {
@@ -129,14 +143,14 @@ export default function SchedulesManageScreen() {
             >
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.schedName}>{s.name}</Text>
+                  <Text style={[styles.schedName, { color: theme.text }]}>{s.name}</Text>
                   {isCurrent && (
                     <View style={styles.currentBadge}>
                       <Text style={styles.currentBadgeText}>当前</Text>
                     </View>
                   )}
                 </View>
-                <Text style={styles.subMeta}>
+                <Text style={[styles.subMeta, { color: theme.textSecondary }]}>
                   {cCount} 门课 · {s.startDate.replace(/-/g, '/')} 开学 · 共 {s.totalWeeks} 周
                 </Text>
               </View>
@@ -178,7 +192,7 @@ export default function SchedulesManageScreen() {
                   });
                 }}
               >
-                <Text style={styles.moreDots}>⋯</Text>
+                <Text style={[styles.moreDots, { color: theme.textSecondary }]}>⋯</Text>
               </TouchableOpacity>
             </TouchableOpacity>
           );
@@ -187,20 +201,25 @@ export default function SchedulesManageScreen() {
 
       <Modal visible={drawerVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.drawerSheet}>
-            <Text style={styles.drawerTitle}>{editingId ? '重命名课表' : '新建课表'}</Text>
+          <View style={[styles.drawerSheet, { backgroundColor: theme.backgroundElement }]}>
+            <Text style={[styles.drawerTitle, { color: theme.text }]}>
+              {editingId ? '重命名课表' : '新建课表'}
+            </Text>
 
-            <Text style={styles.fieldLabel}>课表名称</Text>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>课表名称</Text>
             <TextInput
               value={schedName}
               onChangeText={setSchedName}
               placeholder="例如：2026 秋"
+              placeholderTextColor={theme.textSecondary}
               accessibilityLabel="课表名称"
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.backgroundSelected, color: theme.text }]}
             />
 
             <View style={styles.labelRow}>
-              <Text style={styles.fieldLabel}>开学日期 (YYYY-MM-DD)</Text>
+              <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+                开学日期 (YYYY-MM-DD)
+              </Text>
               <TouchableOpacity
                 accessibilityLabel="选今天"
                 onPress={() => {
@@ -218,26 +237,27 @@ export default function SchedulesManageScreen() {
               value={startDate}
               onChangeText={setStartDate}
               placeholder="2026-09-07"
+              placeholderTextColor={theme.textSecondary}
               accessibilityLabel="开学日期"
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.backgroundSelected, color: theme.text }]}
             />
 
-            <Text style={styles.fieldLabel}>总周数 (1–60)</Text>
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>总周数 (1–60)</Text>
             <TextInput
               value={totalWeeks}
               onChangeText={setTotalWeeks}
               keyboardType="number-pad"
               accessibilityLabel="总周数"
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.backgroundSelected, color: theme.text }]}
             />
 
             <View style={styles.btnRow}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[styles.cancelBtn, { backgroundColor: theme.backgroundSelected }]}
                 accessibilityLabel="取消"
                 onPress={() => setDrawerVisible(false)}
               >
-                <Text style={styles.cancelBtnText}>取消</Text>
+                <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>取消</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveBtn}
@@ -255,7 +275,7 @@ export default function SchedulesManageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F7' },
+  container: { flex: 1 },
   headerBar: {
     height: 52,
     paddingHorizontal: 16,
@@ -268,17 +288,14 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 22, color: '#111113', lineHeight: 24 },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: '#111113' },
+  backArrow: { fontSize: 22, lineHeight: 24 },
+  headerTitle: { fontSize: 17, fontWeight: '600' },
   addTopText: { fontSize: 14, fontWeight: '600', color: '#3B82F6' },
   scrollBody: { padding: 16, gap: 10 },
   schedCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
@@ -286,7 +303,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  schedName: { fontSize: 16, fontWeight: '600', color: '#111113' },
+  schedName: { fontSize: 16, fontWeight: '600' },
   currentBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -294,47 +311,43 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.12)',
   },
   currentBadgeText: { fontSize: 10, fontWeight: '700', color: '#3B82F6' },
-  subMeta: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginTop: 4 },
+  subMeta: { fontSize: 12, marginTop: 4 },
   moreBtn: { padding: 8 },
-  moreDots: { fontSize: 18, color: 'rgba(0,0,0,0.5)' },
+  moreDots: { fontSize: 18 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
   drawerSheet: {
-    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 32,
   },
-  drawerTitle: { fontSize: 16, fontWeight: '700', color: '#111113', marginBottom: 14 },
+  drawerTitle: { fontSize: 16, fontWeight: '700', marginBottom: 14 },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  fieldLabel: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginBottom: 6, marginTop: 8 },
+  fieldLabel: { fontSize: 12, marginBottom: 6, marginTop: 8 },
   pickTodayText: { fontSize: 12, fontWeight: '600', color: '#3B82F6' },
   input: {
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#F5F5F7',
     paddingHorizontal: 12,
     fontSize: 14,
-    color: '#111113',
   },
   btnRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
   cancelBtn: {
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#F5F5F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelBtnText: { fontSize: 14, fontWeight: '500', color: 'rgba(0,0,0,0.6)' },
+  cancelBtnText: { fontSize: 14, fontWeight: '500' },
   saveBtn: {
     flex: 1,
     height: 44,

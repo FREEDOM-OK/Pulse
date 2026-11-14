@@ -152,8 +152,12 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <ThemedView style={styles.container} glow>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        overScrollMode="never"
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled">
         <View style={styles.avatarBlock}>
           <Pressable
             accessibilityRole="button"

@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
 import { addDays, formatDay, parseDate, todayStr } from '@/lib/date';
 
 /** 当前周前后各预加载 50 周，共 101 页。 */
@@ -94,6 +94,8 @@ function DayCellBase({
   onSelect,
 }: DayCellProps) {
   const progress = useRef(new Animated.Value(0)).current;
+  const glass = useGlass();
+  const scheme = useThemeMode();
 
   useEffect(() => {
     if (!isSelected) {
@@ -129,6 +131,13 @@ function DayCellBase({
           pointerEvents="none"
           style={[
             styles.pill,
+            glass
+              ? {
+                  borderWidth: 1,
+                  borderColor:
+                    scheme === 'light' ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.35)',
+                }
+              : null,
             {
               opacity: progress,
               transform: [{ scale: pillScale }],

@@ -1,57 +1,96 @@
 import { useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { ModuleColors, Spacing } from '@/constants/theme';
-import { createEvent } from '@/db/repositories/events';
-import { EVENT_TITLE_LABELS, EVENT_TYPE_LABELS, type EventType } from '@/db/types';
-import { parseAmount } from '@/lib/format';
+import { AppButton } from '@/components/ui/app-button';
+import { ModalSheet, modalStyles } from '@/components/ui/modal-sheet';
+import { MonthPicker } from '@/components/ui/month-picker';
+import { TextField } from '@/components/ui/text-field';
+import type { TabIcon } from '@/constants/tabs';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { createEvent } from '@/db/repositories/events';
+import type { EventType } from '@/db/types';
+import { formatDay, todayStr } from '@/lib/date';
+import { parseAmount } from '@/lib/format';
 
 interface EventFormProps {
   visible: boolean;
-  type: EventType | null;
+  /** 打开时默认选中的事件类型。 */
+  initialType?: EventType | null;
+  /** 打开时默认日期；不传则取今天。 */
+  date?: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
+interface EventOption {
+  type: EventType;
+  label: string;
+  icon: TabIcon;
+  placeholder: string;
+}
+
+const EVENT_OPTIONS: EventOption[] = [
+  {
+    type: 'expense',
+    label: '记消费',
+    icon: { ios: 'dollarsign', android: 'attach_money', web: 'attach_money' },
+    placeholder: '填写消费内容',
+  },
+  {
+    type: 'shopping',
+    label: '记购物',
+    icon: { ios: 'bag', android: 'shopping_bag', web: 'shopping_bag' },
+    placeholder: '填写购买物品',
+  },
+  {
+    type: 'meal',
+    label: '记好饭',
+    icon: { ios: 'fork.knife', android: 'restaurant', web: 'restaurant' },
+    placeholder: '填写吃了什么',
+  },
+];
+
+const CIRCLE_SIZE = 68;
+
+function optionOf(type: EventType): EventOption {
+  return EVENT_OPTIONS.find((option) => option.type === type) ?? EVENT_OPTIONS[0];
+}
+
 /**
- * 添加事件的表单：屏幕正中的卡片。
- * 只有名称是必填；金额可留空、可以带小数；日期固定是今天。
+ * 记录事件的综合弹窗：顶部三个黑白圆形图标切换消费 / 购物 / 好饭。
+ * 只有内容必填；金额可留空、可以带小数；日期默认今天，可点日期行修改。
  */
-export function EventForm({ visible, type, onClose, onSaved }: EventFormProps) {
+export function EventForm({ visible, initialType, date, onClose, onSaved }: EventFormProps) {
   const theme = useTheme();
+  const [selectedType, setSelectedType] = useState<EventType>(initialType ?? 'expense');
   const [title, setTitle] = useState('');
   const [amountText, setAmountText] = useState('');
   const [note, setNote] = useState('');
+  const [formDate, setFormDate] = useState(date ?? todayStr());
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
+    setSelectedType(initialType ?? 'expense');
     setTitle('');
     setAmountText('');
     setNote('');
+    setFormDate(date ?? todayStr());
+    setPickerOpen(false);
     setError(null);
     setBusy(false);
-  }, [visible, type]);
+  }, [visible, initialType, date]);
 
-  if (!type) return null;
-
-  const titleLabel = EVENT_TITLE_LABELS[type];
+  const selected = optionOf(selectedType);
 
   const handleSave = async () => {
     setError(null);
     if (title.trim().length === 0) {
-      setError(`请填写${titleLabel}`);
+      setError('请填写事件内容');
       return;
     }
     const amount = parseAmount(amountText);
@@ -61,7 +100,13 @@ export function EventForm({ visible, type, onClose, onSaved }: EventFormProps) {
     }
     setBusy(true);
     try {
-      await createEvent({ type, title, note, amount });
+      await createEvent({
+        type: selectedType,
+        title,
+        note,
+        amount,
+        date: formDate,
+      });
       onSaved();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '保存失败');
@@ -71,174 +116,168 @@ export function EventForm({ visible, type, onClose, onSaved }: EventFormProps) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.root}>
-        <View
-          style={styles.backdrop}
-          accessible={false}
-          onStartShouldSetResponder={() => true}
-          onResponderRelease={onClose}
-        />
-        <ThemedView style={styles.sheet}>
-          <ThemedText type="smallBold" style={styles.title}>
-            {EVENT_TYPE_LABELS[type]}
-          </ThemedText>
-
-          {error ? (
-            <ThemedText type="small" style={styles.error}>
-              {error}
-            </ThemedText>
-          ) : null}
-
-          <View style={styles.field}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
-              {titleLabel}
-            </ThemedText>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              accessibilityLabel={titleLabel}
-              placeholder={`填写${titleLabel}`}
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
-              金额（可不填）
-            </ThemedText>
-            <TextInput
-              value={amountText}
-              onChangeText={setAmountText}
-              keyboardType="decimal-pad"
-              accessibilityLabel="金额"
-              placeholder="例如 12.5"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-            />
-          </View>
-
-          <View style={styles.field}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
-              备注（可不填）
-            </ThemedText>
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              accessibilityLabel="备注"
-              placeholder="补充说明"
-              placeholderTextColor={theme.textSecondary}
-              style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-            />
-          </View>
-
-          <View style={styles.actions}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="取消"
-              onPress={onClose}
-              style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}>
-              <ThemedText type="small" themeColor="textSecondary">
-                取消
-              </ThemedText>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
+    <>
+      <ModalSheet
+        visible={visible}
+        title="记事件"
+        onClose={onClose}
+        footer={
+          <View style={modalStyles.actionsRow}>
+            <AppButton label="取消" variant="secondary" onPress={onClose} />
+            <AppButton
+              label={busy ? '保存中…' : '保存'}
               accessibilityLabel="保存事件"
+              onPress={handleSave}
               disabled={busy}
-              onPress={() => {
-                handleSave().catch(() => undefined);
-              }}
-              style={({ pressed }) => [
-                styles.save,
-                pressed && styles.pressed,
-                busy && styles.disabled,
-              ]}>
-              <ThemedText type="small" style={styles.saveText}>
-                {busy ? '保存中…' : '保存'}
-              </ThemedText>
-            </Pressable>
+            />
           </View>
-        </ThemedView>
-      </KeyboardAvoidingView>
-    </Modal>
+        }>
+        <View style={modalStyles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            类型
+          </ThemedText>
+          <View style={styles.typeRow}>
+            {EVENT_OPTIONS.map((option) => {
+              const active = option.type === selectedType;
+              return (
+                <Pressable
+                  key={option.type}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    setSelectedType(option.type);
+                    setError(null);
+                  }}
+                  style={({ pressed }) => [
+                    styles.typeCircle,
+                    { backgroundColor: active ? theme.text : theme.backgroundElement },
+                    pressed && styles.pressed,
+                  ]}>
+                  <SymbolView
+                    name={option.icon}
+                    size={22}
+                    tintColor={active ? theme.background : theme.text}
+                  />
+                  <ThemedText
+                    style={[
+                      styles.typeLabel,
+                      { color: active ? theme.background : theme.text },
+                    ]}>
+                    {option.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={modalStyles.field}>
+          <TextField
+            label="内容"
+            value={title}
+            onChangeText={setTitle}
+            placeholder={selected.placeholder}
+            accessibilityLabel="内容"
+            autoFocus
+            maxLength={120}
+          />
+        </View>
+
+        <View style={modalStyles.field}>
+          <ThemedText type="small" themeColor="textSecondary">
+            日期
+          </ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`选择日期 ${formDate}`}
+            onPress={() => setPickerOpen(true)}
+            style={({ pressed }) => [
+              styles.dateRow,
+              { backgroundColor: theme.backgroundElement },
+              pressed && styles.pressed,
+            ]}>
+            <ThemedText type="small">{formatDay(formDate)}</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              修改 ›
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        <View style={modalStyles.field}>
+          <TextField
+            label="金额（选填）"
+            value={amountText}
+            onChangeText={setAmountText}
+            keyboardType="decimal-pad"
+            placeholder="例如：12.5"
+            accessibilityLabel="金额"
+          />
+        </View>
+
+        <View style={modalStyles.field}>
+          <TextField
+            label="备注（选填）"
+            value={note}
+            onChangeText={setNote}
+            placeholder="补充说明"
+            accessibilityLabel="备注"
+            maxLength={200}
+          />
+        </View>
+
+        {error ? (
+          <ThemedText type="small" style={styles.error}>
+            {error}
+          </ThemedText>
+        ) : null}
+      </ModalSheet>
+
+      <MonthPicker
+        visible={pickerOpen}
+        value={formDate}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(selectedDate) => {
+          setFormDate(selectedDate);
+          setPickerOpen(false);
+        }}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    justifyContent: 'center',
+  typeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 8,
+  },
+  typeCircle: {
+    width: CIRCLE_SIZE,
+    height: CIRCLE_SIZE,
+    borderRadius: CIRCLE_SIZE / 2,
     alignItems: 'center',
-    padding: Spacing.four,
+    justifyContent: 'center',
   },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+  typeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
-  sheet: {
-    width: '100%',
-    maxWidth: 340,
-    borderRadius: Spacing.four,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  title: {
-    fontSize: 16,
-    paddingHorizontal: Spacing.one,
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.two,
+    minHeight: 42,
   },
   error: {
     color: '#D64545',
-    paddingHorizontal: Spacing.one,
-  },
-  field: {
-    gap: Spacing.one,
-  },
-  label: {
-    paddingHorizontal: Spacing.one,
-  },
-  input: {
-    borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.two,
-    fontSize: 15,
-    minHeight: 42,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    marginTop: Spacing.one,
-  },
-  cancel: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-  },
-  save: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.three,
-    backgroundColor: ModuleColors.events,
-  },
-  saveText: {
-    color: '#ffffff',
-    fontWeight: 700,
+    fontSize: 12,
   },
   pressed: {
     opacity: 0.7,
-  },
-  disabled: {
-    opacity: 0.5,
   },
 });

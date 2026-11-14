@@ -8,11 +8,9 @@ export async function run(page, baseUrl) {
   await page.waitForText('Today');
   await page.waitForText('这一天还没有安排');
 
-  // 从列表尾部「＋ 新建」建一条带时间的任务
+  // 从列表尾部「＋ 新建」打开综合弹窗建一条带时间的任务
   await page.clickLabel('新建任务或备忘');
-  await page.waitForText('新建任务');
-  await page.clickText('新建任务');
-  await page.waitForText('添加任务');
+  await page.waitForText('新建任务/备忘');
   await page.fill('例如：写周报', '写周报');
   await page.fill('补充说明', '周五下班前交');
   await page.fill('09:00', '09:30');
@@ -56,10 +54,9 @@ export async function run(page, baseUrl) {
 
   // 3 天批量添加
   await page.clickLabel('新建任务或备忘');
-  await page.clickText('新建任务');
-  await page.waitForText('添加任务');
+  await page.waitForText('新建任务/备忘');
   await page.fill('例如：写周报', '晨读');
-  await page.clickText('今天起 3 天');
+  await page.clickText('今天起3天');
   await page.clickText('保存');
   await page.waitForText('晨读');
 
@@ -85,8 +82,7 @@ export async function run(page, baseUrl) {
 
   // 再建一条备忘，验证置顶与备忘样式进入列表
   await page.clickLabel('新建任务或备忘');
-  await page.clickText('新建备忘');
-  await page.waitForText('新建备忘');
+  await page.clickLabel('类型 备忘');
   await page.fill('例如：周五前交房租', '周五前交房租');
   await page.clickLabel('置顶备忘');
   await page.clickText('保存');

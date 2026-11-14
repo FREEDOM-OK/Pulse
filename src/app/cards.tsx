@@ -270,6 +270,8 @@ export default function CardsScreen() {
 
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
+      overScrollMode="never"
       style={{ backgroundColor: theme.background }}
       contentContainerStyle={styles.content}
       scrollEnabled={dragging === null}>

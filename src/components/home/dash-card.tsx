@@ -4,7 +4,7 @@ import { SymbolView } from 'expo-symbols';
 import { ThemedText } from '@/components/themed-text';
 import { RipplePressable } from '@/components/ui/ripple-pressable';
 import type { CardStyle, HomeCardId } from '@/db/types';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useGlassMaterial, useTheme } from '@/hooks/use-theme';
 import { CartoonArt } from './cartoon-art';
 
 export interface DashCardProps {
@@ -39,8 +39,16 @@ export function DashCard({
   onPress,
 }: DashCardProps) {
   const theme = useTheme();
+  const glass = useGlass();
+  const material = useGlassMaterial();
   const isCustom = style === 'custom';
-  const backgroundColor = isCustom ? color : theme.backgroundElement;
+  /** 毛玻璃皮肤只改「跟随主题」的默认卡；自定义色与卡通卡保持原样。 */
+  const glassSurface = glass && style === 'default';
+  const backgroundColor = isCustom
+    ? color
+    : glassSurface
+      ? material.card
+      : theme.backgroundElement;
   const ink = isCustom ? inkFor(color) : theme.text;
   const subInk = isCustom
     ? ink === '#FFFFFF'
@@ -48,16 +56,21 @@ export function DashCard({
       : 'rgba(0,0,0,0.55)'
     : theme.textSecondary;
   const showCartoon = style === 'cartoon';
+  const bubbleColor = glassSurface ? 'rgba(255,255,255,0.8)' : '#FFFFFF';
 
   return (
     <RipplePressable
-      style={[styles.card, { width, height, backgroundColor }]}
+      style={[
+        styles.card,
+        { width, height, backgroundColor },
+        glassSurface ? { borderWidth: 1, borderColor: material.cardBorder } : null,
+      ]}
       contentStyle={styles.content}
       onPress={onPress}
       rippleColor={ink === '#FFFFFF' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.10)'}
       accessibilityRole="button"
       accessibilityLabel={`${title}，${subtitle}`}>
-      <View style={styles.iconCircle}>
+      <View style={[styles.iconCircle, { backgroundColor: bubbleColor }]}>
         {showCartoon ? (
           <CartoonArt kind={kind} size={26} color="#1C1C1E" />
         ) : (
@@ -74,7 +87,7 @@ export function DashCard({
         </ThemedText>
       </View>
 
-      <View style={styles.arrow}>
+      <View style={[styles.arrow, { backgroundColor: bubbleColor }]}>
         <ThemedText style={styles.arrowText}>›</ThemedText>
       </View>
     </RipplePressable>

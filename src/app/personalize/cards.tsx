@@ -45,7 +45,7 @@ export default function PersonalizeCardsScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <Breadcrumb
@@ -58,7 +58,10 @@ export default function PersonalizeCardsScreen() {
           <ThemedText style={styles.title}>卡片样式</ThemedText>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+          contentContainerStyle={styles.content}>
           <ThemedText type="small" themeColor="textSecondary">
             选一个底色，主卡与其它卡共用。文字会自动用浅色。
           </ThemedText>

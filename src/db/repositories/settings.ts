@@ -1,14 +1,19 @@
 import { getDriver } from '../connection';
 import {
+  APP_SKINS,
   CARD_STYLES,
   DASH_MODES,
   DEFAULT_CARD_COLOR,
   DEFAULT_ENABLED_CARDS,
+  DEFAULT_HOME_BG_COLOR,
+  HOME_BG_MODES,
   HOME_CARD_IDS,
   MIDDLE_TABS,
   SORT_MODES,
+  type AppSkin,
   type CardStyle,
   type DashMode,
+  type HomeBgMode,
   type HomeCardId,
   type MiddleTab,
   type SortMode,
@@ -354,6 +359,62 @@ export async function resetTimetableAppearance(): Promise<void> {
     setSetting(LUNCH_AFTER_KEY, String(DEFAULT_LUNCH_AFTER)),
     setSetting(SATURATION_KEY, String(DEFAULT_SATURATION)),
   ]);
+}
+
+// —— v1.2.3 外观设置：全局皮肤与首页背景 ——
+// 只动 settings 表的 key-value，不新增表、不改 SCHEMA_VERSION。
+
+const APP_SKIN_KEY = 'app.skin';
+const HOME_BG_MODE_KEY = 'home.bgMode';
+const HOME_BG_COLOR_KEY = 'home.bgColor';
+const HOME_BG_IMAGE_KEY = 'home.bgImage';
+
+/** 全局皮肤；非法值回落经典极简。 */
+export async function getAppSkin(): Promise<AppSkin> {
+  const raw = await getSetting(APP_SKIN_KEY);
+  return (APP_SKINS as string[]).includes(raw ?? '') ? (raw as AppSkin) : 'default';
+}
+
+export async function setAppSkin(value: AppSkin): Promise<void> {
+  const safe = APP_SKINS.includes(value) ? value : 'default';
+  await setSetting(APP_SKIN_KEY, safe);
+}
+
+/** 首页背景模式；非法值回落默认底色。 */
+export async function getHomeBgMode(): Promise<HomeBgMode> {
+  const raw = await getSetting(HOME_BG_MODE_KEY);
+  return (HOME_BG_MODES as string[]).includes(raw ?? '') ? (raw as HomeBgMode) : 'default';
+}
+
+export async function setHomeBgMode(value: HomeBgMode): Promise<void> {
+  const safe = HOME_BG_MODES.includes(value) ? value : 'default';
+  await setSetting(HOME_BG_MODE_KEY, safe);
+}
+
+/** 首页自定义纯色（#RRGGBB）；非法值回落冰川浅蓝。 */
+export async function getHomeBgColor(): Promise<string> {
+  const raw = await getSetting(HOME_BG_COLOR_KEY);
+  return raw && /^#[0-9a-fA-F]{6}$/.test(raw) ? raw.toLowerCase() : DEFAULT_HOME_BG_COLOR;
+}
+
+export async function setHomeBgColor(value: string): Promise<void> {
+  const safe = /^#[0-9a-fA-F]{6}$/.test(value) ? value : DEFAULT_HOME_BG_COLOR;
+  await setSetting(HOME_BG_COLOR_KEY, safe.toLowerCase());
+}
+
+/** 首页自定义背景图（App 私有目录里的绝对路径）；未设置时为 null。 */
+export async function getHomeBgImage(): Promise<string | null> {
+  const raw = await getSetting(HOME_BG_IMAGE_KEY);
+  return raw && raw.length > 0 ? raw : null;
+}
+
+/** 传 null 表示清除：直接删掉这一行，不留下空字符串。 */
+export async function setHomeBgImage(value: string | null): Promise<void> {
+  if (!value) {
+    await deleteSetting(HOME_BG_IMAGE_KEY);
+    return;
+  }
+  await setSetting(HOME_BG_IMAGE_KEY, value);
 }
 
 function parseJsonValue(raw: string | null): unknown {

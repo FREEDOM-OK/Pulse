@@ -26,6 +26,103 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/** 一套主题色板：经典极简用 Colors，苹果毛玻璃用 GlassColors，键完全一致。 */
+export type ThemePalette = { [K in ThemeColor]: string };
+
+/**
+ * 苹果毛玻璃（Apple Glass）色板。
+ *
+ * 只覆盖主题色：底层环境光画布不再是死板纯色，卡片/选中态换成半透明材质，
+ * 这样所有用 useTheme() 的界面不用改代码就能一起切过去。
+ */
+export const GlassColors = {
+  light: {
+    text: '#0B1220',
+    background: '#EEF2F7',
+    backgroundElement: 'rgba(255, 255, 255, 0.65)',
+    backgroundSelected: 'rgba(0, 0, 0, 0.06)',
+    textSecondary: '#5F6673',
+  },
+  dark: {
+    text: '#F5F7FC',
+    background: '#0B0D13',
+    backgroundElement: 'rgba(32, 34, 42, 0.62)',
+    backgroundSelected: 'rgba(255, 255, 255, 0.12)',
+    textSecondary: '#9AA2B1',
+  },
+} as const;
+
+export type GlassScheme = 'light' | 'dark';
+
+export interface GlassMaterialSpec {
+  /** 页面根背景（环境光画布）。 */
+  canvas: string;
+  /** 卡片磨砂表面。 */
+  card: string;
+  cardBorder: string;
+  cardShadow: string;
+  cardShadowOpacity: number;
+  cardElevation: number;
+  /** 底栏悬浮胶囊。 */
+  bar: string;
+  barBorder: string;
+  barIndicator: string;
+  /** 弹窗面板（浓度更高）。 */
+  sheet: string;
+  sheetBorder: string;
+  /** 根容器四角的弥散光晕。 */
+  glowPrimary: string;
+  glowSecondary: string;
+  /** 自定义壁纸上的柔光蒙版。 */
+  imageOverlay: string;
+  /** 卡片内部分隔线 / 细高光边。 */
+  hairline: string;
+  block: string;
+  blockBorder: string;
+}
+
+/** 玻璃材质的数值配方，浅色/深色两套。 */
+export const GlassMaterial: Record<GlassScheme, GlassMaterialSpec> = {
+  light: {
+    canvas: '#EEF2F7',
+    card: 'rgba(255, 255, 255, 0.65)',
+    cardBorder: 'rgba(255, 255, 255, 0.85)',
+    cardShadow: '#0F172A',
+    cardShadowOpacity: 0.05,
+    cardElevation: 2,
+    bar: 'rgba(255, 255, 255, 0.72)',
+    barBorder: 'rgba(255, 255, 255, 0.9)',
+    barIndicator: 'rgba(0, 0, 0, 0.06)',
+    sheet: 'rgba(250, 250, 252, 0.88)',
+    sheetBorder: 'rgba(255, 255, 255, 0.9)',
+    glowPrimary: 'rgba(147, 197, 253, 0.22)',
+    glowSecondary: 'rgba(249, 168, 212, 0.18)',
+    imageOverlay: 'rgba(255, 255, 255, 0.18)',
+    hairline: 'rgba(15, 23, 42, 0.08)',
+    block: 'rgba(255, 255, 255, 0.55)',
+    blockBorder: 'rgba(255, 255, 255, 0.45)',
+  },
+  dark: {
+    canvas: '#0B0D13',
+    card: 'rgba(32, 34, 42, 0.62)',
+    cardBorder: 'rgba(255, 255, 255, 0.14)',
+    cardShadow: '#000000',
+    cardShadowOpacity: 0.28,
+    cardElevation: 0,
+    bar: 'rgba(28, 30, 36, 0.72)',
+    barBorder: 'rgba(255, 255, 255, 0.16)',
+    barIndicator: 'rgba(255, 255, 255, 0.12)',
+    sheet: 'rgba(30, 32, 38, 0.88)',
+    sheetBorder: 'rgba(255, 255, 255, 0.18)',
+    glowPrimary: 'rgba(59, 130, 246, 0.12)',
+    glowSecondary: 'rgba(129, 140, 248, 0.1)',
+    imageOverlay: 'rgba(0, 0, 0, 0.35)',
+    hairline: 'rgba(255, 255, 255, 0.1)',
+    block: 'rgba(255, 255, 255, 0.08)',
+    blockBorder: 'rgba(255, 255, 255, 0.18)',
+  },
+};
+
 /** 日历回顾的模块颜色（PRDv1.1 第 2.3 节）：计划蓝 / 健身橙 / 事件绿 / 游戏紫。 */
 export const ModuleColors = {
   tasks: '#4C8DF6',

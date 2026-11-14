@@ -16,7 +16,7 @@ export function CalendarScreen({ mode = 'tab', initialDate }: CalendarScreenProp
   const insets = useSafeAreaInsets();
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={styles.container} glow>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <SubPageHeader title="日历回顾" mode={mode} />
         <CalendarPanel

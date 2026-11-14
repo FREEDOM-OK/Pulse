@@ -19,10 +19,11 @@ import {
   getSortMode,
   getTimetableSettings,
 } from '@/db/repositories/settings';
-import { deleteTask, listTasksByDate, toggleTask } from '@/db/repositories/tasks';
+import { deleteTask, listTasksByDate, rolloverAutoPostponeTasks, toggleTask } from '@/db/repositories/tasks';
 import type { MemoRow, SortMode, TaskRow } from '@/db/types';
 import { useTheme } from '@/hooks/use-theme';
 import { bumpDataVersion, useDataVersion } from '@/lib/data-version';
+import { todayStr } from '@/lib/date';
 import { listCoursesForDate, type CourseOnDate } from '@/features/timetable/bridge';
 import { buildTodayItems } from '@/lib/today-items';
 import { sortTodayItems, type TodayItem } from '@/lib/today-sort';
@@ -104,7 +105,6 @@ export function TodayList({
   const [editingMemo, setEditingMemo] = useState<MemoRow | null>(null);
   const [menuMemo, setMenuMemo] = useState<MemoRow | null>(null);
 
-  const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState<DeleteTarget>(null);
   const [hideCompleted, setHideCompleted] = useState(false);
   /** 刚勾选的条目先留在原位，300ms 后再沉到列表底部。 */
@@ -115,6 +115,10 @@ export function TodayList({
   statsRef.current = onStats;
 
   const load = useCallback(async () => {
+    // 打开今天时先顺延开启了自动延期的过期任务，再读列表。
+    if (date === todayStr()) {
+      await rolloverAutoPostponeTasks(date);
+    }
     const [taskList, memoList, courseList, sortMode, hide, timetable] = await Promise.all([
       listTasksByDate(date),
       listMemosByDate(date),
@@ -292,7 +296,10 @@ export function TodayList({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="新建任务或备忘"
-          onPress={() => setNewMenuOpen(true)}
+          onPress={() => {
+            setEditingTask(null);
+            setTaskFormOpen(true);
+          }}
           style={({ pressed }) => [styles.addRow, pressed && styles.pressed]}>
           <ThemedText
             type="small"
@@ -378,30 +385,6 @@ export function TodayList({
           },
         ]}
         onClose={() => setMenuMemo(null)}
-      />
-
-      <ActionMenu
-        visible={newMenuOpen}
-        title="新建"
-        items={[
-          {
-            key: 'task',
-            label: '新建任务',
-            onPress: () => {
-              setEditingTask(null);
-              setTaskFormOpen(true);
-            },
-          },
-          {
-            key: 'memo',
-            label: '新建备忘',
-            onPress: () => {
-              setEditingMemo(null);
-              setMemoFormOpen(true);
-            },
-          },
-        ]}
-        onClose={() => setNewMenuOpen(false)}
       />
 
       <ConfirmDialog

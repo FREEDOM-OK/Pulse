@@ -11,7 +11,8 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { useGlass, useTheme, useThemeMode } from '@/hooks/use-theme';
+import { glassSheetStyle } from '@/lib/glass';
 
 interface ModalSheetProps {
   visible: boolean;
@@ -24,6 +25,8 @@ interface ModalSheetProps {
 /** 通用弹窗容器：居中卡片，点遮罩关闭，内容可滚动。 */
 export function ModalSheet({ visible, title, onClose, children, footer }: ModalSheetProps) {
   const theme = useTheme();
+  const glass = useGlass();
+  const scheme = useThemeMode();
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -32,7 +35,7 @@ export function ModalSheet({ visible, title, onClose, children, footer }: ModalS
         behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}>
         <View style={styles.root}>
           <Pressable style={styles.backdrop} onPress={onClose} />
-          <ThemedView style={styles.card}>
+          <ThemedView style={[styles.card, glass ? glassSheetStyle(scheme) : null]}>
             <View style={styles.header}>
               <ThemedText type="smallBold" style={styles.title}>
                 {title}
@@ -41,6 +44,8 @@ export function ModalSheet({ visible, title, onClose, children, footer }: ModalS
             <ScrollView
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
+              showsVerticalScrollIndicator={false}
+              overScrollMode="never"
               keyboardShouldPersistTaps="handled">
               {children}
             </ScrollView>

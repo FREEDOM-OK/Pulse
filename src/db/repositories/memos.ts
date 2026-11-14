@@ -1,6 +1,6 @@
 import { getDriver } from '../connection';
 import type { MemoRow } from '../types';
-import { nowIsoMonotonic } from '@/lib/date';
+import { addDays, nowIsoMonotonic } from '@/lib/date';
 
 export interface CreateMemoInput {
   date: string;
@@ -58,6 +58,18 @@ export async function createMemo(input: CreateMemoInput): Promise<number> {
     ]
   );
   return result.lastInsertRowId;
+}
+
+/** 一次添加到连续 days 天（含起始日）。 */
+export async function createMemoSeries(input: CreateMemoInput, days: number): Promise<number[]> {
+  const driver = getDriver();
+  const ids: number[] = [];
+  await driver.withTransactionAsync(async () => {
+    for (let offset = 0; offset < days; offset += 1) {
+      ids.push(await createMemo({ ...input, date: addDays(input.date, offset) }));
+    }
+  });
+  return ids;
 }
 
 export async function updateMemo(id: number, patch: MemoPatch): Promise<void> {

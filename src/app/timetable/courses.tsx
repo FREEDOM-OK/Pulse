@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
+import { useThemePreference } from '@/theme/theme-context';
 import { askConfirm, showActions } from '@/lib/dialogs';
 import { useTimetable } from '@/features/timetable/TimetableContext';
 import {
@@ -17,6 +19,8 @@ import {
 } from '@/lib/timetable-core';
 
 export default function AllCoursesScreen() {
+  const theme = useTheme();
+  const { scheme } = useThemePreference();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { courses, settings, deleteCourse } = useTimetable();
@@ -31,6 +35,7 @@ export default function AllCoursesScreen() {
       style={[
         styles.container,
         {
+          backgroundColor: theme.background,
           paddingTop: insets.top || SAFE_TOP_DP,
           paddingBottom: insets.bottom || SAFE_BOTTOM_DP,
         },
@@ -38,19 +43,25 @@ export default function AllCoursesScreen() {
     >
       <View style={styles.headerBar}>
         <TouchableOpacity
-          style={styles.backBtnCircle}
+          style={[
+            styles.backBtnCircle,
+            {
+              borderColor: scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)',
+              backgroundColor: theme.backgroundElement,
+            },
+          ]}
           accessibilityLabel="返回"
           onPress={() => router.back()}
         >
-          <Text style={styles.backArrow}>‹</Text>
+          <Text style={[styles.backArrow, { color: theme.text }]}>‹</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>全部课程</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>全部课程</Text>
         <View style={{ width: 36 }} />
       </View>
 
       {sortedCourses.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyTitle}>还没有课程</Text>
+          <Text style={[styles.emptyTitle, { color: theme.textSecondary }]}>还没有课程</Text>
           <TouchableOpacity
             style={styles.addBtn}
             accessibilityLabel="添加课程"
@@ -60,7 +71,10 @@ export default function AllCoursesScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollBody}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never"
+          contentContainerStyle={styles.scrollBody}>
           {sortedCourses.map((c) => {
             const dotColor = softenColor(c.color, settings.saturation);
             const outOfRangeCount = c.sessions.filter(
@@ -70,7 +84,7 @@ export default function AllCoursesScreen() {
             return (
               <TouchableOpacity
                 key={c.id}
-                style={styles.courseCard}
+                style={[styles.courseCard, { backgroundColor: theme.backgroundElement }]}
                 accessibilityLabel={`课程 ${c.name}`}
                 onPress={() =>
                   router.push({ pathname: '/timetable/course', params: { id: c.id } })
@@ -107,8 +121,10 @@ export default function AllCoursesScreen() {
                 <View style={styles.rowLeft}>
                   <View style={[styles.colorDot, { backgroundColor: dotColor }]} />
                   <View>
-                    <Text style={styles.courseName}>{c.name}</Text>
-                    <Text style={styles.sessionCount}>{c.sessions.length} 个时段</Text>
+                    <Text style={[styles.courseName, { color: theme.text }]}>{c.name}</Text>
+                    <Text style={[styles.sessionCount, { color: theme.textSecondary }]}>
+                      {c.sessions.length} 个时段
+                    </Text>
                     {outOfRangeCount > 0 && (
                       <Text style={styles.outOfRangeText}>
                         有 {outOfRangeCount} 个时段超出当前节次范围
@@ -116,7 +132,7 @@ export default function AllCoursesScreen() {
                     )}
                   </View>
                 </View>
-                <Text style={styles.chevron}>›</Text>
+                <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
               </TouchableOpacity>
             );
           })}
@@ -127,7 +143,7 @@ export default function AllCoursesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F5F7' },
+  container: { flex: 1 },
   headerBar: {
     height: 52,
     paddingHorizontal: 16,
@@ -140,16 +156,13 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.12)',
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backArrow: { fontSize: 22, color: '#111113', lineHeight: 24 },
-  headerTitle: { fontSize: 17, fontWeight: '600', color: '#111113' },
+  backArrow: { fontSize: 22, lineHeight: 24 },
+  headerTitle: { fontSize: 17, fontWeight: '600' },
   scrollBody: { padding: 16, gap: 10 },
   courseCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     flexDirection: 'row',
@@ -158,12 +171,12 @@ const styles = StyleSheet.create({
   },
   rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   colorDot: { width: 12, height: 12, borderRadius: 6 },
-  courseName: { fontSize: 16, fontWeight: '600', color: '#111113' },
-  sessionCount: { fontSize: 12, color: 'rgba(0,0,0,0.6)', marginTop: 2 },
+  courseName: { fontSize: 16, fontWeight: '600' },
+  sessionCount: { fontSize: 12, marginTop: 2 },
   outOfRangeText: { fontSize: 11, color: '#D97706', marginTop: 2 },
-  chevron: { fontSize: 18, color: 'rgba(0,0,0,0.3)' },
+  chevron: { fontSize: 18 },
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: 'rgba(0,0,0,0.6)' },
+  emptyTitle: { fontSize: 16, fontWeight: '600' },
   addBtn: {
     paddingHorizontal: 20,
     height: 42,
